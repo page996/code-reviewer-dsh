@@ -2572,5 +2572,347 @@
     "startLine": 323,
     "disposition": "accepted",
     "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b86c0358c2243b5a742d1fe16719b6e593c3bc03",
+    "file": "lib/viewer-state.js",
+    "category": "correctness",
+    "title": "cleanState() 无条件用 nowIso() 覆盖 updatedAt，而 load() 对每个已持久化的 key 都会重跑 cleanState，导致",
+    "startLine": 46,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "64d04ccc0eb1ff862d5973d0a63ac37e8e4e5b07",
+    "file": "lib/viewer-state.js",
+    "category": "errors",
+    "title": "persist() 用空 catch 吞掉 copyFile 的全部错误，把 EACCES/ENOSPC/EBUSY 与「首次写入的 ENOENT」混为一谈，备",
+    "startLine": 100,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b3d097cfa57ec7feb741e9f45a2f50cf0eabadda",
+    "file": "lib/viewer-state.js",
+    "category": "errors",
+    "title": "set() 先修改内存中的 states（第 145 行）再 await persist()（第 151 行），persist 抛错时没有回滚，被拒绝的写入仍然",
+    "startLine": 145,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "72fde1afc93c30a941fb076999ea49fb0007f2ca",
+    "file": "lib/viewer-state.js",
+    "category": "correctness",
+    "title": "数值字段用 Number() 强转、布尔字段用 Boolean() 强转，`null`/`''`/`false` 会被强转成 0 再夹到最小值，字符串 \"fal",
+    "startLine": 26,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "651f93d334d46009d0d6f2174e326a20ee8f7a68",
+    "file": "lib/viewer-state.js",
+    "category": "correctness",
+    "title": "cleanState() 每次调用都无条件把 updatedAt 重置为 nowIso()，而 load() 也用它清洗磁盘记录，导致持久化时间戳在每次启动后被",
+    "startLine": 47,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "884837c042353f8209b9d0d522febfc78aafd68d",
+    "file": "lib/viewer-state.js",
+    "category": "concurrency",
+    "title": "load() 用 `loaded` 做 check-then-act 并直接改写共享 `states`，与 enqueue 串行化的写链无互斥：冷启动读取或 r",
+    "startLine": 59,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4559b18e4f8418e52511c41045d1f5b0bdf382af",
+    "file": "lib/viewer-state.js",
+    "category": "security",
+    "title": "load() 不限制状态文件大小和加载的键数量，与 persist() 的 MAX_BYTES/MAX_KEYS 配额不对称，超大或被污染的文件会在启动时整读入",
+    "startLine": 62,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ae021e61a5fbae799c19b94dc4ba092410aa1926",
+    "file": "lib/viewer-state.js",
+    "category": "correctness",
+    "title": "load() 只处理 JSON.parse 失败，对“合法 JSON 但版本/结构不符”的文件不隔离也不报错，直接当作空 store 并在下次写入时覆盖",
+    "startLine": 63,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "13c02d573a22154dc1e8dfc6dd572650bd03a5cf",
+    "file": "lib/viewer-state.js",
+    "category": "errors",
+    "title": "load() 把所有非 ENOENT 的读失败都当成“文件损坏”，对瞬态/权限类错误（EMFILE/EACCES/EPERM/EIO/EBUSY）也会走隔离分支",
+    "startLine": 77,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4f2f9cc4253c36152b6f06f3ec30f24a3029d0cb",
+    "file": "lib/viewer-state.js",
+    "category": "errors",
+    "title": "load() 把除 ENOENT 外的所有读取失败（EACCES/EBUSY/EIO 与 JSON 解析失败）一律当作文件损坏：隔离文件 + `states =",
+    "startLine": 78,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "23f300fecc6127dd4fc824a376267f9f24bd105d",
+    "file": "lib/viewer-state.js",
+    "category": "errors",
+    "title": "load() 把所有非 ENOENT 读取/解析错误都当成损坏并清空状态；如果 quarantine rename 失败（EACCES/EPERM/EBUSY ",
+    "startLine": 79,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a061c6e3b5dba7990140b68abf9543abf002e0fa",
+    "file": "lib/viewer-state.js",
+    "category": "contract",
+    "title": "持久化时写入 `version: 1`，但 load() 从不读取或校验 version 字段，格式升级/回退时会被静默按 v1 解析并回写覆盖。",
+    "startLine": 92,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "aa60649e21c91c2202c2b782f9aae55ef9aa2e0d",
+    "file": "lib/viewer-state.js",
+    "category": "intent",
+    "title": "persist() 每次都写 .bak，但 load() 从不读取 .bak；主文件 JSON 损坏时直接 quarantine 并 states={}，备份没",
+    "startLine": 100,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "97102686d845acc6a71a7110551ff0cfd9e874bb",
+    "file": "lib/viewer-state.js",
+    "category": "security",
+    "title": "临时文件和 .bak 备份使用固定可预测路径，且以非排他、跟随符号链接的方式写入，存在本地符号链接覆盖竞态。",
+    "startLine": 105,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fc81aed0492c75354ac77c66d10b08ea94e63c25",
+    "file": "lib/viewer-state.js",
+    "category": "contract",
+    "title": "all() 只对顶层 map 做浅拷贝，返回的每个 key 的值仍是内部对象引用，而 get() 对单条做了 `{ ...states[id] }` 拷贝，两个",
+    "startLine": 116,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c9b0de4d580decc1fb782f6d244ea1fa4510f047",
+    "file": "lib/viewer-state.js",
+    "category": "errors",
+    "title": "set() 在持久化成功之前就修改了共享内存 states（含淘汰删除），persist() 抛错时没有回滚，导致“报告失败的写入”在内存中已生效并在之后被读到",
+    "startLine": 143,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6563db39e28218eede4eb9832e6c5a0338d58210",
+    "file": "lib/viewer-state.js",
+    "category": "concurrency",
+    "title": "reload() 不经过 enqueue，也没有与 set() 的写链互斥；它会在 set() 已完成内存修改但尚未 rename 的窗口内清空并重读旧文件，造",
+    "startLine": 155,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e719715e8e6d3a8467a940048d88fb29dd72b627",
+    "file": "lib/viewer-state.js",
+    "category": "contract",
+    "title": "reload() 的返回值是内部可变对象 states（load() 末尾直接 `return states;`），且它不经过 set() 使用的 enqueu",
+    "startLine": 155,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a9a516347cde51404702da239aac50d8bf734ff9",
+    "file": "lib/alignment.js",
+    "category": "security",
+    "title": "MATH_RE 的两条数学定界分支只用「反斜杠+括号」这种 2 字符前缀做起点、后接惰性任意字符匹配，遇到大量未闭合起始符的文本会退化成 O(n²)，构成可由文",
+    "startLine": 16,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c5a0c0d57fe49b50dfa5419ae96325a458c222c4",
+    "file": "lib/alignment.js",
+    "category": "correctness",
+    "title": "MATH_RE 的裸 `$...$` 分支把成对美元符号当行内公式，跨句的一对金额符号会把两句吞成一句，与 header \"inline-math spans ",
+    "startLine": 29,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4116b26ccb628ad62c41a77f6b9b937d972012cf",
+    "file": "lib/alignment.js",
+    "category": "intent",
+    "title": "header 声称缩写会被保留（abbreviations kept intact），但查表前只去掉结尾句点、不去内部句点，ABBREV 里的 'eg'/'ie",
+    "startLine": 63,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d010e79cf90093d788d8d1a9946f34e71e90309e",
+    "file": "lib/alignment.js",
+    "category": "correctness",
+    "title": "ABBREV 中的 'eg'/'ie' 对真实书写的 'e.g.'/'i.e.' 永不命中：token 正则保留内部点号，得到 'e.g'，而 replace(",
+    "startLine": 63,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "43a690206489772baeb99a48d5ed181ef1427618",
+    "file": "lib/alignment.js",
+    "category": "correctness",
+    "title": "句首判定字符集只覆盖 ASCII 引号 \" '，缺少排印学开引号 “ ‘（以及 — * 等常见句首符号），句号后接这类开引号时不会断句。",
+    "startLine": 74,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6b6ed1b3e260e917cf188e18b11c2b306b661173",
+    "file": "lib/alignment.js",
+    "category": "contract",
+    "title": "targetLang 的兜底项用的是 extraction.source.language（源文档语言），和 sourceLang 的兜底是同一个表达式，导致译",
+    "startLine": 95,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "496e0863d1e033d7999fe1e36c299350c63b5c35",
+    "file": "lib/alignment.js",
+    "category": "correctness",
+    "title": "targetLang 的回退链把「源语言」当成目标语言默认值，导致 'zh-CN' 默认值在几乎所有真实输入下都不可达，目标语言被标成源语言。",
+    "startLine": 96,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e4defe155716842b142565d53dd0ff807669fbb7",
+    "file": "lib/alignment.js",
+    "category": "intent",
+    "title": "targetLang 的兜底链回落到 extraction 的**源**语言，译文缺 target_lang 时目标语言会被标成源语言，payload 语言方向",
+    "startLine": 96,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "3ca0d0ca03dd54504f9f090cfbd68b1a12960528",
+    "file": "lib/alignment.js",
+    "category": "errors",
+    "title": "translations 入参缺失或结构异常时会被静默降级成空对象，所有块都会被判为 untranslated，产物与“文档确实没有译文”无法区分，上游读取/解",
+    "startLine": 101,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "50ba2674d897b3657b64030492770eaa172b4684",
+    "file": "lib/alignment.js",
+    "category": "correctness",
+    "title": "直接用未校验的 block.id 去读写普通对象（第 113 行读 translationBlocks、第 129 行写 blocks），原型链上的键会被当作译",
+    "startLine": 113,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d486fb06bbc49da9d506767d33412d865f1fecf8",
+    "file": "lib/alignment.js",
+    "category": "contract",
+    "title": "对外的摘要 payload 与完整 alignment payload 字段契约不一致：摘要没有 version（也丢了 sourceLang/targetLa",
+    "startLine": 157,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d5bdd6999a5e8c6a0328c0b476ca2264055c4a90",
+    "file": "lib/skills.js",
+    "category": "errors",
+    "title": "“skill store 不可用”是服务端状态，却被映射成 400（客户端错误）；同一状态在未显式选择 skill 的路径上又被静默降级为空上下文，同一故障有两",
+    "startLine": 120,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "46d0c7d9cff3ac2616ec4316daa95c8616a37e50",
+    "file": "lib/skills.js",
+    "category": "contract",
+    "title": "空字符串 `skill` 被当作“已提供”参与互斥校验，但模块自己的 normalizeRequestedSkill 把空串归一为“未选”，两种语义自相矛盾，导",
+    "startLine": 112,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7050b81d5d92570b4090a93d3a63788dd9dd3c55",
+    "file": "lib/skills.js",
+    "category": "intent",
+    "title": "skill/skills 的互斥判定用原始字段存在性，而模块自身把空串 skill 视为「未选择」，导致 `{skill:'', skills:[...]}` ",
+    "startLine": 112,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "95c064026bda03db8cfd6389700308345e90e813",
+    "file": "lib/skills.js",
+    "category": "correctness",
+    "title": "互斥校验按「字段是否出现」判断，而值语义按「归一化后是否为空」判断，导致 `skill: ''` + `skills: [...]` 这种实际只带了 multi",
+    "startLine": 112,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c3c661c5852f8f8a43340e9635fc77a3260585dc",
+    "file": "lib/skills.js",
+    "category": "correctness",
+    "title": "`title` 可空性在两个分支里假设不一致：description 非空时直接拼接 `skill.title`，title 缺失会把字面量 `undefine",
+    "startLine": 154,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "dc84d7cc5515a6f065254b92393f191d1a5c905e",
+    "file": "lib/skills.js",
+    "category": "concurrency",
+    "title": "选中的技能先经 store.get 校验、再由 store.list 二次读取过滤注入，两次读取之间技能被禁用/删除会让用户显式选择的技能被静默丢弃",
+    "startLine": 186,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0ac4524421bc90e050402d8fded9024d9352d62d",
+    "file": "lib/skills.js",
+    "category": "intent",
+    "title": "loadSkillCatalog 的种子回退路径没有按 enabled 过滤，与同函数文档「Only enabled skills are exposed」以及",
+    "startLine": 254,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c1265d226608e49157c8fc1be6dc06c15df535ae",
+    "file": "lib/skills.js",
+    "category": "correctness",
+    "title": "`SKILL_HINTS[skill.name] ?? []` 是原型链查找，`?? []` 只挡 null/undefined；当 catalog 条目的 n",
+    "startLine": 262,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6b5df7ec18d29f5e4a62536ea86c0351115a5b0d",
+    "file": "lib/skills.js",
+    "category": "correctness",
+    "title": "自动选技能的关键词匹配区分大小写，而 SKILL_HINTS 里英文提示词全部小写，英文消息首字母大写（句首常态）时关键词全部失配，不会被自动选中。",
+    "startLine": 265,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
   }
 ]

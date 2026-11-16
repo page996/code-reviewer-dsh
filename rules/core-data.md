@@ -33,3 +33,5 @@ alwaysApply: false
 > 软删除/墓碑高频问题：墓碑记录是否仍被计入配额、枚举、统计与树结构（batch-12 实测：删除永不物理清除，累计 120 个根后配额永久 409）；`schemaVersion` 只写不校验；配额/子节点计数用未过滤的 readdir（把 `*.tmp` 残留与墓碑算进去）。
 >
 > 「未知 vs 空」高频问题：`Number(null/''/[])` 变 0 后与真实 0 不可区分（页码、confidence、配额）；未翻译/缺失时用源文回填会让 `untranslated` 恒为 false；协议字段缺失时静默回落某个具体值（如语言 `'en'`）而不是标 unknown。要求输出侧保留 unknown 状态并在报告里显式计数。
+>
+> 状态持久化顺序问题：先修改内存状态再 await 持久化，失败后不回滚（内存与磁盘不一致）；用 `Boolean('false')`/`Number(null)` 清洗磁盘读回的值会把显式 false/null 变成 true/0；clean/load 路径无条件重写 `updatedAt` 破坏原始时间戳。

@@ -32,7 +32,10 @@
 | batch-18 | `lib/document.js` | standard（同 lenses） | `run-20261116-225217-90db` | 1 major + 9 minor，全部 accepted；`review eval`：matched 10 / missed 0 → **pass** |
 | batch-19 | `lib/evidence.js` | standard（同 lenses） | `run-20261116-225831-7c48` | 16 minor，全部 accepted；`review eval`：matched 16 / missed 0 → **pass** |
 | batch-20 | `lib/audit.js` | standard（同 lenses） | `run-20261116-230351-549f` | 14 minor，全部 accepted；`review eval`：matched 14 / missed 0 → **pass** |
-| batch-21（待做） | 其余 `lib/` 模块（graph/llm/note-sessions/skills/katex-verify/viewer-state/alignment…） | standard | — | — |
+| batch-21 | `lib/viewer-state.js` | standard（同 lenses） | `run-20261116-230848-cd83` | 1 major + 17 minor，全部 accepted；`review eval`：matched 18 / missed 0 → **pass** |
+| batch-22 | `lib/alignment.js` | standard（同 lenses） | `run-20261116-231305-d25f` | 11 minor，全部 accepted；`review eval`：matched 11 / missed 0 → **pass** |
+| batch-23 | `lib/skills.js` | standard（同 lenses） | `run-20261116-231724-694b` | 9 minor，全部 accepted；`review eval`：matched 9 / missed 0 → **pass** |
+| batch-24（待做） | 其余 `lib/` 模块（graph/llm/note-sessions/skill-store/katex-verify…） | standard | — | — |
 
 排除：`assets/katex/**`（vendored）、`python/__pycache__/**`、`*.pyc`、`locale/*.json`。
 
@@ -92,6 +95,9 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 - batch-18：`review eval --run run-20261116-225217-90db` → **pass**（matched 10 / missed 0 / notEvaluated 246）。
 - batch-19：`review eval --run run-20261116-225831-7c48` → **pass**（matched 16 / missed 0 / notEvaluated 256）。
 - batch-20：`review eval --run run-20261116-230351-549f` → **pass**（matched 14 / missed 0 / notEvaluated 272）。
+- batch-21：`review eval --run run-20261116-230848-cd83` → **pass**（matched 18 / missed 0 / notEvaluated 286）。
+- batch-22：`review eval --run run-20261116-231305-d25f` → **pass**（matched 11 / missed 0 / notEvaluated 304）。
+- batch-23：`review eval --run run-20261116-231724-694b` → **pass**（matched 9 / missed 0 / notEvaluated 315）。
 - batch-2：`--run run-20261116-193909-9bc6`（插件仍缓存旧 `lib/plan.mjs`，tests 视角未跳过；本机无重启）→ matched 13 / missed 0 / noise 2–4，exit 2；属运行时缓存而非代码回归。
 - 新增 `review.temperature=0` 与 reviewer 传输重试后，**重启 DSH** 重跑 batch-2 预期稳定通过（重复运行结果一致）。
 - eval 语义已按 run scope 过滤：其他批次基线在当前 run 中计 `notEvaluated`，不再误判漏报。
