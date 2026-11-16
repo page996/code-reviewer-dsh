@@ -472,9 +472,12 @@ async function safeListRuns(core, cwd, config, log) {
   }
 }
 
-async function resolveRunContext(env, runIdInput, toolOverrides = {}) {
+async function resolveRunContext(env, runIdInput, toolOverrides = {}, repoInput) {
   const core = await getCore();
-  const baseCwd = effectiveCwd(env.ctx);
+  const effectiveRoot = effectiveCwd(env.ctx);
+  const baseCwd = cleanString(repoInput)
+    ? path.resolve(effectiveRoot, cleanString(repoInput))
+    : effectiveRoot;
   let config = await loadEffectiveConfig(core, baseCwd, env.pluginConfig, toolOverrides);
   const ref = normalizeRunRef(runIdInput);
 
@@ -1221,7 +1224,7 @@ async function executeReviewScope(args, exec, env) {
 async function executeReviewPlan(args, exec, env) {
   const effort = normalizeEffort(args?.effort);
   const overrides = effort ? { review: { effort } } : {};
-  const rc = await resolveRunContext(env, args?.runId, overrides);
+  const rc = await resolveRunContext(env, args?.runId, overrides, args?.repo);
   if (!isPlainObject(rc.run.scope)) {
     throw pluginError('USAGE', `运行 ${rc.runId} 还没有 scope.json；请先调用 review_scope。`);
   }
@@ -1265,7 +1268,7 @@ async function executeReviewRun(args, exec, env) {
   if (effort) reviewOverrides.effort = effort;
   if (lenses) reviewOverrides.lenses = lenses;
   if (rounds) reviewOverrides.rounds = rounds;
-  const rc = await resolveRunContext(env, args?.runId, Object.keys(reviewOverrides).length > 0 ? { review: reviewOverrides } : {});
+  const rc = await resolveRunContext(env, args?.runId, Object.keys(reviewOverrides).length > 0 ? { review: reviewOverrides } : {}, args?.repo);
   if (!isPlainObject(rc.run.scope)) {
     throw pluginError('USAGE', `运行 ${rc.runId} 还没有 scope.json；请先调用 review_scope。`);
   }
@@ -1311,7 +1314,7 @@ async function executeReviewRun(args, exec, env) {
 }
 
 async function executeReviewGate(args, exec, env) {
-  const rc = await resolveRunContext(env, args?.runId);
+  const rc = await resolveRunContext(env, args?.runId, {}, args?.repo);
   const core = rc.core;
   let aggregate = isPlainObject(rc.run.aggregate) ? rc.run.aggregate : null;
   if (!aggregate && isPlainObject(rc.run.reviews) && Array.isArray(rc.run.reviews.anchored)) {
@@ -1355,7 +1358,7 @@ async function executeReviewGate(args, exec, env) {
 
 async function executeReviewReport(args, exec, env) {
   const format = normalizeFormat(args?.format);
-  const rc = await resolveRunContext(env, args?.runId);
+  const rc = await resolveRunContext(env, args?.runId, {}, args?.repo);
   const aggregate = isPlainObject(rc.run.aggregate) ? rc.run.aggregate : emptyAggregate();
   const route = resolveModelRoute(env.ctx, rc.config, env.pluginConfig);
   const meta = reportMeta({ runId: rc.runId, reviewRecord: rc.run.reviews, route, aggregate });
@@ -1439,7 +1442,7 @@ async function executeReviewLedger(args, exec, env) {
     };
   }
 
-  const rc = await resolveRunContext(env, args?.runId);
+  const rc = await resolveRunContext(env, args?.runId, {}, args?.repo);
   const aggregate = isPlainObject(rc.run.aggregate) ? rc.run.aggregate : null;
   const gate = isPlainObject(rc.run.gate) ? rc.run.gate : null;
   const counts = aggregate ? findingCounts(aggregate) : null;
@@ -1948,6 +1951,7 @@ function buildToolDefinitions(env) {
         type: 'object',
         properties: {
           runId: jsonString('运行 id；省略时使用最近一次运行。'),
+          repo: jsonString('创建 run 的仓库根目录（相对当前工作目录）；省略时用当前工作目录。'),
           effort: { type: 'string', enum: EFFORTS, description: '评审力度；省略时用配置 review.effort。' },
         },
         required: [],
@@ -1992,6 +1996,7 @@ function buildToolDefinitions(env) {
         type: 'object',
         properties: {
           runId: jsonString('运行 id；省略时使用最近一次运行。'),
+          repo: jsonString('创建 run 的仓库根目录（相对当前工作目录）；省略时用当前工作目录。'),
           effort: { type: 'string', enum: EFFORTS, description: '覆盖评审力度（影响视角数量）。' },
           lenses: jsonArraySchema({ type: 'string', enum: LENS_IDS }, '覆盖视角集合；省略时按 effort 自动选择。'),
           rounds: { type: 'integer', minimum: 1, maximum: 3, description: '评审轮数（deep 模式常用 2）。' },
@@ -2026,6 +2031,7 @@ function buildToolDefinitions(env) {
         type: 'object',
         properties: {
           runId: jsonString('运行 id；省略时使用最近一次运行。'),
+          repo: jsonString('创建 run 的仓库根目录（相对当前工作目录）；省略时用当前工作目录。'),
         },
         required: [],
         additionalProperties: false,
@@ -2080,6 +2086,7 @@ function buildToolDefinitions(env) {
         type: 'object',
         properties: {
           runId: jsonString('运行 id；省略时使用最近一次运行。'),
+          repo: jsonString('创建 run 的仓库根目录（相对当前工作目录）；省略时用当前工作目录。'),
           format: { type: 'string', enum: FORMATS, description: '输出格式；默认 all（三种都写）。' },
         },
         required: [],
@@ -2112,6 +2119,7 @@ function buildToolDefinitions(env) {
         properties: {
           action: { type: 'string', enum: LEDGER_ACTIONS, description: 'list（默认）/ show / latest。' },
           runId: jsonString('show 时指定运行 id；省略时使用最近一次运行。'),
+          repo: jsonString('运行所在仓库根目录（相对当前工作目录）；省略时用当前工作目录。'),
         },
         required: [],
         additionalProperties: false,

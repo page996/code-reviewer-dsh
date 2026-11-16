@@ -18,11 +18,11 @@ const TOOL_NAMES = ['review_scope', 'review_plan', 'review_run', 'review_gate', 
 
 const TOOL_PARAMS = {
   review_scope: ['base', 'head', 'mode', 'path', 'repo'],
-  review_plan: ['effort', 'runId'],
-  review_run: ['effort', 'lenses', 'rounds', 'runId'],
-  review_gate: ['runId'],
-  review_report: ['format', 'runId'],
-  review_ledger: ['action', 'runId'],
+  review_plan: ['effort', 'repo', 'runId'],
+  review_run: ['effort', 'lenses', 'repo', 'rounds', 'runId'],
+  review_gate: ['repo', 'runId'],
+  review_report: ['format', 'repo', 'runId'],
+  review_ledger: ['action', 'repo', 'runId'],
 };
 
 const ADD_SOURCE = 'export function add(a: number, b: number): number {\n  return a + b;\n}\n';
