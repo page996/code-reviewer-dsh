@@ -30,3 +30,9 @@ alwaysApply: false
 - blocker：静默数据错误/未捕获异常导致主流程失败。
 - major：特定输入下的错误或被掩盖的 null 路径。
 - minor：仅在边界输入下出现且影响可观测性有限。
+
+## 文件与路径（Node/Windows 高频真实缺陷）
+- 用户可控名字写文件：未处理 Windows 保留设备名（CON/PRN/AUX/NUL/COM1…）与结尾点号/空格时，写入失败或被重定向到设备；给出触发名字与调用点。
+- `path.resolve(相对路径)` 按 `process.cwd()` 解析，不等价于“相对 workspace/root”；调用方传相对路径而 cwd 不在预期根下会静默越界或读失败。
+- 边界校验只用 `path.resolve`/`path.relative` 做字面比较、未做 `realpath` 时，根内指向外部的符号链接能通过；解释实际可达的越界路径（若无调用点证据则降为 needs-human）。
+- `catch {}` / `except: pass` 把 ENOENT 与 EACCES/EBUSY/JSON 解析失败合并成“文件不存在”：会静默丢 checkpoint 或把损坏状态当空状态；要求区分错误类型。

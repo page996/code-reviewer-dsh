@@ -918,7 +918,7 @@ function compactScopeFiles(files) {
     path: file?.path ?? '',
     status: file?.status ?? '',
     reviewable: file?.reviewable === true,
-    excludeReason: file?.excludeReason ?? null,
+    excludeReason: file?.excludeReason ?? '',
     insertions: intOr(file?.insertions),
     deletions: intOr(file?.deletions),
   }));
@@ -1778,6 +1778,47 @@ function jsonString(description) {
   return description ? { type: 'string', description } : { type: 'string' };
 }
 
+/**
+ * Coerce a tool result to its declared output schema.
+ *
+ * The core engine uses `null` for absent optional values (e.g. `excludeReason`,
+ * `gateVerdict`, usage before an LLM run). The harness validates every tool result
+ * against the declared schema, so optional nulls must be dropped and required ones
+ * replaced by the type's zero value. This keeps the schemas honest without making
+ * every field nullable.
+ */
+function sanitizeOutput(value, schema) {
+  if (!schema) return value;
+  if (value === null || value === undefined) {
+    const type = Array.isArray(schema.type) ? schema.type[0] : schema.type;
+    if (type === 'string') return '';
+    if (type === 'number' || type === 'integer') return 0;
+    if (type === 'boolean') return false;
+    if (type === 'array') return [];
+    if (type === 'object') return {};
+    return value;
+  }
+  if (Array.isArray(value)) {
+    if (schema.type === 'array' && schema.items) return value.map((item) => sanitizeOutput(item, schema.items));
+    return value;
+  }
+  if (typeof value === 'object' && schema.type === 'object' && schema.properties) {
+    const required = new Set(Array.isArray(schema.required) ? schema.required : []);
+    const out = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (item === null || item === undefined) {
+        if (required.has(key)) out[key] = sanitizeOutput(item, schema.properties[key] ?? {});
+        continue;
+      }
+      out[key] = Object.prototype.hasOwnProperty.call(schema.properties, key)
+        ? sanitizeOutput(item, schema.properties[key])
+        : item;
+    }
+    return out;
+  }
+  return value;
+}
+
 function jsonNumber(description) {
   return description ? { type: 'number', description } : { type: 'number' };
 }
@@ -2129,6 +2170,11 @@ function registerTools(env) {
       const disposers = [];
       for (const definition of buildToolDefinitions(env)) {
         try {
+          const originalExecute = definition.execute;
+          if (typeof originalExecute === 'function') {
+            definition.execute = async (args, exec) =>
+              sanitizeOutput(await originalExecute(args, exec), definition.output?.schema);
+          }
           const disposer = registry.register(definition);
           if (typeof disposer === 'function') disposers.push(disposer);
           env.log('debug', `已注册工具 ${definition.name}`);

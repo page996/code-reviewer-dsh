@@ -447,7 +447,7 @@ test('aggregate: fingerprints are deterministic sha1 over normalized fields', ()
   assert.notEqual(a, computeFingerprint({ ...finding(), startLine: 99 }));
 });
 
-test('aggregate: review errors and human attention make the verdict needs-human', () => {
+test('aggregate: reviewer failures make the verdict needs-human', () => {
   const result = aggregateFindings({
     reviews: [
       { unitId: 'u01', lens: 'intent', findings: [], usage: usage(), humanAttention: ['确认配置项'] },
@@ -460,6 +460,19 @@ test('aggregate: review errors and human attention make the verdict needs-human'
   assert.equal(result.humanAttention.length, 1);
   assert.equal(result.errors.length, 1);
   assert.equal(result.errors[0].code, 'LLM_SERVER');
+});
+
+test('aggregate: human attention alone does not block (minor findings still pass)', () => {
+  const result = aggregateFindings({
+    reviews: [
+      { unitId: 'u01', lens: 'intent', findings: [], usage: usage(), humanAttention: ['确认配置项'] },
+    ],
+    anchored: [finding({ severity: 'minor', lens: 'intent' })],
+    config: AGG_CONFIG,
+  });
+  assert.equal(result.verdict, 'pass');
+  assert.equal(result.humanAttention.length, 1);
+  assert.equal(result.counts.minor, 1);
 });
 
 /* ------------------------------------------------------------------------- */

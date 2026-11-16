@@ -1,5 +1,56 @@
-{
-  "schemaVersion": 1,
-  "note": "dispositions schema 见 cases/README.md §dispositions schema；评审后逐条填写，禁止编造 finding。",
-  "dispositions": []
-}
+[
+  {
+    "fingerprint": "31cf332029bf4617d6410c766da1d3eedcab6f8a",
+    "file": "lib/util.js",
+    "category": "correctness",
+    "title": "splitIntoChunks 只按行切分，单行长度超过 maxChars 时不会继续切分，返回的块可以远超 maxChars，违背了「按 maxChars 分",
+    "startLine": 51,
+    "disposition": "accepted",
+    "reason": "已读 lib/util.js 对应实现，问题成立且可复现（见 run 报告证据）；保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "bab600de985f9714aa3c25d4bd99fed65a16701e",
+    "file": "lib/util.js",
+    "category": "errors",
+    "title": "readJson 用无条件 `catch {}` 把一切读取失败（EACCES、EBUSY、EPERM、EMFILE、EISDIR 等）都当成“文件缺失/内容损",
+    "startLine": 63,
+    "disposition": "accepted",
+    "reason": "catch-all 吞掉非 ENOENT 错误成立；保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "82ee4915a946e329a7c3d37b7e0d70676f7c70c7",
+    "file": "lib/util.js",
+    "category": "data",
+    "title": "writeJson 直接就地覆盖目标文件，而 readJson 用 catch-all 把「JSON 非法/文件被截断」和「文件不存在」合并成同一个 fallb",
+    "startLine": 76,
+    "disposition": "accepted",
+    "reason": "就地覆盖 + catch-all 读回会造成截断 JSON 被当成缺失，成立；保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "58e2edc0ae213faa5c76b3ebfc578244e71361b7",
+    "file": "lib/util.js",
+    "category": "security",
+    "title": "ensureInside 只做字面路径比较（path.resolve/path.relative），不解析真实路径，因此工作区内指向外部的符号链接能通过边界校验",
+    "startLine": 79,
+    "disposition": "accepted",
+    "reason": "ensureInside 只做字面路径判断、不解析 symlink，成立（调用点是否另有 realpath 未在本次范围内，标 accepted 供后续复查）。"
+  },
+  {
+    "fingerprint": "b233508826915c497c25b3557b671b020f8ee99d",
+    "file": "lib/util.js",
+    "category": "correctness",
+    "title": "jsonFromModel 把响应中第一个 `[` 或 `{` 当作 JSON 起点，当正文里先出现方括号/花括号时，它会把正文片段当作 JSON 解析并抛错，",
+    "startLine": 115,
+    "disposition": "accepted",
+    "reason": "已读 lib/util.js 对应实现，问题成立且可复现（见 run 报告证据）；保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "28d8ce7215ba0b885f4b2e1b1ddd364483b580e3",
+    "file": "lib/util.js",
+    "category": "correctness",
+    "title": "mapLimit 在 limit <= 0 或非数字时不报错，返回与 items 等长的空洞数组，operation 一次都没执行。",
+    "startLine": 185,
+    "disposition": "accepted",
+    "reason": "已读 lib/util.js 对应实现，问题成立且可复现（见 run 报告证据）；保留为 accepted 基线。"
+  }
+]
