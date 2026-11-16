@@ -37,3 +37,10 @@ alwaysApply: false
 - 边界校验只用 `path.resolve`/`path.relative` 做字面比较、未做 `realpath` 时，根内指向外部的符号链接能通过；解释实际可达的越界路径（若无调用点证据则降为 needs-human）。
 - `catch {}` / `except: pass` 把 ENOENT 与 EACCES/EBUSY/JSON 解析失败合并成“文件不存在”：会静默丢 checkpoint 或把损坏状态当空状态；要求区分错误类型。
 - `.catch(() => [])` / `.catch(() => null)` 把 `readdir`/`stat` 的 EACCES/EMFILE/EIO 退化成“空目录/不存在”：统计、审计、限额会静默变成 0；指出被吞的错误类型与后果。
+
+## 前端/React 与网络调用（真实高频）
+- `fetch` 无超时/`AbortSignal`，配合 `Promise.allSettled` 会让单个悬挂请求永久拖住刷新；指出悬挂点与用户可见后果。
+- fire-and-forget 写请求（如 PUT active-view）错误被吞、无重试/取消；轮询与 focus/storage 事件并发触发刷新但无请求序号，旧响应覆盖新状态。
+- React `state updater` 内修改 ref/外部状态（StrictMode 双调用会重复副作用）；应在 updater 外同步。
+- “不可达/成环”的文件夹集合仍把环成员当根并保留父子关系，渲染会重复；检查树构建时是否断环。
+- 不可信 HTML 的预览 iframe 同源且无 `sandbox`（生成文档脚本可获得主页面权限）；`href` 未校验协议（`javascript:`/`data:`）可被点击触发。

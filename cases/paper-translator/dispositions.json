@@ -1105,5 +1105,158 @@
     "startLine": 2785,
     "disposition": "accepted",
     "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "83abb5aa4da3d828376140c35edf8f23a420411e",
+    "file": "client.js",
+    "category": "contract",
+    "title": "术语数量下拉的可选值与 normalizeMaxTerms/health 默认值的取值范围不一致，显示值与实际 POST 值可能不同",
+    "startLine": 87,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "32bcaa704e0d957cf1078ac6f130824d7f49ef2e",
+    "file": "client.js",
+    "category": "errors",
+    "title": "所有 API 请求的 fetch 没有超时/AbortSignal，refreshAll 使用 Promise.allSettled 等待全部请求；单个 hos",
+    "startLine": 886,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b3977fa6ebb3cee7ff999288c2a62fbc60b985cf",
+    "file": "client.js",
+    "category": "security",
+    "title": "进程级 token 被拼进 api/file 的 URL query，并被写进 iframe src 与下载链接，违背本文件对 reader iframe 明确",
+    "startLine": 1013,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6a6956a1512027df25a6c6b5b3160712aa7f2acd",
+    "file": "client.js",
+    "category": "correctness",
+    "title": "不可达（成环）的文件夹被全部加入 rootFolders，但环中的父子关系仍在 children 中，渲染时同一文件夹会作为根和另一环成员的子项各出现一次。",
+    "startLine": 1140,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "44c56702f85700c4ed291dbf2780e820e1031578",
+    "file": "client.js",
+    "category": "errors",
+    "title": "设置保存失败被完全吞掉：SettingsModal 的 catch 注释声称“caller reports the failure”，但真正的调用方 saveS",
+    "startLine": 1874,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "46f89dcd8330a3d7eb0d7849ceae1a5522747a19",
+    "file": "client.js",
+    "category": "errors",
+    "title": "ConfirmModal 支持 busy 禁用确认按钮，但 Page 里所有破坏性确认（removeDoc / deleteFolder / deleteDoc",
+    "startLine": 1968,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c0531fbf39b6ae7080785d40603565e7aea48480",
+    "file": "client.js",
+    "category": "security",
+    "title": "渲染 PDF/LLM 派生 HTML 的预览与阅读 iframe 与主页面同源且未设置 sandbox，生成文档里的脚本可获得主页面全部权限。",
+    "startLine": 2240,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "930a88333e239b772ea8c77cbe98112a748aaaca",
+    "file": "client.js",
+    "category": "security",
+    "title": "术语来源链接把外部/模型产出的 URL 直接作为 href 渲染，未校验协议，javascript:/data: 等伪协议可被点击触发。",
+    "startLine": 2380,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ae9daefe98ca674bf9192e6a3f8a49015413b96b",
+    "file": "client.js",
+    "category": "correctness",
+    "title": "doc 视图的 reader 判定直接采用 translation.readerReady，未先校验 doc 状态为 translated；running 状态",
+    "startLine": 3269,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0ccf2ba5ad5599d8b64bb21fe039a2dccfb9cd0f",
+    "file": "client.js",
+    "category": "concurrency",
+    "title": "putActiveView 的 PUT 是 fire-and-forget 且错误被静默吞掉，而 reconcileActiveView 会在 2 秒后用 ho",
+    "startLine": 3611,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0dba73bd2989e51587cc360f8820ce2c96155542",
+    "file": "client.js",
+    "category": "concurrency",
+    "title": "refreshAll 可被轮询、focus、storage、broadcast 和用户操作并发触发，但没有请求序号/取消，后返回的旧响应会覆盖先返回的新快照。",
+    "startLine": 3622,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "65ef2236a424a09890c27421d2c67cb4399e7251",
+    "file": "client.js",
+    "category": "correctness",
+    "title": "active-view 的「没有 view」被当成权威的『清空本地视窗』，与本文件自述的『仅跨窗口提示、不阻塞本地』语义相反，PUT 失败或响应形状不符时会自动",
+    "startLine": 3630,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7f38d6dd856b51b9752f564517105123686c2eb7",
+    "file": "client.js",
+    "category": "correctness",
+    "title": "state updater 内修改 knownFolderIdsRef（副作用）；React StrictMode 会双调用 updater，第二次调用因 re",
+    "startLine": 3877,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e6ce2c6f0e8d1dfeed57f01ee0de592c78bee4e5",
+    "file": "client.js",
+    "category": "errors",
+    "title": "job 详情抓取失败后 ensuredJobsRef 已占位且永不重试，导致该视图长期缺失 qualityGate / 文件与预览页签",
+    "startLine": 3898,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1cce61cf7e95284076e87eec849c8275c1b67aca",
+    "file": "client.js",
+    "category": "errors",
+    "title": "fetchJobDetail 只把 401 冒泡到错误条，404/500 等失败被静默丢弃，而失败的结果是视窗永久停在“加载中…”占位。",
+    "startLine": 4000,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e77028636ee5a0f4c7da49fc8c2545ca46e47ee8",
+    "file": "client.js",
+    "category": "errors",
+    "title": "refreshAll 对 /api/jobs 的失败没有任何处理分支，失败被静默丢弃；同一函数里 /api/library 的失败却会写入 libraryErr",
+    "startLine": 4185,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "70448b727f52f1daeba520a3ba735bc4a87ccded",
+    "file": "client.js",
+    "category": "correctness",
+    "title": "在 job 视图（尤其历史 job 无 docId）点击“写随笔”时，代码回退到 docsRef.current[0]，为素材库第一个文档打开 notes，而不",
+    "startLine": 4470,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
   }
 ]

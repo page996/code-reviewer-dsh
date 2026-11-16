@@ -21,8 +21,9 @@
 | batch-7 | `python/floats.py` | standard（同 lenses） | `run-20261116-211500-f3ee` | 2 major + 18 minor，全部 accepted；`review eval`：matched 20 / missed 0 → **pass**；跨视角同行重复项部分被新去重合并（措辞差异大者仍分开，见 lessons R-15） |
 | batch-8 | `python/render_paper.py`（4,731 行） | standard（同 lenses） | `run-20261116-212301-f41d` | 15 minor，全部 accepted；`review eval`：matched 15 / missed 0 → **pass** |
 | batch-9 | `python/mathconv.py`（2,554 行） | standard（同 lenses） | `run-20261116-213124-06c8` | 12 minor，全部 accepted；`review eval`：matched 12 / missed 0 → **pass** |
-| batch-10（待做） | `client.js` / `assets/*` 跨端契约 | standard | — | — |
-| batch-11（待做） | `lib/{workspace,graph,notes-store,...}` 剩余模块 | standard | — | — |
+| batch-10 | `client.js`（Web UI，4,871 行） | standard（同 lenses） | `run-20261116-214120-3f06` | 17 minor，全部 accepted；`review eval`：matched 17 / missed 0 → **pass**；首轮曾遇 2 次传输失败，重跑成功（重试代码已在 main，待重启生效） |
+| batch-11（待做） | `lib/{workspace,graph,notes-store,visual,...}` 剩余模块 | standard | — | — |
+| batch-12（待做） | `assets/{workbench,doc-reader,graph-view}.js` 大 UI 契约 | standard | — | — |
 
 排除：`assets/katex/**`（vendored）、`python/__pycache__/**`、`*.pyc`、`locale/*.json`。
 
@@ -71,6 +72,7 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 - batch-7（Python）：`review eval --run run-20261116-211500-f3ee` → **pass**（matched 20 / missed 0 / noise 0 / notEvaluated 76）。
 - batch-8（Python）：`review eval --run run-20261116-212301-f41d` → **pass**（matched 15 / missed 0 / notEvaluated 96）。
 - batch-9（Python）：`review eval --run run-20261116-213124-06c8` → **pass**（matched 12 / missed 0 / notEvaluated 111）。
+- batch-10（Web UI）：`review eval --run run-20261116-214120-3f06` → **pass**（matched 17 / missed 0 / notEvaluated 123）。
 - batch-2：`--run run-20261116-193909-9bc6`（插件仍缓存旧 `lib/plan.mjs`，tests 视角未跳过；本机无重启）→ matched 13 / missed 0 / noise 2–4，exit 2；属运行时缓存而非代码回归。
 - 新增 `review.temperature=0` 与 reviewer 传输重试后，**重启 DSH** 重跑 batch-2 预期稳定通过（重复运行结果一致）。
 - eval 语义已按 run scope 过滤：其他批次基线在当前 run 中计 `notEvaluated`，不再误判漏报。
