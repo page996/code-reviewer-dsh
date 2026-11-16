@@ -34,7 +34,7 @@ import {
 } from '../lib/git.mjs';
 import { createScope, languageForPath, SUPPORTED_EXTS } from '../lib/scope.mjs';
 import { loadRules, matchGlob, parseFrontmatter, resolveRulesForFile } from '../lib/rules.mjs';
-import { EFFORT_LENSES, buildPlan } from '../lib/plan.mjs';
+import { EFFORT_LENSES, SCAN_SKIP_LENSES, buildPlan } from '../lib/plan.mjs';
 import {
   createRun,
   createRunId,
@@ -699,9 +699,13 @@ test('plan: effort -> lenses, deep rounds, grouping modes and rule binding', (t)
   }
 
   const standard = buildPlan({ scope, config, effort: 'standard', rules });
-  assert.deepEqual(standard.lenses, [...EFFORT_LENSES.standard]);
+  assert.deepEqual(
+    standard.lenses,
+    EFFORT_LENSES.standard.filter((lens) => !SCAN_SKIP_LENSES.includes(lens)),
+    'scan mode skips unit-scope-unfriendly lenses',
+  );
   const deep = buildPlan({ scope, config, effort: 'deep', rules });
-  assert.equal(deep.lenses.length, LENSES.length);
+  assert.equal(deep.lenses.length, LENSES.length - SCAN_SKIP_LENSES.length);
   assert.equal(deep.rounds >= 2, true, 'deep effort forces rounds >= 2');
 
   const perfile = buildPlan({ scope, config: baseConfig(dir, { plan: { maxFilesPerUnit: 5, maxLinesPerUnit: 10000, groupBy: 'perfile' } }), effort: 'quick', rules });
@@ -765,6 +769,20 @@ test('plan: scan grouping enforces BOTH maxFilesPerUnit and maxLinesPerUnit', (t
   assert.equal(soloUnits.length, 1);
   assert.equal(soloUnits[0].files.length, 1, 'oversized single file is not split and is not merged');
   assert.equal(soloUnits[0].stats.changedLines, 50);
+});
+
+test('plan: scan mode drops the tests lens unless explicitly requested', (t) => {
+  const dir = initRepo();
+  t.after(() => removeTemp(dir));
+  writeFile(dir, 'lib/a.js', 'export const a = 1;\n');
+  commitAll(dir, 'init');
+  const config = baseConfig(dir);
+  const scanScope = createScope({ cwd: dir, mode: 'scan', path: 'lib', config });
+  const plan = buildPlan({ scope: scanScope, config, effort: 'standard' });
+  assert.equal(plan.lenses.includes('tests'), false, 'scan units contain only the reviewed file');
+  assert.equal(plan.lenses.includes('correctness'), true);
+  const explicit = buildPlan({ scope: scanScope, config, effort: 'standard', lenses: ['tests'] });
+  assert.deepEqual(explicit.lenses, ['tests'], 'an explicit lens selection always wins');
 });
 
 // ---------------------------------------------------------------------------

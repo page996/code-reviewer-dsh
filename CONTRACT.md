@@ -248,7 +248,7 @@ review eval  --case <caseDir> [--run R] [--json]              # case 回归（�
 - `test/`：`node --test`。必须覆盖：git 枚举 5 种模式（fixture 临时 repo）、scope 排除原因、规则 glob、plan 打包、定位（命中/未命中）、聚合（投票/pre-existing/去重）、gate verdict/退出码、hooks 安装与阻断、SARIF 结构合法、CLI `--json` 输出。
 - `test/hooks.contract.mjs`：临时 repo + `install-hooks` + `git commit`（配置 `gate.commands` 为 `node -e "process.exit(1)"` 时提交失败、`exit 0` 时成功）→ 断言退出码与 stderr；`REVIEW_SKIP_HOOKS=1` 时放行。
 - 不真实调用模型的测试一律注入 fake `llm`（`{complete: async()=>...}`），禁止在单测里发网络请求。
-- CI：`.github/workflows/ci.yml`（node 24，`npm test` + 自审 `review scan`）、`review.yml`（PR 跑 LLM 评审 + gate + SARIF + PR 评论；缺 `DEEPSEEK_API_KEY` 时**严格失败**并给出明确提示；fork PR 除外）、`hooks-contract.yml`。
+- CI：`.github/workflows/ci.yml`（node 24，`npm test` + 自审 `review scan`）、`review.yml`（PR 跑 LLM 评审 + gate + SARIF + PR 评论；缺 key secret（`DSH_API_KEY`，兼容 `DEEPSEEK_API_KEY`）时**严格失败**并给出明确提示；fork PR 除外）、`hooks-contract.yml`。
 
 ## 11. 经验沉淀（`cases/`）
 

@@ -80,7 +80,7 @@ Copy-Item -Recurse -Force <repo>\skills\ai-code-review .dsh\skills\ai-code-revie
 ### 3. GitHub Actions
 
 1. 复制 `.github/workflows/{ci,review,hooks-contract}.yml` 到目标仓库；
-2. 配置 Secret `DEEPSEEK_API_KEY`（可选 `DEEPSEEK_BASE_URL`）；
+2. 配置 Secret `DSH_API_KEY`（也接受 `DEEPSEEK_API_KEY`；可选 `DEEPSEEK_BASE_URL`）；
 3. branch protection：要求 `ci.yml` 与 `review.yml` 的 check 必过，push 后 dismiss 旧 approval；
 4. 严格模式：同仓 PR 缺 secret → job 必须红；fork PR 无 secret → 只跑确定性门禁并在评论标注未评审。
 

@@ -38,9 +38,17 @@ function makeCase({ findings, dispositions }) {
   return dir;
 }
 
-function makeRun(findings) {
+function makeRun(findings, { files } = {}) {
   const dir = tmpDir('review-run-');
   writeJson(path.join(dir, 'aggregate.json'), { schemaVersion: 1, runId: 'run-test', findings });
+  if (files) {
+    writeJson(path.join(dir, 'scope.json'), {
+      schemaVersion: 1,
+      runId: 'run-test',
+      mode: 'scan',
+      files: files.map((file) => ({ path: file, reviewable: true })),
+    });
+  }
   return dir;
 }
 
@@ -136,4 +144,66 @@ test('eval: invalid disposition value is a schema error', () => {
 
 test('eval: missing case directory is a usage error', () => {
   assert.throws(() => evalCase({ caseDir: path.join(os.tmpdir(), 'definitely-missing-case-dir'), runDir: tmpDir() }), /case directory not found/);
+});
+
+test('eval: baseline findings outside the run scope are not evaluated (no false regression)', () => {
+  const other = finding({
+    file: 'lib/other.mjs',
+    startLine: 5,
+    category: 'security',
+    problem: 'unrelated issue from another batch',
+  });
+  const caseDir = makeCase({ findings: [accepted, other], dispositions: [] });
+  const runDir = makeRun([accepted], { files: ['lib/a.mjs'] });
+  const result = evalCase({ caseDir, runDir });
+  assert.equal(result.verdict, 'pass');
+  assert.equal(result.counts.notEvaluated, 1);
+  assert.equal(result.counts.missed, 0);
+  assert.equal(result.notEvaluated[0].file, 'lib/other.mjs');
+});
+
+test('eval: nearby-line drift still matches an accepted finding', () => {
+  const drifted = finding({ startLine: 18, endLine: 20 });
+  const caseDir = makeCase({ findings: [accepted], dispositions: [] });
+  const runDir = makeRun([drifted]);
+  const result = evalCase({ caseDir, runDir });
+  assert.equal(result.verdict, 'pass');
+  assert.equal(result.counts.missed, 0);
+  assert.ok(['key', 'line', 'nearby-line'].includes(result.matched[0].matchedBy));
+});
+
+test('eval: reworded title with a nearby line still matches', () => {
+  const reworded = finding({
+    startLine: 14,
+    problem: 'loop bound is off by one, index can overflow the array',
+  });
+  const caseDir = makeCase({ findings: [accepted], dispositions: [] });
+  const runDir = makeRun([reworded]);
+  const result = evalCase({ caseDir, runDir });
+  assert.equal(result.verdict, 'pass');
+  assert.equal(result.counts.missed, 0);
+});
+
+test('eval: a rejected tests finding is not matched by a nearby code finding', () => {
+  const testGap = finding({
+    category: 'tests',
+    severity: 'minor',
+    startLine: 40,
+    problem: '本单元没有配套测试：mint/decide/consume 状态机均无断言',
+  });
+  const caseDir = makeCase({
+    findings: [testGap],
+    dispositions: [{ file: 'lib/a.mjs', category: 'tests', disposition: 'rejected', reason: 'unit scope noise' }],
+  });
+  const codeFinding = finding({
+    category: 'errors',
+    severity: 'minor',
+    startLine: 41,
+    problem: 'mint/decide/consume 的错误码没有被调用方检查',
+  });
+  const runDir = makeRun([codeFinding], { files: ['lib/a.mjs'] });
+  const result = evalCase({ caseDir, runDir });
+  assert.equal(result.verdict, 'pass');
+  assert.equal(result.counts.noiseStillReported, 0);
+  assert.equal(result.counts.newFindings, 1);
 });

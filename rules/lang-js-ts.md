@@ -36,3 +36,4 @@ alwaysApply: false
 - `path.resolve(相对路径)` 按 `process.cwd()` 解析，不等价于“相对 workspace/root”；调用方传相对路径而 cwd 不在预期根下会静默越界或读失败。
 - 边界校验只用 `path.resolve`/`path.relative` 做字面比较、未做 `realpath` 时，根内指向外部的符号链接能通过；解释实际可达的越界路径（若无调用点证据则降为 needs-human）。
 - `catch {}` / `except: pass` 把 ENOENT 与 EACCES/EBUSY/JSON 解析失败合并成“文件不存在”：会静默丢 checkpoint 或把损坏状态当空状态；要求区分错误类型。
+- `.catch(() => [])` / `.catch(() => null)` 把 `readdir`/`stat` 的 EACCES/EMFILE/EIO 退化成“空目录/不存在”：统计、审计、限额会静默变成 0；指出被吞的错误类型与后果。

@@ -1,61 +1,62 @@
 # lessons — paper-translator
 
-> 批次 1（`lib/util.js`，run `run-20261116-190955-746b`）已完成并逐条判定。
+> 已评审：batch-1（`lib/util.js`，quick）与 batch-2（`lib/gateway.js`，standard）。
 > 每条 lesson 必须落到具体文件（规则 / prompt / 回归用例 / 项目口径），否则不算沉淀。
 
 ## 1. 规则缺口（→ `rules/*.md`）
 
 | # | 现象（来自哪条 finding） | 根因 | 建议新增/修改的规则 | 目标文件 | 验证方式 |
 |---|---|---|---|---|---|
-| R-1 | `safeName` 未处理 Windows 保留设备名与结尾点/空格（finding #6 的 human_attention 分支） | 通用「路径安全」规则只写了 traversal，没覆盖 Windows 文件名 | 新增「文件与路径」节：保留设备名/结尾点号/空格 | `rules/lang-js-ts.md`（已加） | 重跑 deep，确认 Windows 文件名类问题被报出 |
-| R-2 | `ensureInside` 用 `path.resolve(相对路径)` 依赖 cwd | 规则没提“相对路径按 cwd 解析”这一陷阱 | 同上节：`path.resolve`≠workspace 根 | `rules/lang-js-ts.md`（已加） | 同上 |
-| R-3 | `readJson` catch-all 吞 EACCES/EBUSY/解析错误 | 规则没有“区分 ENOENT 与其他错误”的可判定条件 | 同上节：catch-all 合并错误类型 → 静默丢状态 | `rules/lang-js-ts.md`（已加） | 同上 |
-| R-4 | `writeJson` 就地覆盖没有 tmp+rename | 数据持久化规则缺“原子写”判据 | `rules/core-data.md` 后续补「checkpoint/状态文件必须 tmp+rename，或说明回退理由」 | `rules/core-data.md`（下一批） | 下一批 finding 或 eval |
+| R-1 | `safeName` 未处理 Windows 保留设备名与结尾点/空格 | 通用路径规则没覆盖 Windows 文件名 | 文件与路径节：保留设备名/结尾点号/空格 | `rules/lang-js-ts.md`（已加） | 重跑 deep 确认报出 |
+| R-2 | `ensureInside` 用 `path.resolve(相对路径)` 依赖 cwd | 规则没提「相对路径按 cwd 解析」 | 同上节：`path.resolve`≠workspace 根 | `rules/lang-js-ts.md`（已加） | 同上 |
+| R-3 | `readJson` catch-all 吞 EACCES/EBUSY/解析错误 | 缺少「区分 ENOENT 与其他错误」判据 | 同上节：catch-all 合并错误类型 | `rules/lang-js-ts.md`（已加） | 同上 |
+| R-4 | `writeJson` 就地覆盖没有 tmp+rename | 数据持久化规则缺「原子写」判据 | checkpoint/状态文件必须 tmp+rename 或说明回退理由 | `rules/core-data.md`（下一批补） | batch-3 finding 或 eval |
+| R-5 | `gateway.walkImpact` 用 `.catch(() => [])` 吞 readdir 错误 | 规则只覆盖 `catch {}`，没覆盖 promise catch 简写 | 新增 `.catch(() => [])`/`.catch(() => null)` 吞错条目 | `rules/lang-js-ts.md`（已加） | batch-2 复评命中 |
+| R-6 | 审批 summary.bytes 取自请求体、决定者身份不校验 | 缺少「审批依据可伪造」判据 | 审批/授权依据来自客户端且不复核 → 报告 | `rules/core-security.md`（已加） | batch-2 复评命中 |
+| R-7 | pending 上限 check-then-act、consume 执行前标记 consumed | 规则缺「跨 await 的配额检查」与「一次性授权状态机」 | 新增两条并发/状态机条目 | `rules/core-concurrency.md`（已加） | batch-2 复评命中 |
 
 ## 2. prompt 调整（→ `references/prompts.md` + `lib/prompts.mjs`）
 
-| # | 哪个视角漏了 | 要追加的检查项 | 目标文件 | 验证方式 |
+| # | 哪个视角/环节 | 要追加的检查项 | 目标文件 | 验证方式 |
 |---|---|---|---|---|
-| P-1 | 全局 | `human_attention` 无上限，无任务契约时输出 11 条泛泛问题，把 verdict 顶成 needs-human | `lib/prompts.mjs` BASE_RULES（已加：≤3 条、只保留影响合并/发布的问题）+ `skills/ai-code-review/references/prompts.md` | 重跑 quick，human_attention ≤3 且 verdict 不被顶掉 |
-| P-2 | intent | 无任务契约时无法核对“改动意图”，容易泛化提问 | 批次 2 起在 case README 提供最小契约（目标/非目标/验收）再评审 | 重跑一批，human_attention 数量下降 |
+| P-1 | 全局 | `human_attention` 无上限，无契约时 11 条泛泛问题把 verdict 顶成 needs-human | `lib/prompts.mjs` BASE_RULES：≤3 条、只保留影响合并/发布的问题 | batch-2 复评 human_attention 明显减少 |
+| P-2 | tests | unit 只含被审文件时仍报「本单元没有测试」 | `lib/prompts.mjs` tests 视角禁止范围性观察；`lib/plan.mjs` scan 模式跳过 tests 视角；`lib/aggregate.mjs` 兜底 drop `unit-scope-test-gap` | 重启后重跑 batch-2，eval noise=0 |
+| P-3 | 全局 | 无任务契约时 intent 视角仍会报“无法核对意图” | 批次 3 起在 case README 提供最小契约（目标/非目标/验收）再评审 | human_attention 数量下降 |
 
-## 3. 需要新增的回归用例（→ 本 case 基线 + `review eval`）
+## 3. 回归用例（→ `findings.json` 基线 + `review eval`）
 
-| # | 缺陷/误报 | 输入（文件/片段） | 期望行为 | 落点 |
-|---|---|---|---|---|
-| E-1 | 单行超长不切分 | `lib/util.js` `splitIntoChunks` | 下次仍被报出（`accepted`） | `findings.json` 基线 |
-| E-2 | catch-all 读错误 | `lib/util.js` `readJson` | 仍被报出（`accepted`） | 同上 |
-| E-3 | 非原子写 + 静默回退 | `lib/util.js` `writeJson` | 仍被报出（`accepted`） | 同上 |
-| E-4 | 字面路径校验不解析 symlink | `lib/util.js` `ensureInside` | 仍被报出（`accepted`） | 同上 |
-| E-5 | 取首个括号当 JSON | `lib/util.js` `jsonFromModel` | 仍被报出（`accepted`） | 同上 |
-| E-6 | `mapLimit(limit<=0)` 空洞数组 | `lib/util.js` `mapLimit` | 仍被报出（`accepted`） | 同上 |
+| # | 缺陷 | 期望行为 | 落点 |
+|---|---|---|---|
+| E-1…E-6 | batch-1 的 6 条 util 缺陷 | 仍被报出（accepted） | `findings.json` |
+| E-7…E-19 | batch-2 的 13 条 gateway 缺陷（accepted） | 仍被报出；允许类别标签/措辞漂移（eval 用同文件近似行/标题相似度匹配） | `findings.json` |
+| E-20…E-23 | batch-2 的 4 条 unit-scope 测试缺口 | 不再报出（rejected；tests 视角在 scan 模式应跳过） | `findings.json` |
 
 回归命令：
 
 ```bash
-node bin/review.mjs eval --case cases/paper-translator --run latest
-# 有回归 exit 2；accepted 漏报 / rejected|fixed 复现 都会失败
+node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator --run latest
+# 0=通过；2=召回/精度/过期回归；notEvaluated 表示基线文件不在本次 run 的 scope 内
 ```
 
 ## 4. 逃逸/误报台账
 
-| finding fingerprint | 四态 | 原因摘要 | 是否已有规则/prompt 覆盖 | 后续动作 |
-|---|---|---|---|---|
-| `31cf332029bf4617d6410c766da1d3eedcab6f8a` | accepted | 单行超长不切分，长中文段落会超上下文 | 是（core-correctness 边界） | 保持基线 |
-| `bab600de985f9714aa3c25d4bd99fed65a16701e` | accepted | catch-all 吞 EACCES/EBUSY/parse | 是（R-3） | 保持基线 |
-| `82ee4915a946e329a7c3d37b7e0d70676f7c70c7` | accepted | 就地写 + catch-all 读回 = 静默丢 checkpoint | 是（R-4 待补） | 下一批补 core-data 规则 |
-| （ensureInside symlink） | accepted | 字面路径校验可通过根内外链 | 是（R-2/R-4） | 调用点批次复查 |
-| （jsonFromModel 首括号） | accepted | 正文先出括号时误判 JSON 起点 | 是（core-errors） | 保持基线 |
-| （mapLimit limit<=0） | accepted | 空洞数组、operation 未执行 | 是（core-concurrency） | 保持基线 |
+| 批次 | fingerprint（见 findings.json） | 四态 | 原因摘要 | 覆盖 | 后续动作 |
+|---|---|---|---|---|---|
+| batch-1 | 6 条 | accepted | 见 batch-1 报告 | 规则已补 | 保持基线 |
+| batch-2 | 13 条 | accepted | 见 run `run-20261116-193909-9bc6` 报告 | R-5/R-6/R-7 + P-1 | 重启后复评确认 |
+| batch-2 | 4 条（tests） | rejected | unit-scope 范围噪声，非真实缺陷 | P-2 + plan scan 跳过 tests + aggregate 兜底 | 重启后 eval 应 noise=0 |
 
-> 精确 fingerprint 以 `cases/paper-translator/findings.json` 为准；本表里带简称的行在后续批次补齐 fingerprint。
+## 5. eval 机制自身的三次修正（meta lesson）
 
-## 5. 结论摘要
+1. **跨批次误报**：batch-2 的 run 只覆盖 gateway.js，batch-1 的 util.js 基线不该判漏报 → eval 按 run scope 过滤，记 `notEvaluated`。
+2. **措辞/行号漂移**：同一问题两次运行标题不同、行号移动 → 增加「同文件近似行（±20）+ 中文 bigram 标题相似度」兜底。
+3. **类别漂移 vs 类别族**：errors/security/concurrency 允许互认；tests 与代码类别不互认，避免「测试缺口」误配到代码 finding。
 
-- 真实缺陷：6 条（blocker 0 / major 0 / minor 6）；全部 accepted。
-- 误报：0 条（本批未出现可证伪 finding；产品侧修复了 11 条 human_attention 噪声）。
-- 新增规则：3 条（R-1/R-2/R-3 已落 `rules/lang-js-ts.md`），R-4 待落 `rules/core-data.md`。
-- prompt 调整：1 处（P-1，已落 `lib/prompts.mjs`）。
-- 回归用例：6 条（E-1…E-6）。
-- 产品改进：verdict 与 gate 语义解耦、report 结论以 gate 为准、插件输出 schema 清洗（见 `README.md`）。
-- 是否更新 `REVIEW.md`/`AGENTS.md`：否（本仓库无 .git，也不属于被评审项目的改造范围）。
+## 6. 结论摘要
+
+- 真实缺陷：batch-1 6 条 + batch-2 13 条 accepted（均为 minor；batch-2 复评新增 3 条 major 待下一轮 disposition）。
+- 误报：batch-2 4 条 unit-scope 测试噪声（rejected）。
+- 新增规则：5 条（R-1/R-2/R-3/R-5/R-6/R-7 已落，R-4 待落 core-data）。
+- prompt 调整：2 处（P-1/P-2 已落）。
+- 回归用例：19 accepted + 4 rejected。
+- 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则）。

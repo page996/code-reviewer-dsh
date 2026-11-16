@@ -52,5 +52,158 @@
     "startLine": 185,
     "disposition": "accepted",
     "reason": "已读 lib/util.js 对应实现，问题成立且可复现（见 run 报告证据）；保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e4ad3a00d4acc8d09c2a6e58dec9b32ad586abca",
+    "file": "lib/gateway.js",
+    "category": "errors",
+    "title": "walkImpact 与非递归 delete 统计中的 readdir 失败被 `.catch(() => [])` 吞掉，EACCES/EMFILE/EIO ",
+    "startLine": 107,
+    "disposition": "accepted",
+    "reason": "错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "26e49fd90705f65d69110bbeb6c54e6c9f3fd873",
+    "file": "lib/gateway.js",
+    "category": "tests",
+    "title": "mint 的影响统计降级路径（无 resolveDocDir → degraded/exists:null）、路径逃逸 400 invalid-path、以及 ",
+    "startLine": 138,
+    "disposition": "rejected",
+    "reason": "unit 范围只含被审文件，属“本 unit 无测试”噪声：判 rejected，要求 prompt P-2 后不再仅凭 unit 范围报测试缺口。"
+  },
+  {
+    "fingerprint": "d72e0a82521ef9ba676e62b95b6c144cab02981a",
+    "file": "lib/gateway.js",
+    "category": "tests",
+    "title": "本单元新增了 517 行的审批状态机（mint/decide/consume/list + TTL + 一次性消费），但整个 unit 只有 lib/gatew",
+    "startLine": 187,
+    "disposition": "rejected",
+    "reason": "unit 范围只含被审文件，属“本 unit 无测试”噪声：判 rejected，要求 prompt P-2 后不再仅凭 unit 范围报测试缺口。"
+  },
+  {
+    "fingerprint": "288aa24d909b6d0aa78e7235517ff581e188448a",
+    "file": "lib/gateway.js",
+    "category": "errors",
+    "title": "docMap 在建表时无条件下写入实例级 `approvals`，而只读路径 `list`(508 行)、`decide`(403 行)、`consume`(4",
+    "startLine": 206,
+    "disposition": "accepted",
+    "reason": "错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a9b07adb7867b0a16f6188bb41ae6bc6e6dfa3a8",
+    "file": "lib/gateway.js",
+    "category": "concurrency",
+    "title": "approvals 只按 docId 增加条目、从不删除；sweep 只清理当前被访问的那个 docId，未再被访问的文档其记录永久驻留，内存无上限增长。",
+    "startLine": 206,
+    "disposition": "accepted",
+    "reason": "并发/状态机缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "9bf1b06ecb358c59e3f3be5253b9f10cddbadcb7",
+    "file": "lib/gateway.js",
+    "category": "intent",
+    "title": "mint 路径实际会调用注入的 executors（resolveDocDir / ensureDocumentDirectory），与本文件自己声明的契约相反",
+    "startLine": 226,
+    "disposition": "accepted",
+    "reason": "实现与文件头/注释契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b13242307c5a75b06347400e9ae415561cdc6d0d",
+    "file": "lib/gateway.js",
+    "category": "errors",
+    "title": "审计写入失败被吞成 null，且所有调用点都不检查返回值，调用方无法区分「已审计」与「审计丢失」；默认未注入 log 时连日志都没有",
+    "startLine": 240,
+    "disposition": "accepted",
+    "reason": "错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f9f290bba7ba97970c2903de87899181e1122740",
+    "file": "lib/gateway.js",
+    "category": "tests",
+    "title": "两级过期语义（pending 的 `pendingTtlMs` 与 approved 的 `approvedWindowMs`）没有任何测试验证，而代码已经专门",
+    "startLine": 286,
+    "disposition": "rejected",
+    "reason": "unit 范围只含被审文件，属“本 unit 无测试”噪声：判 rejected，要求 prompt P-2 后不再仅凭 unit 范围报测试缺口。"
+  },
+  {
+    "fingerprint": "63ba83ea2178eca3eb653e56b6cf4b44646f0956",
+    "file": "lib/gateway.js",
+    "category": "errors",
+    "title": "mint 中 normalizeRelative 抛错没有被包装成带 status/code 的 gatewayError，非法路径会以裸错误冒泡，丢失错误类型",
+    "startLine": 319,
+    "disposition": "accepted",
+    "reason": "错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fdb6faf7e6e665ef8109cf70ea25dadccfb1e87a",
+    "file": "lib/gateway.js",
+    "category": "security",
+    "title": "write 类审批的“将写入字节数”完全来自请求体 `options.bytes`，服务端没有任何交叉校验，审批人看到的规模可被伪造。",
+    "startLine": 329,
+    "disposition": "accepted",
+    "reason": "审批依据可伪造/决定者未校验，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "990cab184497c40808c38f83b34d4aa6b9b4cae4",
+    "file": "lib/gateway.js",
+    "category": "concurrency",
+    "title": "待审批上限是 check-then-act：计数检查（337 行）到真正插入记录（372 行 `map.set`）之间跨了两个 await（345 行 `awa",
+    "startLine": 337,
+    "disposition": "accepted",
+    "reason": "并发/状态机缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "64a47c1da6b261c600f34693e957b41359889a0e",
+    "file": "lib/gateway.js",
+    "category": "intent",
+    "title": "decide() 把已 consumed 的记录映射成顶层 status:'approved'，而同一个响应里的 approval.status 来自 publ",
+    "startLine": 409,
+    "disposition": "accepted",
+    "reason": "实现与文件头/注释契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "611a8ee7ffeef1a824400de9c9be56c37bf21da7",
+    "file": "lib/gateway.js",
+    "category": "security",
+    "title": "审批的“决定者”身份直接从请求体取，且缺省即记为 `user`；网关既不校验决定者与 mint 者是否同一主体，也允许调用方自称 `system`/`user`",
+    "startLine": 419,
+    "disposition": "accepted",
+    "reason": "审批依据可伪造/决定者未校验，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "bd4ecc48a311e116ce2853ac565bc4b600fb48e6",
+    "file": "lib/gateway.js",
+    "category": "contract",
+    "title": "consume 的匹配契约只比对 op/path/recursive，审批摘要中 write 的 bytes 完全由请求方自报且执行前从不复核，审批记录与实际变",
+    "startLine": 493,
+    "disposition": "accepted",
+    "reason": "接口契约与实现不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d64311ec8ce1e9433e5d59f110be639aced0037d",
+    "file": "lib/gateway.js",
+    "category": "tests",
+    "title": "consume 的核心安全不变量——「一次授权只能执行一次」以及「重放操作必须与授权的 op/path/recursive 完全一致」——没有任何测试断言其错误",
+    "startLine": 493,
+    "disposition": "rejected",
+    "reason": "unit 范围只含被审文件，属“本 unit 无测试”噪声：判 rejected，要求 prompt P-2 后不再仅凭 unit 范围报测试缺口。"
+  },
+  {
+    "fingerprint": "242486c4cc81a7aeb5dbeaaffd863b924a188f98",
+    "file": "lib/gateway.js",
+    "category": "intent",
+    "title": "consume() 把审批标记为 consumed 时不写审计，而 mint/approve/deny/expire 四个状态转换都会写 audit（373、4",
+    "startLine": 500,
+    "disposition": "accepted",
+    "reason": "实现与文件头/注释契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "92aef639926ff1ed41eb5a61ada0eb4ab5633865",
+    "file": "lib/gateway.js",
+    "category": "errors",
+    "title": "审批在真正的 workspace 写/删/mkdir 执行之前就被标记 consumed，执行失败没有回滚或补偿，一次性额度被直接烧掉",
+    "startLine": 500,
+    "disposition": "accepted",
+    "reason": "错误处理/可观测性缺口成立，保留为 accepted 基线。"
   }
 ]

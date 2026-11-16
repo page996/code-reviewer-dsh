@@ -19,6 +19,7 @@ alwaysApply: false
 7. 密钥与凭据：硬编码密钥/token/证书； .env 或密钥进入仓库、日志、错误响应、URL query。
 8. Web 边界：CORS 通配 + 凭据、CSRF 缺失、Cookie 缺 `HttpOnly/Secure/SameSite`、原型污染（`__proto__`/`constructor`）、开放重定向。
 9. 依赖与配置：危险默认（`debug=true` 进生产、关闭 TLS 校验、宽泛 IAM/AWS 权限）。
+10. 审批/授权依据可伪造：审批人看到的规模/影响/操作者身份来自客户端请求体（bytes、actor、role）且服务端不复核；或决定者身份未与申请者/会话校验（可自称 `system`/`user`），使“人类审批”形同虚设。
 
 ## 证据要求
 - 攻击者能控制哪个输入（请求参数/文件/环境），经过哪条路径到达危险点（文件:行）。

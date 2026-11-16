@@ -4,10 +4,10 @@
 
 ## 1. 严格模式（必读）
 
-- **同仓 PR 缺 `DEEPSEEK_API_KEY` → job 必须红**：workflow 用 `::error` 说明原因与修复步骤（Settings → Secrets → Actions，或 `gh secret set DEEPSEEK_API_KEY`），并 `exit 1`。
+- **同仓 PR 缺 key → job 必须红**：workflow 用 `::error` 说明原因与修复步骤（Settings → Secrets → Actions，或 `gh secret set DSH_API_KEY`），并 `exit 1`。仓库 secret 名称接受 `DSH_API_KEY`（推荐）或 `DEEPSEEK_API_KEY`。
 - **fork PR**：GitHub 不向 fork workflow 暴露仓库 secret → 只跑确定性半区（scope/plan/gate），评论首行显式写「LLM 评审 skipped（fork PR 无法读取 secret）」；不得说成「已评审」。
 - **手动 `workflow_dispatch` 无 key**：提示 + 只跑确定性检查（不是 PR 放行依据）。
-- secret 是否可用用布尔环境变量暴露：`HAS_KEY: ${{ secrets.DEEPSEEK_API_KEY != '' }}`（`secrets` 不能出现在 `if:` 里）。任何「评审被跳过但 job 显示通过」都是 CI 配置缺陷，必须修 workflow。
+- `secrets` 不能出现在 `if:` 或 workflow 级 `env:` 里。可用写法：检测步骤把 `secrets.DSH_API_KEY || secrets.DEEPSEEK_API_KEY` 注入 step env，输出 `present=true/false`；后续步骤用 `steps.key.outputs.present` 判断。任何「评审被跳过但 job 显示通过」都是 CI 配置缺陷，必须修 workflow。
 
 ## 2. 触发、权限、环境
 
@@ -21,13 +21,13 @@
 ## 3. 执行顺序（与 `review.yml` 一致）
 
 ```text
-1) 检查 DEEPSEEK_API_KEY 是否可用（HAS_KEY）
+1) 检查 key 是否可用（DSH_API_KEY 或 DEEPSEEK_API_KEY；步骤输出 present）
 2) 确定性半区（always，无 secret）：
    scope --mode range --base "origin/$BASE_REF" --json
    plan  --run latest --effort quick --json
    gate  --run latest --json
    非 0 退出 → ::error + 失败（0/2/3/4/5 语义不变）
-3) LLM 半区（仅 HAS_KEY=true）：
+3) LLM 半区（仅 present=true）：
    all --mode range --base "origin/$BASE_REF" --effort standard --json
    退出码即权威 verdict（2 blocking / 3 needs-human / 4 gate 失败 / 5 引擎错误）
 4) 收集产物：report --run latest --format json|sarif|md --out .review-ci/report.*

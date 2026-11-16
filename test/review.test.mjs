@@ -406,6 +406,42 @@ test('aggregate: style/docs minor findings are dropped', () => {
   assert.equal(result.verdict, 'pass');
 });
 
+test('aggregate: unit-scope "no tests" observation is dropped (P-2 noise)', () => {
+  const anchored = [
+    {
+      ...finding({
+        category: 'tests',
+        severity: 'minor',
+        problem: '本评审单元没有任何配套测试文件',
+        evidence: 'unit 内只有 lib/gateway.js，没有 test/ 文件',
+      }),
+      lens: 'tests',
+    },
+  ];
+  const result = aggregateFindings({ reviews: [], anchored, config: AGG_CONFIG });
+  assert.equal(result.findings[0].status, 'dropped');
+  assert.equal(result.findings[0].dropReason, 'unit-scope-test-gap');
+  assert.equal(result.counts.dropped, 1);
+  assert.equal(result.verdict, 'pass');
+});
+
+test('aggregate: a specific test assertion gap is still reported', () => {
+  const anchored = [
+    {
+      ...finding({
+        category: 'tests',
+        severity: 'minor',
+        problem: '失败路径的断言缺失：consume 的 409 分支没有任何断言',
+        evidence: 'consume 在 consumed 状态抛 409，但测试只断言了成功路径',
+      }),
+      lens: 'tests',
+    },
+  ];
+  const result = aggregateFindings({ reviews: [], anchored, config: AGG_CONFIG });
+  assert.equal(result.findings[0].status, 'real');
+  assert.equal(result.counts.dropped, 0);
+});
+
 test('aggregate: maxComments trims real findings but keeps needs-human', () => {
   const anchored = [
     { ...finding({ startLine: 10 }), lens: 'correctness' },
