@@ -26,8 +26,9 @@
 | batch-12 | `lib/notes-store.js` | standard（同 lenses） | `run-20261116-220227-4e65` | 16 minor，全部 accepted；`review eval`：matched 16 / missed 0 → **pass** |
 | batch-13 | `assets/doc-reader.js`（2,184 行） | standard（同 lenses） | `run-20261116-220935-107c` | 1 major + 17 minor，全部 accepted；`review eval`：matched 18 / missed 0 → **pass** |
 | batch-14 | `assets/graph-view.js`（3,848 行） | standard（同 lenses） | `run-20261116-221855-0557` | 14 minor，全部 accepted；`review eval`：matched 14 / missed 0 → **pass** |
-| batch-15（待做） | `assets/workbench.js`（6,108 行） | standard | — | — |
-| batch-16（待做） | 其余 `lib/` 模块（visual/compare/document/evidence/audit/graph/llm…） | standard | — | — |
+| batch-15 | `assets/workbench.js`（6,108 行） | standard（同 lenses） | `run-20261116-222838-b669` | 15 minor，全部 accepted；`review eval`：matched 15 / missed 0 → **pass** |
+| batch-16 | `lib/visual.js` | standard（同 lenses） | `run-20261116-223718-0297` | 13 minor，全部 accepted；首轮 1 个视角传输失败，重跑成功；`review eval`：matched 13 / missed 0 → **pass** |
+| batch-17（待做） | 其余 `lib/` 模块（compare/document/evidence/audit/graph/llm/note-sessions…） | standard | — | — |
 
 排除：`assets/katex/**`（vendored）、`python/__pycache__/**`、`*.pyc`、`locale/*.json`。
 
@@ -81,6 +82,8 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 - batch-12：`review eval --run run-20261116-220227-4e65` → **pass**（matched 16 / missed 0 / notEvaluated 164）。
 - batch-13：`review eval --run run-20261116-220935-107c` → **pass**（matched 18 / missed 0 / notEvaluated 180）。
 - batch-14：`review eval --run run-20261116-221855-0557` → **pass**（matched 14 / missed 0 / notEvaluated 198）。
+- batch-15：`review eval --run run-20261116-222838-b669` → **pass**（matched 15 / missed 0 / notEvaluated 212）。
+- batch-16：`review eval --run run-20261116-223718-0297` → **pass**（matched 13 / missed 0 / notEvaluated 227）。
 - batch-2：`--run run-20261116-193909-9bc6`（插件仍缓存旧 `lib/plan.mjs`，tests 视角未跳过；本机无重启）→ matched 13 / missed 0 / noise 2–4，exit 2；属运行时缓存而非代码回归。
 - 新增 `review.temperature=0` 与 reviewer 传输重试后，**重启 DSH** 重跑 batch-2 预期稳定通过（重复运行结果一致）。
 - eval 语义已按 run scope 过滤：其他批次基线在当前 run 中计 `notEvaluated`，不再误判漏报。

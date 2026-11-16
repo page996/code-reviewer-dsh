@@ -1906,5 +1906,257 @@
     "startLine": 4081,
     "disposition": "accepted",
     "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "82d8291f89b18d60b83baef0a384e0b576315e5f",
+    "file": "assets/workbench.js",
+    "category": "intent",
+    "title": "切换 active view 时只 flush 旧的 viewer-state 写入，却不重置内存中的 zoom/compare/sidebarWidth，新文",
+    "startLine": 1092,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "435400658042800fb6665f1de1b11f63480a5e53",
+    "file": "assets/workbench.js",
+    "category": "errors",
+    "title": "boot 里 GET /api/active-view 的非 404/405 失败只静默降级回 URL 参数，state.activeViewApi 保持 fa",
+    "startLine": 1190,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6e7d6fff0da64d23d87433eddae3d2da596f7fea",
+    "file": "assets/workbench.js",
+    "category": "errors",
+    "title": "apiFetch 没有超时/AbortSignal，而 schedulePoll 与 startTranslation 都依赖请求 settle：一个悬挂请求会",
+    "startLine": 1284,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "5ee0d4169d95fc1f192aa1794393cf99bd094e96",
+    "file": "assets/workbench.js",
+    "category": "errors",
+    "title": "apiFetch 同时支持 HTTP 错误与 `{ok:false}` 错误信封，但当 HTTP 为 200 且 body 为 `{ok:false}` 时把 ",
+    "startLine": 1380,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d6fea9fa9770ecd40434c69f2cd9c540de0d9784",
+    "file": "assets/workbench.js",
+    "category": "correctness",
+    "title": "对照模型的一次失败会被永久缓存到该 jobId 上：compareError/compareFallback 置位后 syncFrame 的 pending 恒",
+    "startLine": 1513,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "5cbd322fc712b67d2a02e220caecd7787bb3bc64",
+    "file": "assets/workbench.js",
+    "category": "security",
+    "title": "审批对话框把「exists 未知」的 write 一律描述成“将新建文件”，覆盖已有文件的写入会被展示为非破坏性操作，批准人据此放行",
+    "startLine": 2155,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4da68732f36d6a938f7f085e119daf3eae08fd54",
+    "file": "assets/workbench.js",
+    "category": "errors",
+    "title": "loadOutputs 吞掉所有错误并把「完整成稿」列表渲染成空目录，把加载失败伪装成「没有成稿」。",
+    "startLine": 2305,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6ca31d52b3c91987a288d2d71b801ecf4d89ebaf",
+    "file": "assets/workbench.js",
+    "category": "errors",
+    "title": "确认框不可用时条件短路为 false，破坏性操作改成「无确认直接执行」——失败开放。",
+    "startLine": 2345,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4926835c770c436d13828c73f3f84dafbc37959b",
+    "file": "assets/workbench.js",
+    "category": "concurrency",
+    "title": "loadFiles 没有请求序号或取消：先发出的请求后返回时会用旧目录的 entries 覆盖新目录的列表，而面包屑/标题取的是当前 state.filePat",
+    "startLine": 2366,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6540c0c595eb60ecd86d055535c1b811aec5f2b1",
+    "file": "assets/workbench.js",
+    "category": "errors",
+    "title": "loadData 每次成功刷新都无条件 clearNotice()，会把与本次刷新无关的错误提示（文件删除/上传/新建目录/审批失败等）在没有 hold 的情况",
+    "startLine": 2600,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "efca0ae87d82bb29fc04c4c8d254dc250ada9f5c",
+    "file": "assets/workbench.js",
+    "category": "intent",
+    "title": "skills 目录加载失败被当成“目录已加载且为空”，导致用户已持久化的显式技能选择被 prune 成 null 并写回 localStorage，与同文件注释",
+    "startLine": 3120,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "75046db0b0c0a2af6c701b2cb113494a33cf16c6",
+    "file": "assets/workbench.js",
+    "category": "errors",
+    "title": "NDJSON 读取循环只在遇到 '\\n' 时解析事件，流结束后既不处理 buffer 里的残留内容也不做 decoder 收尾，最后一条没有换行结尾的事件会被丢",
+    "startLine": 5015,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "81e6033d316a1c791c5c7784bdd6ba7db9caeebc",
+    "file": "assets/workbench.js",
+    "category": "concurrency",
+    "title": "流式回合进行中切换随笔（openNote）只把 state.notes.live 置空，既不中止也未让读流循环失效，后续 stream 事件会把旧笔记的回复/工",
+    "startLine": 5118,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "337f6ec3a155d08a615c219218ae932aeb08b631",
+    "file": "assets/workbench.js",
+    "category": "security",
+    "title": "window message 监听只校验 origin、不校验 event.source，任何同源 iframe/窗口都能伪造阅读器协议事件。",
+    "startLine": 5968,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "37a6e22e90c9bf2148870649d404c887dcb67367",
+    "file": "assets/workbench.js",
+    "category": "contract",
+    "title": "工具栏/首次发送路径把原始 selection 对象直接当作 note seed 传给 Host，绕过了 noteSeedFromSelection 的字段归一",
+    "startLine": 6150,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6b6b1d84a06d7f7d7004d8021f17edace33ee874",
+    "file": "lib/visual.js",
+    "category": "correctness",
+    "title": "parseVisionJson 的“修补”只转义不合法转义的反斜杠，但对合法 JSON 转义前缀（b/f/n/r/t/u）的 LaTeX 命令既不修补也不报错：",
+    "startLine": 101,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c8d39885e558da649b4b5a4916362db285dc3cf6",
+    "file": "lib/visual.js",
+    "category": "intent",
+    "title": "probeVisionCapability 把「探测失败」与「模型不支持图像」压成同一个结果：文件头注释声明 `supportsImage: false` 只在",
+    "startLine": 143,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "70b23dc1cd55ca5a554b82b3efa920c7b2643248",
+    "file": "lib/visual.js",
+    "category": "security",
+    "title": "probeVisionCapability 把 provider/model 解析失败的原始错误消息原样放进返回对象（第 155 行 `error,`），而这个",
+    "startLine": 144,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "9b92ede2555e0bb60098d3271b1ee4174a0cbbc8",
+    "file": "lib/visual.js",
+    "category": "contract",
+    "title": "requestImages=false 时请求里没有图片，但 system prompt 仍无条件使用“附件图片是唯一依据 / 不得返回空 latex”的图片版",
+    "startLine": 197,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fea4436f36b20abe7e0fa82f428281350a107691",
+    "file": "lib/visual.js",
+    "category": "correctness",
+    "title": "Number(null)/Number('')/Number([])/Number(false) 都是 0，confidence 会从“未知”变成 0",
+    "startLine": 231,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "62ef7c7b3f9255d7d685148a153bf14b2ae87ddd",
+    "file": "lib/visual.js",
+    "category": "security",
+    "title": "两个批量视觉函数对 items/pages 的数量和单图字节数没有任何上限：先按传进来的全部条目逐个 attachments.saveImage 落盘，再把全部",
+    "startLine": 331,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b94838cd14db01429c72d4fce6c4ab345dc3c949",
+    "file": "lib/visual.js",
+    "category": "correctness",
+    "title": "parseVisionJson 永远不可能返回顶层数组（切片固定从第一个 '{' 到最后一个 '}'），因此本行与 inspectPagesVision 第 4",
+    "startLine": 360,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "94e5896f4c84921d43e8b02b4878120cf7d269db",
+    "file": "lib/visual.js",
+    "category": "intent",
+    "title": "批量重建声称「returns a per-crop verdict」，但返回行与请求项没有任何对账：缺 id 的行被丢弃、请求里没有的 id 被原样保留，也不报",
+    "startLine": 362,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a88080966d125ab6c4ff91ab06ea773749eec26b",
+    "file": "lib/visual.js",
+    "category": "intent",
+    "title": "`kind:\"text\"` 的行仍保留规范化后的 `latex`：只要模型同时填了 latex 字段（prompt 有要求但无强制），文本行就会带着未被 KaT",
+    "startLine": 368,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1acf246465b6f0d3269c618673d8a55b5c166b53",
+    "file": "lib/visual.js",
+    "category": "errors",
+    "title": "视觉 QA 的模型输出完全无法解析时，函数仍以「成功且干净」的形状返回：parseVisionJson 失败返回 null（本文件 line 108 `retu",
+    "startLine": 453,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c7599fa4c724a4feb29d33a166891eba495bedc4",
+    "file": "lib/visual.js",
+    "category": "correctness",
+    "title": "Number(pageRow.page) 把缺失/null/'' 的页码转成 0，而第 466 行只判 Number.isFinite，于是缺页码的告警被归到不",
+    "startLine": 458,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "be25116cd517530d421018a71ad44af13d926069",
+    "file": "lib/visual.js",
+    "category": "contract",
+    "title": "未知的缺陷 code 被静默塌缩成 text_fragment，报告无法区分“模型给了新类/拼错”与真实的文本碎片",
+    "startLine": 461,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7cde9f171b4e74274ee78752d01ae591e03dfb01",
+    "file": "lib/visual.js",
+    "category": "correctness",
+    "title": "缺少 detail 的视觉缺陷被整条丢弃：模型确实报告了缺陷但没写描述时，该 issue 直接消失，且没有任何计数或告警，最终结果与「该页干净」相同。",
+    "startLine": 463,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
   }
 ]
