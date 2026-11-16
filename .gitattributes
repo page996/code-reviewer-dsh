@@ -1,0 +1,14 @@
+# Keep text files LF in the repository so POSIX shell hooks and CI scripts work on Linux.
+* text=auto eol=lf
+*.sh text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+.githooks/* text eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.zip binary
