@@ -479,3 +479,72 @@ test('/review command runs the full pipeline and returns a compact summary', asy
   const errors = [firstAgain, secondAgain].filter((entry) => entry && entry.kind === 'error');
   assert.ok(errors.some((entry) => /正在执行/.test(entry.text)), 'concurrent /review is rejected with an explanatory error');
 });
+
+test('review_scope output normalizes optional nulls so the harness schema can validate', async (t) => {
+  const cwd = await makeWorkspace(t);
+  const harness = createHarness({ cwd });
+  plugin.apply(harness.ctx, harness.pluginConfig);
+
+  const scope = await callTool(harness, 'review_scope', {});
+  assertNoError(scope, 'review_scope');
+  assert.ok(Array.isArray(scope.files) && scope.files.length > 0);
+  // The deterministic scope marks reviewable files with `excludeReason: null`; the tool
+  // boundary must normalize it (null would fail the declared output schema).
+  for (const file of scope.files) {
+    assert.ok(Object.prototype.hasOwnProperty.call(file, 'excludeReason'), 'excludeReason is always present');
+    assert.equal(file.excludeReason, '', 'null is normalized to an empty reason');
+  }
+  assert.equal(JSON.stringify(scope).includes('"excludeReason":null'), false);
+});
+
+test('repo parameter resolves a run stored in another workspace (no session cache)', async (t) => {
+  const sessionCwd = await makeWorkspace(t);
+  const reviewedRepo = await makeWorkspace(t);
+  const runId = 'run-20260101-000000-abcd';
+  const runDir = path.join(reviewedRepo, '.review', 'runs', runId);
+  await mkdir(runDir, { recursive: true });
+  const repoInfo = { root: reviewedRepo, name: 'reviewed-repo' };
+  await writeFile(
+    path.join(runDir, 'meta.json'),
+    JSON.stringify({ schemaVersion: 1, runId, mode: 'scan', repo: repoInfo, createdAt: '2026-01-01T00:00:00.000Z', config: {} }),
+    'utf8',
+  );
+  await writeFile(
+    path.join(runDir, 'scope.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      runId,
+      repo: repoInfo,
+      mode: 'scan',
+      range: { base: null, head: null, mergeBase: null, commit: null },
+      files: [
+        {
+          path: 'src/add.ts',
+          status: 'existing',
+          binary: false,
+          reviewable: true,
+          excludeReason: null,
+          insertions: 0,
+          deletions: 0,
+          bytes: ADD_SOURCE.length,
+        },
+      ],
+      counts: { total: 1, reviewable: 1, excluded: 0, insertions: 0, deletions: 0 },
+      coverage: { complete: true, unreviewed: [] },
+    }),
+    'utf8',
+  );
+
+  const harness = createHarness({ cwd: sessionCwd });
+  plugin.apply(harness.ctx, harness.pluginConfig);
+
+  // No review_scope call for this run: the session workspace cannot resolve it, which is
+  // exactly why the `repo` parameter must drive run resolution.
+  const missing = await callTool(harness, 'review_plan', { runId, effort: 'quick' });
+  assert.ok(missing && missing.error, 'without repo the session workspace cannot resolve the remote run');
+
+  const plan = await callTool(harness, 'review_plan', { repo: reviewedRepo, runId, effort: 'quick' });
+  assertNoError(plan, 'review_plan');
+  assert.equal(plan.runId, runId);
+  assert.ok((await stat(path.join(runDir, 'plan.json'))).isFile(), 'plan.json lands in the reviewed repository run');
+});
