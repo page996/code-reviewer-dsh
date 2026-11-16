@@ -222,6 +222,7 @@ review scan  --path D [--effort ...] [--no-llm]                         # = scop
 review hook  pre-commit|pre-push [--repo D]
 review install-hooks [--repo D] [--uninstall]
 review runs  [--json]
+review aggregate --run R [--json]                              # 用已存 reviews.json 重新定位+聚合（不重跑模型/过滤）
 review eval  --case <caseDir> [--run R] [--json]              # case 回归（基线 vs 本次 run）
 ```
 

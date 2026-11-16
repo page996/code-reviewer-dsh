@@ -682,5 +682,185 @@
     "startLine": 442,
     "disposition": "accepted",
     "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8e7d2304023002f66c3c2dc0e7609f708af913d6",
+    "file": "python/floats.py",
+    "category": "correctness",
+    "title": "中文题注里“表”被当成 figure：kind 只按是否命中 cn 组判断，而 cn 组同时匹配“图”和“表”，导致所有中文表题注产出 kind=\"figure",
+    "startLine": 162,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b74d316d0d62749b1870fb0db747f90e10c6f653",
+    "file": "python/floats.py",
+    "category": "contract",
+    "title": "新增了未在契约中声明的 kind 取值 \"region\"，与 TableCandidate.kind 注释枚举的三个值不一致。",
+    "startLine": 982,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "713fc3d764d0b63ef96b678dff002eabf4a850c6",
+    "file": "python/floats.py",
+    "category": "intent",
+    "title": "第 22 行声明支持\"图/表\"标签，但分隔符分支要求标点或\"空白+ASCII 大写/数字/括号\"，最常见的中文写法\"图1 系统总体架构\"无法命中。",
+    "startLine": 28,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1fe660f134c8eb9486d97eb9f99cc32a6329506f",
+    "file": "python/floats.py",
+    "category": "contract",
+    "title": "TableCandidate.kind 声明的取值集合不包含实现实际返回的 \"region\"，数据模型与产出不一致。",
+    "startLine": 61,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1af4c65b2f3c2f7c969a12e6951d704c149b4956",
+    "file": "python/floats.py",
+    "category": "correctness",
+    "title": "对单页 drawings 做 O(n²) 的两两相交测试，没有任何数量上限或空间索引，矢量路径很多的页会退化成分钟级甚至小时级卡死。",
+    "startLine": 250,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "dbdd4c6a013f38ac62eef0e56e56e0e06688fc8c",
+    "file": "python/floats.py",
+    "category": "security",
+    "title": "`_cluster_drawings` 对单页所有 drawings 做 O(n²) 两两相交判定，n 完全由 PDF 内容流决定且没有上限，可用大量小矩形把解",
+    "startLine": 250,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "062ee9cf77905ab6be64d202775fcc06783bb5bd",
+    "file": "python/floats.py",
+    "category": "correctness",
+    "title": "选取上方矢量图时只按垂直窗口过滤，未对单个 rect 做水平重叠过滤，任何跨栏/通栏规则都会被并进 union，导致裁剪框横向扩到整页宽——与本函数 docst",
+    "startLine": 332,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8d432359d6ae4e867599b7a84e6e9ddef90df24a",
+    "file": "python/floats.py",
+    "category": "intent",
+    "title": "docstring 承诺\"只保留与 caption 水平重叠的路径\"，实现却只在竖向窗口内收集全部 drawings，未做逐路径水平过滤。",
+    "startLine": 333,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a80597894badfc1d71d30221ef9d74048b69bc4a",
+    "file": "python/floats.py",
+    "category": "contract",
+    "title": "build_grid_table 的降级返回违反自身文档契约：文档承诺返回等长行与 column_count，降级分支却原样返回不等长行且列数为 0，同时 ht",
+    "startLine": 642,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "08b5964fa527d4596a6fde0f47c2146061a8efa0",
+    "file": "python/floats.py",
+    "category": "errors",
+    "title": "find_detected_tables 把整页的 find_tables() 调用包在 `except Exception` 里直接 `return []`，",
+    "startLine": 692,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "106cc72c63b9108e6a402eec734a5c54318eacad",
+    "file": "python/floats.py",
+    "category": "errors",
+    "title": "table.extract() 可能返回 None，_sanitize_rows 直接迭代 None 抛 TypeError，且这一步不在 try 保护内。",
+    "startLine": 704,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "cef4261e0dfc524c31f7820fb17b33eca95a20bc",
+    "file": "python/floats.py",
+    "category": "correctness",
+    "title": "词表中的 `Alg\\.` 被尾部 `\\b` 包住，实际只在点号后紧跟单词字符时才可能匹配，\"Alg. \" 这类正常写法永远不命中。",
+    "startLine": 893,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fa6fd26d6669194d1ec68b26175731fbee95fea4",
+    "file": "python/floats.py",
+    "category": "scope",
+    "title": "通用表头识别里硬编码了特定论文/领域的词表，命中即把恢复区域起点裁到该基线组，会截断其它论文的表格。",
+    "startLine": 893,
+    "disposition": "accepted",
+    "reason": "batch-3 人工复核后判定。"
+  },
+  {
+    "fingerprint": "858dad25d84e800a149c19c712b62fe90572592e",
+    "file": "python/floats.py",
+    "category": "security",
+    "title": "PAPER_EXTRACT_DEBUG 打开时，代码把从 PDF 抽取到的原文片段（每行前 30 字符）连同坐标写入 stderr，把待处理文档内容带进日志。",
+    "startLine": 965,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "9cab29d44cf62c40129a209556429f130db055f4",
+    "file": "python/floats.py",
+    "category": "intent",
+    "title": "caption-only 回退永远向 caption 下方取条带，忽略前面算出的 prefer_above，与自身注释 \"crop a strip below/",
+    "startLine": 1002,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1591f6b7010584369274a839fc1d4fb5aced0858",
+    "file": "python/floats.py",
+    "category": "contract",
+    "title": "TableCandidate.caption / FigureCandidate.caption 在本文件所有构造点都未赋值，题注信息在候选对象上永远丢失。",
+    "startLine": 1044,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "20a79323bf4d1304c230236220c47ac551a81957",
+    "file": "python/floats.py",
+    "category": "errors",
+    "title": "crop_to_png 在 clip 为空或极小时静默降级为整页 crop，且只用 `clipped=True` 标记；而 1081-1086 行已用同一个 `",
+    "startLine": 1087,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "748e138207be4427b559b603cc8cb693b99cdfc4",
+    "file": "python/floats.py",
+    "category": "correctness",
+    "title": "4000 像素上限在第一次满 dpi 渲染之后才检查，无法限制内存；且被 max(72, ...) 地板抬高后第二次渲染仍可能超过上限。",
+    "startLine": 1090,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a01f733568846c383b70e315df95ec3cfa33d3b8",
+    "file": "python/floats.py",
+    "category": "security",
+    "title": "对渲染尺寸的 4000px 上限在第一次全分辨率 get_pixmap 之后才生效，而 clip 只是被钳制到 PDF 自身的 MediaBox，攻击者可用超大",
+    "startLine": 1090,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f06d548e6890efdd3b8bddb064d8e65ccccc4286",
+    "file": "python/floats.py",
+    "category": "errors",
+    "title": "像素上限的降级回退不可靠：`effective_dpi = max(72, int(dpi * scale))` 在需要低于 72dpi 才能把边长压到 400",
+    "startLine": 1090,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
   }
 ]

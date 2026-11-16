@@ -21,6 +21,7 @@
 | R-12 | batch-4：未知 docId 返回 400 而非 404；契约检查崩溃降级对象缺字段 | 契约规则缺「状态码/响应形状稳定性」判据 | 新增契约高频问题清单 | `rules/core-contract.md`（已加） | batch-4 真实命中 |
 | R-13 | batch-5：scan 模式 2 条 major 把 `gate` 判成 block/exit 2 | scan 无 diff，finding 本应全部 preexisting；实现只信 reviewer 的 preexisting 字段 | scan findings 标 preexisting + gate 对 scan 忽略 blocking（`blockPreexisting` 可覆盖） | `lib/review.mjs` + `lib/gate.mjs` + CONTRACT §3（已加） | 单测 + batch-5 gate 恢复 pass |
 | R-14 | batch-6（Python）：页面几何未钳制导致无界数组/逐点累加；解析异常被吞；`not is_multi` 分支死代码；混排打平破坏栏带 | Python 规则包缺「不可信几何/解析吞错/死代码/混排」判据 | 新增 Python 高频条目 | `rules/lang-python.md`（已加） | batch-6 真实命中 |
+| R-15 | batch-7：同一问题被 correctness/security 两个视角在同行报成两条，措辞差异大，标题相似度 0.12 → 未合并 | 跨视角合并只看标题相似度，无法识别“同因不同表述” | 已加同文件同行相似标题合并 + `review aggregate` 无模型重算；措辞差异极大的重复仍会保留（已知限制，后续可加 LLM dedupe pass） | `lib/aggregate.mjs` + `bin/review.mjs`（已加） | batch-7 复算 20 条；R-15 限制记录 |
 
 ## 2. prompt 调整（→ `references/prompts.md` + `lib/prompts.mjs`）
 
@@ -42,6 +43,7 @@
 | E-38…E-56 | batch-4 的 19 条 index.js 缺陷（accepted） | 仍被报出；batch-4 run 的 eval：matched 19 / missed 0 / noise 0 | `findings.json` |
 | E-57…E-68 | batch-5 的 12 条 library.js 缺陷（含 2 条 major，accepted） | 仍被报出；batch-5 run 的 eval：matched 12 / missed 0 / noise 0 | `findings.json` |
 | E-69…E-76 | batch-6 的 8 条 pageparse.py 缺陷（accepted） | 仍被报出；batch-6 run 的 eval：matched 8 / missed 0 / noise 0 | `findings.json` |
+| E-77…E-96 | batch-7 的 20 条 floats.py 缺陷（含 2 major，accepted） | 仍被报出；batch-7 run 的 eval：matched 20 / missed 0 / noise 0 | `findings.json` |
 
 回归命令：
 
@@ -78,10 +80,10 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 
 ## 7. 结论摘要
 
-- 真实缺陷：batch-1 6 + batch-2 13 + batch-3 14 + batch-4 19 + batch-5 12（含 2 major）+ batch-6 8 = 72 条 accepted。
+- 真实缺陷：batch-1 6 + batch-2 13 + batch-3 14 + batch-4 19 + batch-5 12（含 2 major）+ batch-6 8 + batch-7 20（含 2 major）= 92 条 accepted。
 - 误报：batch-2 4 条 unit-scope 测试噪声（rejected）。
-- 新增规则：11 条（R-1/R-2/R-3/R-5/R-6/R-7/R-10/R-11/R-12/R-14 已落，R-4 待落 core-data）。
-- 编排修复：R-8 传输重试、R-9 temperature=0、R-13 scan 模式 preexisting/门禁语义。
+- 新增规则：10 条（R-1/R-2/R-3/R-5/R-6/R-7/R-10/R-11/R-12/R-14 已落，R-4 待落 core-data）。
+- 编排修复：R-8 传输重试、R-9 temperature=0、R-13 scan 模式 preexisting/门禁语义、R-15 跨视角同类合并 + `review aggregate`。
 - prompt 调整：4 处（P-1/P-2/P-4 已落，P-3 待批次契约）。
-- 回归用例：72 accepted + 4 rejected；batch-3/4/5/6 的 eval 均全绿（missed 0 / noise 0），含首个 Python 批次。
+- 回归用例：92 accepted + 4 rejected；batch-3/4/5/6/7 的 eval 均全绿（missed 0 / noise 0），覆盖 JS/TS/Python。
 - 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则、重试、温度）。

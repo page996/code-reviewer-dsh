@@ -442,6 +442,59 @@ test('aggregate: a specific test assertion gap is still reported', () => {
   assert.equal(result.counts.dropped, 0);
 });
 
+test('aggregate: cross-lens duplicates on the same line merge into one finding', () => {
+  const anchored = [
+    {
+      ...finding({
+        category: 'concurrency',
+        severity: 'minor',
+        startLine: 250,
+        problem: '_cluster_drawings 对单页所有 drawings 做 O(n²) 两两相交判定，没有数量上限',
+      }),
+      lens: 'concurrency',
+    },
+    {
+      ...finding({
+        category: 'security',
+        severity: 'minor',
+        startLine: 250,
+        problem: '_cluster_drawings 对单页所有 drawings 做 O(n²) 两两相交判定，n 由 PDF 内容流决定且没有上限',
+      }),
+      lens: 'security',
+    },
+  ];
+  const result = aggregateFindings({ reviews: [], anchored, config: AGG_CONFIG });
+  const atLine = result.findings.filter((item) => item.startLine === 250);
+  assert.equal(atLine.length, 1, 'the same issue is not reported twice under two categories');
+  assert.equal(atLine[0].votes, 2, 'lens votes are unioned');
+  assert.deepEqual(atLine[0].mergedCategories.sort(), ['concurrency', 'security']);
+});
+
+test('aggregate: different issues on the same line stay separate', () => {
+  const anchored = [
+    {
+      ...finding({
+        category: 'security',
+        severity: 'minor',
+        startLine: 250,
+        problem: 'unbounded O(n^2) intersection scan over attacker controlled drawings',
+      }),
+      lens: 'security',
+    },
+    {
+      ...finding({
+        category: 'errors',
+        severity: 'minor',
+        startLine: 250,
+        problem: 'debug logging writes extracted PDF text to stderr',
+      }),
+      lens: 'errors',
+    },
+  ];
+  const result = aggregateFindings({ reviews: [], anchored, config: AGG_CONFIG });
+  assert.equal(result.findings.filter((item) => item.startLine === 250).length, 2);
+});
+
 test('aggregate: maxComments trims real findings but keeps needs-human', () => {
   const anchored = [
     { ...finding({ startLine: 10 }), lens: 'correctness' },

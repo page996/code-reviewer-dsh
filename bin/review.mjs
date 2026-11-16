@@ -47,6 +47,7 @@ const USAGE = `用法: review <command> [options]
   hook           执行 git hook（pre-commit|pre-push）
   install-hooks  安装 .githooks（--uninstall 卸载）
   runs           列出历史 run
+  aggregate      用已存的 reviews.json 重新定位+聚合（不重跑模型；用于去重/规则调整后重算）
   eval           case 回归：对比基线 findings 与 dispositions（--case <dir> [--run latest]）
 
 共同参数:
@@ -878,6 +879,44 @@ async function cmdEval({ values, repo, log }) {
   return result.exitCode;
 }
 
+async function cmdAggregate({ values, repo, log }) {
+  if (!values.run) throw usageError('aggregate 需要 --run R');
+  const config = loadCliConfig(values, repo, log);
+  const runDir = resolveRunDir(repo, config, values.run);
+  const run = readRun(runDir);
+  const reviews = Array.isArray(run.reviews?.reviews) ? run.reviews.reviews : [];
+  if (!Array.isArray(run.plan?.units) || run.plan.units.length === 0) {
+    throw new CliError('该 run 没有可用的 plan.json，无法重新聚合（需要先 plan）', 'USAGE', 1);
+  }
+  if (reviews.length === 0) {
+    throw new CliError('该 run 没有 reviews.json，无法重新聚合（需要先 run）', 'USAGE', 1);
+  }
+  // Re-run position + aggregate from stored reviewer output (no model calls, no filter pass).
+  const finalized = await finalizeReview({ reviews, plan: run.plan, config, llm: null, log });
+  const aggregate = finalized.aggregate;
+  const runId = run.runId ?? path.basename(runDir);
+  writeAggregateArtifacts(runDir, runId, aggregate);
+  const counts = aggregate.counts ?? {};
+  log('info', `aggregate 完成：blocker=${counts.blocker ?? 0} major=${counts.major ?? 0} minor=${counts.minor ?? 0} needsHuman=${counts.needsHuman ?? 0} dropped=${counts.dropped ?? 0}`);
+  if (values.json) {
+    emitJson({
+      schemaVersion: 1,
+      command: 'aggregate',
+      ok: true,
+      runId,
+      runDir,
+      verdict: aggregate.verdict ?? null,
+      counts,
+      filterApplied: false,
+      artifacts: { aggregate: artifactPaths(runDir).aggregate, findings: artifactPaths(runDir).findings },
+      exitCode: 0,
+    });
+    return 0;
+  }
+  humanLine(values, `已重新聚合 ${runId}：${JSON.stringify(counts)}（未重跑模型/过滤）`);
+  return 0;
+}
+
 async function main(argv) {
   let parsed;
   try {
@@ -927,6 +966,8 @@ async function main(argv) {
         return await cmdInstallHooks({ values, repo, log });
       case 'runs':
         return await cmdRuns({ values, repo, log });
+      case 'aggregate':
+        return await cmdAggregate({ values, repo, log });
       case 'eval':
         return await cmdEval({ values, repo, log });
       default:
