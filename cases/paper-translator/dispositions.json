@@ -1258,5 +1258,365 @@
     "startLine": 4470,
     "disposition": "accepted",
     "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "07fdcc751d1f4ba8eccaa8bba268b522db825e4f",
+    "file": "lib/workspace.js",
+    "category": "security",
+    "title": "`.svg` 被归类为可内联预览类型并以 `image/svg+xml` 返回，而 `writeFile` 接受任意扩展名上传，用户上传的 SVG 内嵌脚本在同",
+    "startLine": 38,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "338c325dc70d844df2c5c473ffef85b71d747c22",
+    "file": "lib/workspace.js",
+    "category": "correctness",
+    "title": "insideOrEqual 用 `relative.startsWith('..')` 判断越界，会把名字以 `..` 开头的合法子路径误判为“在根之外”。",
+    "startLine": 80,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7a3264e9d6a8bc315a8bcf88c422d4cf1d91df37",
+    "file": "lib/workspace.js",
+    "category": "errors",
+    "title": "removeTreeNoFollow 在边遍历边删除的过程中才检测符号链接，一旦在较后位置遇到链接就以 409 中止，前面的兄弟文件/子树已经被真删除，形成“报",
+    "startLine": 139,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "99f4a5b0ab3f07e716983fbca4f5e8f021f84b4c",
+    "file": "lib/workspace.js",
+    "category": "security",
+    "title": "保留路径判定是大小写敏感的，而同一个文件在 isBookkeepingPath 中已明确为 Windows/macOS 大小写不敏感做了 lowercase 处",
+    "startLine": 151,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f961154124506ba01708ae8145e16995857866e3",
+    "file": "lib/workspace.js",
+    "category": "correctness",
+    "title": "normalizeRelative 未处理 Windows 保留设备名与结尾点号/空格：writeFile/makeDirectory 会把这类名字直接交给 f",
+    "startLine": 170,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "560b6330961ff8d24936b5f9823854a0cdf440aa",
+    "file": "lib/workspace.js",
+    "category": "security",
+    "title": "受管目录审批门与保留文件保护都基于 POSIX 规范化后的字符串分类，没有处理 Win32 的名字归一化（结尾点/空格、`::$DATA` 数据流），在 Win",
+    "startLine": 201,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1f8c04e4d9e055337b3eb5d0e88e263851b0ea4e",
+    "file": "lib/workspace.js",
+    "category": "contract",
+    "title": "函数签名把参数对象整体设为可选（`= {}`），而 workspaceRoot 缺失时静默回落到 process.cwd()，它正是本模块所有路径边界检查的锚点",
+    "startLine": 215,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "65866f2fb0f54cc53754a7534a4e1218617d3a0e",
+    "file": "lib/workspace.js",
+    "category": "contract",
+    "title": "stateRoot 为相对路径时按 process.cwd() 解析，而同为路径配置的 docsRoot 在本文件内按 workspace 解析，两个配置项的语",
+    "startLine": 218,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "cccbc43e10e4f6db6a44c3a07584822718983f14",
+    "file": "lib/workspace.js",
+    "category": "errors",
+    "title": "settings.json 的读取/解析失败被当作“没有配置”，静默回落到默认 docsRoot 并丢弃 docsRootHistory。",
+    "startLine": 243,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "73c8544da9c701a8444374de9479948c1f3dbdab",
+    "file": "lib/workspace.js",
+    "category": "errors",
+    "title": "setDocsRoot 先持久化新 docsRoot 再 mkdir，mkdir 失败时只回滚内存状态，磁盘上的 settings.json 已经写入未经目录校",
+    "startLine": 400,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0068198e46e46aca2b389e00e378c6913a1aa000",
+    "file": "lib/workspace.js",
+    "category": "errors",
+    "title": "setDocsRoot 的回滚不完整：没恢复 docsRootHistory；且 persistSettings 已成功、随后 mkdir 失败时，磁盘上的 s",
+    "startLine": 403,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "439499791222437b794f539b8d8d8dcc2fcefea7",
+    "file": "lib/workspace.js",
+    "category": "errors",
+    "title": "doc.json 的读取/解析失败与“文件不存在”被合并处理，随后无条件覆盖写回，`createdAt` 等既有元数据被重置。",
+    "startLine": 478,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "2bbd030b5b7ffc730250292bce2ec50b9794db1a",
+    "file": "lib/workspace.js",
+    "category": "correctness",
+    "title": "ensureDocumentDirectory 在每次调用时都无条件重写 doc.json（`updatedAt: now`），而所有只读入口（listFile",
+    "startLine": 497,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8c50807a9add363123ae3cf4c6869b0fc42c861f",
+    "file": "lib/workspace.js",
+    "category": "errors",
+    "title": "源文件复制失败被记录后吞掉，`ensureDocumentDirectory` 仍然返回成功（doc.json 已落盘），workspace 表现为“已创建”但",
+    "startLine": 526,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "45dd6267715eeb8c270337910c3b344399a95e60",
+    "file": "lib/workspace.js",
+    "category": "concurrency",
+    "title": "读接口（listFiles/statFile/outputFiles/previewCachePath）在 writeChain 之外调用 ensureDocu",
+    "startLine": 584,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e7df16a3f0de73dc9e059fabf9e8e8e38eb661d3",
+    "file": "lib/workspace.js",
+    "category": "contract",
+    "title": "listFiles 在条目超过 MAX_LIST_ENTRIES 时静默截断，响应契约里没有 truncated/total 之类的字段。",
+    "startLine": 595,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f9d42e09d03f8d444e7fbe7d7441e138d675a19d",
+    "file": "lib/workspace.js",
+    "category": "security",
+    "title": "writeFile 只校验父目录的真实路径，没有校验最终目标本身；若目标文件已是符号链接/junction，writeFile 会跟随链接写到文档目录之外，与文",
+    "startLine": 681,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4ccb4c4512c7db959af4ce008e74195395a1f25e",
+    "file": "lib/workspace.js",
+    "category": "errors",
+    "title": "上传内容直接写入最终路径，写入中途失败（ENOSPC、进程被杀）会在工作区留下截断文件且不清理。",
+    "startLine": 689,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ae05c94f51a05ef495cc6503beb8cc90248dd7c5",
+    "file": "lib/workspace.js",
+    "category": "correctness",
+    "title": "deleteEntry 的符号链接检查是不可达代码：existingReal 先做了 realpath，拿到的是链接指向的真实路径，lstat 永远看不到链接，",
+    "startLine": 717,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "351afff1c72835445134ee9f8588ebb89a1055fc",
+    "file": "lib/workspace.js",
+    "category": "correctness",
+    "title": "删除整个文档工作区前先调用了 ensureDocumentDirectory，后者会 mkdir 整棵目录树、重写 doc.json，并通过 materiali",
+    "startLine": 736,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "bde16e2bd25880946c82f96de66f602e4a9d46b7",
+    "file": "lib/workspace.js",
+    "category": "contract",
+    "title": "aggregateJobOutputs 把未校验的 jobId 直接拼进输出文件名，且写文件前没有做本模块其它入口都有的 realpath/包含校验。",
+    "startLine": 793,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "02172fe5da67a89e09e179adbc74663efccef608",
+    "file": "lib/workspace.js",
+    "category": "errors",
+    "title": "outputFiles 用 `.catch(() => [])` 把 readdir 的所有错误（EACCES/EMFILE/EIO）降级成空目录，819 行 ",
+    "startLine": 811,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a4e8c7e37046c778fbc094500f2083f266c974a1",
+    "file": "lib/workspace.js",
+    "category": "correctness",
+    "title": "previewCachePath 的 key→文件名映射不是单射，不同 key 会落到同一个缓存文件。",
+    "startLine": 841,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "43e8a26729e68a0ef1d8dcc660fd817411c97d2d",
+    "file": "lib/workspace.js",
+    "category": "contract",
+    "title": "导出的 docWorkspaceRelative 既不校验 docId，也不读取 document.workspace，因此对同一文档返回的路径与 requir",
+    "startLine": 845,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8db93f1469950fedb4146ae4334ae6726f1ce96f",
+    "file": "lib/notes-store.js",
+    "category": "contract",
+    "title": "`singleLineTitle` 的返回值最多是 `max + 1` 个字符（省略号追加在切片之后），超出导出的 `MAX_AUTO_TITLE_CHARS ",
+    "startLine": 45,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8c3c01890883f50a58fe38ec542f97c5c1cc3805",
+    "file": "lib/notes-store.js",
+    "category": "data",
+    "title": "遗留标题迁移会把以「随笔 」开头的真实自定义标题也判定为自动标题并覆盖写回，与注释声明的「真实自定义标题保持不变」相矛盾。",
+    "startLine": 98,
+    "disposition": "accepted",
+    "reason": "batch-3 数据/状态问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "9d8f682e700650b84f73eaf2798e1913fc167f40",
+    "file": "lib/notes-store.js",
+    "category": "errors",
+    "title": "`readNoteJson` 把除瞬态共享冲突外的所有错误（JSON 解析失败、EACCES 重试耗尽、EIO/EMFILE 等）统一当成「文件不存在」返回 n",
+    "startLine": 161,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "2dc390aa1c482b4060bca29d78f11caa250f94fb",
+    "file": "lib/notes-store.js",
+    "category": "errors",
+    "title": "多处 `fsp.readdir(...).catch(() => [])` 把 EACCES/EMFILE/EIO 退化成「空目录」，使 note 查找、列表和",
+    "startLine": 240,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4b9b6fc12735b2dfd9c80621f8c4c4d68aee6e2e",
+    "file": "lib/notes-store.js",
+    "category": "errors",
+    "title": "目录枚举错误被 `.catch(() => [])` 吞成空列表，「读目录失败」被当成「笔记不存在」，与本文件对同一批错误码的读取重试策略自相矛盾。",
+    "startLine": 252,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d1c88a444efc1282f493057f1f6b29c19486fedd",
+    "file": "lib/notes-store.js",
+    "category": "contract",
+    "title": "同一个子笔记在公开返回值里有两个不同的 `kind` 取值：`get`/`createNode`/`updateTitle` 返回 `'note'`，`loca",
+    "startLine": 408,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "aa47dcb1edb9cbc2487a0c841e4031c601b10789",
+    "file": "lib/notes-store.js",
+    "category": "concurrency",
+    "title": "`createRoot` 的 MAX_ROOTS 配额是跨 await 的 check-then-act，检查与建目录之间没有任何互斥，并发创建可突破上限。",
+    "startLine": 429,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "9c10693a53e98e4f9840037e7ab98c51d4a31859",
+    "file": "lib/notes-store.js",
+    "category": "correctness",
+    "title": "根笔记配额把墓碑笔记也计入，而本模块完全没有物理删除，导致一个文档累计创建满 120 个根笔记后 `createRoot` 永久返回 409。",
+    "startLine": 431,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a67a0c51bf58e31a087d19597111517374e0b2a5",
+    "file": "lib/notes-store.js",
+    "category": "contract",
+    "title": "新建 note 写入 `schemaVersion: 2`，但没有任何读取路径校验这个版本号，声明的版本契约在读取侧完全未生效。",
+    "startLine": 440,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4ef36c0d9320665d05923cf314604aa6384e4d38",
+    "file": "lib/notes-store.js",
+    "category": "data",
+    "title": "每个根的 200 子节点配额用未过滤的 `readdir` 计数，把墓碑节点和 `*.json.tmp` 残留一并计入，而墓碑在本文件中永不清理，配额会被逐渐耗",
+    "startLine": 479,
+    "disposition": "accepted",
+    "reason": "batch-3 数据/状态问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "05b4c59b9b449f50a2e997b2b6b4fec5c68bd79c",
+    "file": "lib/notes-store.js",
+    "category": "errors",
+    "title": "createNode 先落子节点文件、再写 root.json，第二步失败时既不回滚也不清理已写的节点文件，调用方收到失败但磁盘上留下孤儿节点。",
+    "startLine": 501,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0a4679890f3f329aa059f1e5c11c8fe66712da26",
+    "file": "lib/notes-store.js",
+    "category": "contract",
+    "title": "`get` 与 `list` 对同一批 node 文件采用不同的校验条件：`list` 要求 `node.id` 匹配 `NOTE_ID_RE`，`get` 只",
+    "startLine": 530,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "74e986c08f87a662f13c14d2030f1332ee18b8c4",
+    "file": "lib/notes-store.js",
+    "category": "contract",
+    "title": "同一份节点数组在 `get` 的详情响应里叫 `nodesCount`，在 `list` 里叫 `nodeCount`。",
+    "startLine": 540,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fb30f8099a979598a7b027e63a00858f5ebd8e68",
+    "file": "lib/notes-store.js",
+    "category": "contract",
+    "title": "`locate()` 用 `String(target.sessionId)` 处理会话 id，note JSON 缺少 `sessionId` 时会把字面量 ",
+    "startLine": 560,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0c4fcbb58f2858168c98e3e0e511eaa9b01ed5d8",
+    "file": "lib/notes-store.js",
+    "category": "intent",
+    "title": "`updateTitle` 对空/空白标题不做派生，直接持久化 `title:''` 且 `titleSource:'manual'`，与新增笔记时「空标题走确",
+    "startLine": 597,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4ed34a68ba9d7c3d2df66dc6f78a327571b37cb7",
+    "file": "lib/notes-store.js",
+    "category": "correctness",
+    "title": "`updateParent` 只校验父节点存在/同根/未墓碑，不校验 `nextParentId` 是否为自身或自己的后代，允许把 parentId 写成自引用",
+    "startLine": 726,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
   }
 ]
