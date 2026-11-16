@@ -35,7 +35,9 @@
 | batch-21 | `lib/viewer-state.js` | standard（同 lenses） | `run-20261116-230848-cd83` | 1 major + 17 minor，全部 accepted；`review eval`：matched 18 / missed 0 → **pass** |
 | batch-22 | `lib/alignment.js` | standard（同 lenses） | `run-20261116-231305-d25f` | 11 minor，全部 accepted；`review eval`：matched 11 / missed 0 → **pass** |
 | batch-23 | `lib/skills.js` | standard（同 lenses） | `run-20261116-231724-694b` | 9 minor，全部 accepted；`review eval`：matched 9 / missed 0 → **pass** |
-| batch-24（待做） | 其余 `lib/` 模块（graph/llm/note-sessions/skill-store/katex-verify…） | standard | — | — |
+| batch-24 | `lib/skill-store.js` | standard（同 lenses） | `run-20261116-232159-73ce` | **1 blocker** + 16 minor，全部 accepted；`review eval`：matched 17 / missed 0 → **pass**（scan 语义下 blocker 不阻断 gate） |
+| batch-25 | `lib/note-sessions.js` | standard（同 lenses） | `run-20261116-232552-70cc` | 16 minor，全部 accepted；首轮 1 视角传输失败，重跑成功；`review eval`：matched 16 / missed 0 → **pass** |
+| batch-26（待做） | 剩余大模块（graph/llm/katex-verify…） | standard / 需先支持单文件切分 | — | — |
 
 排除：`assets/katex/**`（vendored）、`python/__pycache__/**`、`*.pyc`、`locale/*.json`。
 
@@ -98,6 +100,8 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 - batch-21：`review eval --run run-20261116-230848-cd83` → **pass**（matched 18 / missed 0 / notEvaluated 286）。
 - batch-22：`review eval --run run-20261116-231305-d25f` → **pass**（matched 11 / missed 0 / notEvaluated 304）。
 - batch-23：`review eval --run run-20261116-231724-694b` → **pass**（matched 9 / missed 0 / notEvaluated 315）。
+- batch-24：`review eval --run run-20261116-232159-73ce` → **pass**（matched 17 / missed 0 / notEvaluated 324）。
+- batch-25：`review eval --run run-20261116-232552-70cc` → **pass**（matched 16 / missed 0 / notEvaluated 341）。
 - batch-2：`--run run-20261116-193909-9bc6`（插件仍缓存旧 `lib/plan.mjs`，tests 视角未跳过；本机无重启）→ matched 13 / missed 0 / noise 2–4，exit 2；属运行时缓存而非代码回归。
 - 新增 `review.temperature=0` 与 reviewer 传输重试后，**重启 DSH** 重跑 batch-2 预期稳定通过（重复运行结果一致）。
 - eval 语义已按 run scope 过滤：其他批次基线在当前 run 中计 `notEvaluated`，不再误判漏报。

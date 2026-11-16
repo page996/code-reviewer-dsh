@@ -2914,5 +2914,302 @@
     "startLine": 265,
     "disposition": "accepted",
     "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "13b0ccd3e7dd2d82b6fec19cef71cc683801a339",
+    "file": "lib/skill-store.js",
+    "category": "errors",
+    "title": "readFile 的任何错误（EACCES/EPERM/EBUSY/EIO/EMFILE）都被当成「文件不存在」：raw 保持 null 后直接走 seed 导",
+    "startLine": 336,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "205c84792e3a90de9cc3c76f0dc796ec6cf9a4f5",
+    "file": "lib/skill-store.js",
+    "category": "contract",
+    "title": "把“版本号不认识”与“文件损坏”合并处理：任何 version !== 1 的库都会被判为 null，进而被隔离并重建，用户数据被整体丢弃。",
+    "startLine": 246,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8afb5ae4b2d32ef30c9ee8e50bfe29b22492add9",
+    "file": "lib/skill-store.js",
+    "category": "errors",
+    "title": "临时文件的写操作位于 try/catch 之外，writeFile 失败时临时文件不会被清理。",
+    "startLine": 301,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "eccecb9184d38b3bde6ebd830b15ea6a144aec92",
+    "file": "lib/skill-store.js",
+    "category": "data",
+    "title": "从 .bak 恢复时，atomicWrite 先把“刚被判定为损坏”的 skills.json 复制到 skills.json.bak，再替换主文件；备份在修复",
+    "startLine": 303,
+    "disposition": "accepted",
+    "reason": "batch-3 数据/状态问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "826ea6369920b293e92bebca9e180c07f4b0455e",
+    "file": "lib/skill-store.js",
+    "category": "errors",
+    "title": "除 ENOENT 之外的读取错误（EACCES/EPERM/EMFILE/EIO）只记日志，raw 保持 null，随后被当作“运行时 store 不存在”，用",
+    "startLine": 337,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "873adeb3e28bfb23348f5506c0b71810486538a4",
+    "file": "lib/skill-store.js",
+    "category": "concurrency",
+    "title": "load() 在完成首次落盘前就把 state.loaded 置为 true，并发调用方会绕过 loadPromise 直接拿到未落盘完成的状态，并与 load",
+    "startLine": 344,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "98d6863382a8dcc950b209d2e87745ada323db32",
+    "file": "lib/skill-store.js",
+    "category": "data",
+    "title": "从 .bak 恢复后写回时，atomicWrite 会先把仍然损坏的 skills.json 复制到 skills.json.bak，把唯一可用的好备份覆盖成损",
+    "startLine": 364,
+    "disposition": "accepted",
+    "reason": "batch-3 数据/状态问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0bb354b75a2aaa87ce7c4ff689e24437e5be6b37",
+    "file": "lib/skill-store.js",
+    "category": "contract",
+    "title": "list() 与它自己声明的契约不一致：既没有剔除 content/references（“no content”），也没有按 order→id 排序返回。",
+    "startLine": 434,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "2ba5483fce5645ab4c662dcd5b9a546c6fa83737",
+    "file": "lib/skill-store.js",
+    "category": "correctness",
+    "title": "list() 的返回契约声明按 order、再按 id 排序，实现直接返回数组插入顺序，从未排序。",
+    "startLine": 434,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "189f29b6c310c0c44e2d57ec4ae465339449fe93",
+    "file": "lib/skill-store.js",
+    "category": "security",
+    "title": "status() 把 stateRoot 的绝对路径（directory/file）作为返回值暴露，属于内部文件系统布局泄露。",
+    "startLine": 467,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a70379fc6595452e190f0918518ba3db9da6e520",
+    "file": "lib/skill-store.js",
+    "category": "errors",
+    "title": "所有变更先把新状态提交到内存 state.skills，再 await persist()；落盘失败时没有任何回滚，读接口会返回磁盘上并不存在的数据。",
+    "startLine": 470,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e0e539218017a29aef9db1a1830cd40dc19ead5e",
+    "file": "lib/skill-store.js",
+    "category": "errors",
+    "title": "变更先提交到内存 state，再 await persist()；写盘失败没有回滚，调用方收到失败但变更留在内存并会被下一次成功写入持久化。",
+    "startLine": 498,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c887ae73fe339a79ae8edb372474a43c43aaedeb",
+    "file": "lib/skill-store.js",
+    "category": "errors",
+    "title": "create/update/remove 都是「先改内存 state.skills，再 await persist()」，写盘失败时没有回滚，内存与磁盘从此不一",
+    "startLine": 500,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f12896b1df8291eb49d47cf581012eff9d603d48",
+    "file": "lib/skill-store.js",
+    "category": "security",
+    "title": "update()/remove() 在把调用方传入的 id 拼进 404 错误信息前完全未校验，而同一文件 create() 走的是 normalizeId()",
+    "startLine": 511,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7d2202f9578127194aade3bb2606387228c2f79f",
+    "file": "lib/skill-store.js",
+    "category": "errors",
+    "title": "readSeedSkills 吞掉所有读取错误，导致 restore 把「bundle 读不出来」误报成 404 unknown built-in skill。",
+    "startLine": 550,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7fc0bfcf8802ff194f0642851c7f788c8d3f63c1",
+    "file": "lib/skill-store.js",
+    "category": "contract",
+    "title": "initialize() 返回的是内部可变 state 对象本身，与 list()/get() 返回深拷贝的契约不一致，调用方可直接改到内部状态。",
+    "startLine": 585,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "981fa1e5ad1b11acebdb29c163206b3fbafaf89e",
+    "file": "lib/skill-store.js",
+    "category": "contract",
+    "title": "对外暴露的 serialize() 是唯一不调用 ensureLoaded() 的读接口，在首次加载前会返回一个“合法但为空”的 version 1 库文档。",
+    "startLine": 595,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a64501fb0075775275d28dd02bd95bf0e27bd338",
+    "file": "lib/note-sessions.js",
+    "category": "errors",
+    "title": "用消息正则判定「session 不存在」，会把无关的 not found 错误静默降级为会话缺失。",
+    "startLine": 56,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7d5734351cca9cc19a8033a708abdac6348c94cd",
+    "file": "lib/note-sessions.js",
+    "category": "correctness",
+    "title": "TODO_STATUSES 白名单实际上没有生效：非法 status 会被裁剪后原样透传，而不是归一到 'pending'。",
+    "startLine": 84,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d028a0ff1b8a18b995c3f3afe928f2f9002c631c",
+    "file": "lib/note-sessions.js",
+    "category": "errors",
+    "title": "两次 create 失败都被吞掉，最终错误只用第二次 resolveAgent 的 code 并固定映射 409，原始原因丢失且对可能不可重试的失败盲目重试一次",
+    "startLine": 244,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f0ad7f1de31c9c727d70269e9f4933536303a162",
+    "file": "lib/note-sessions.js",
+    "category": "security",
+    "title": "note.cwd 未经规范化/白名单校验就被用作新 Session 的工作目录，直接决定 Agent 工具的文件系统作用域。",
+    "startLine": 246,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "84ea3f712e5bfca6afa03708d9b298d8853cefb2",
+    "file": "lib/note-sessions.js",
+    "category": "intent",
+    "title": "文件头声明的审批策略是 fail-closed，但策略绑定失败时 ensure() 只记日志并继续，sendMessage 仍会照常下发 prompt，没有形成",
+    "startLine": 275,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a2c006e18546acdb92ed0067be5389f4c914753e",
+    "file": "lib/note-sessions.js",
+    "category": "intent",
+    "title": "sessionInfo 只凭进程内缓存推断 exists/approval，没有走文档声明的被动 state() 读取，并在无缓存时把 approval 报成 ",
+    "startLine": 293,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0dba9a3ad3c08714797131cd7b013c9620a55e50",
+    "file": "lib/note-sessions.js",
+    "category": "concurrency",
+    "title": "busy 占位在进入带 finally 的 try 块之前就可能因 controller() 抛错而永久泄漏。",
+    "startLine": 380,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fa5f8ab511ee2253fc19b574852d00319e986da8",
+    "file": "lib/note-sessions.js",
+    "category": "errors",
+    "title": "ctx.on 未做存在性检查，直接调用；模块内其它 Host 访问都带 typeof 守卫，缺失时本应统一抛 503，这里却抛出裸 TypeError。",
+    "startLine": 428,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1974fc59599d053e65d0099137da01624e29df2a",
+    "file": "lib/note-sessions.js",
+    "category": "correctness",
+    "title": "turn 归属门禁只加在 turn/start 与 turn/end 上，assistant/message、tool/call、tool/result、tod",
+    "startLine": 483,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "05a7c99029e9a748e3e34e167152be396fe5326e",
+    "file": "lib/note-sessions.js",
+    "category": "errors",
+    "title": "对 Host 的 prompt/cancel RPC 没有超时；超时路径上的 cancel 若挂起会阻塞 finally，busy 和 active 一直不释放",
+    "startLine": 562,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "15f992e8a40e43672a125164ad543fc7509dd174",
+    "file": "lib/note-sessions.js",
+    "category": "security",
+    "title": "Host/上游错误的原始 message 被原样写进 NDJSON error 帧返回给前端。",
+    "startLine": 605,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "aa44fbea5b3d4b9ee1f4b911d70c6f5bfbf52932",
+    "file": "lib/note-sessions.js",
+    "category": "concurrency",
+    "title": "stop() 无法中止仍处于准备阶段的请求：此时 state.controller 还是 null（L390 才赋值），而之后 L563 仍会照常发出 sc.p",
+    "startLine": 625,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6677ad2d6dc618175362454d8777fdb0a1ad6047",
+    "file": "lib/note-sessions.js",
+    "category": "errors",
+    "title": "stop() 吞掉 cancel 失败并把失败伪装成成功；返回的 active 还是在 await 之后读取的，通常已被 sendMessage 的 final",
+    "startLine": 630,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "687a6ad0f2a75e14ad7f47e00419af2cd98e4fc3",
+    "file": "lib/note-sessions.js",
+    "category": "errors",
+    "title": "transcript 把非 not-found 的历史读取故障也归类为“会话不存在”，把依赖故障伪装成空历史。",
+    "startLine": 651,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "40ced59428585a925216b48edeef42aa99432448",
+    "file": "lib/note-sessions.js",
+    "category": "security",
+    "title": "transcript 靠“已知块标签开头 + 含 `\\n[user-message]\\n`”来猜测并剥离插件注入的前缀，用户可构造同样形状的消息让历史视图吞掉自",
+    "startLine": 694,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "745a8a180abac50ab8ae62b0410782415352d435",
+    "file": "lib/note-sessions.js",
+    "category": "contract",
+    "title": "同一函数内成功路径的返回结构缺少 events 字段，与所有失败路径的返回形状不一致。",
+    "startLine": 752,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
   }
 ]
