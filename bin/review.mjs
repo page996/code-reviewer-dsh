@@ -3,7 +3,7 @@
  * CLI entry — CONTRACT §8.
  *
  * Subcommands: scope | plan | run | gate | report | all | scan | hook |
- *              install-hooks | runs
+ *              install-hooks | runs | eval
  *
  * `--json` guarantees exactly one JSON object on stdout; every log line goes to
  * stderr. Exit codes: 0 pass, 2 blocking findings, 3 needs-human, 4 gate failure,
@@ -28,6 +28,7 @@ import { aggregateFindings } from '../lib/aggregate.mjs';
 import { runGate } from '../lib/gate.mjs';
 import { writeReports } from '../lib/report.mjs';
 import { installHooks, runHook, uninstallHooks } from '../lib/hooks.mjs';
+import { evalCase } from '../lib/eval.mjs';
 
 const TOOL_VERSION = '0.1.0';
 const REPORT_FORMATS = ['md', 'json', 'sarif'];
@@ -46,6 +47,7 @@ const USAGE = `用法: review <command> [options]
   hook           执行 git hook（pre-commit|pre-push）
   install-hooks  安装 .githooks（--uninstall 卸载）
   runs           列出历史 run
+  eval           case 回归：对比基线 findings 与 dispositions（--case <dir> [--run latest]）
 
 共同参数:
   --repo D       仓库目录（默认 cwd）
@@ -99,6 +101,7 @@ function parseCli(argv) {
       out: { type: 'string' },
       uninstall: { type: 'boolean', default: false },
       'no-llm': { type: 'boolean', default: false },
+      case: { type: 'string' },
     },
   });
   return { values, positionals };
@@ -845,6 +848,35 @@ async function cmdRuns({ values, repo, log }) {
   return 0;
 }
 
+async function cmdEval({ values, repo, log }) {
+  if (!values.case) throw usageError('eval 需要 --case <case 目录>');
+  const config = loadCliConfig(values, repo, log);
+  const runDir = values.run ? resolveRunDir(repo, config, values.run) : undefined;
+  const result = evalCase({ caseDir: values.case, cwd: repo, config, runDir, log });
+  if (values.json) {
+    emitJson({ schemaVersion: 1, command: 'eval', ok: true, ...result, exitCode: result.exitCode });
+    return result.exitCode;
+  }
+  humanLine(values, `case ${result.caseId}: ${result.verdict} (exit ${result.exitCode})`);
+  humanLine(
+    values,
+    `基线 ${result.baseline.total} 条 · 命中 ${result.counts.matched} · 漏报 ${result.counts.missed} · ` +
+      `已修复但仍报 ${result.counts.stale} · 已知噪音复现 ${result.counts.noiseStillReported} · 新增 ${result.counts.newFindings}`,
+  );
+  for (const [label, list] of [
+    ['漏报（accepted 未复现）', result.missed],
+    ['已修复仍被报出', result.stale],
+    ['已知噪音复现', result.noiseStillReported],
+  ]) {
+    if (list.length === 0) continue;
+    humanLine(values, `${label}:`);
+    for (const item of list.slice(0, 20)) {
+      humanLine(values, `  - ${item.file}:${item.startLine ?? '?'} [${item.category ?? '-'}] ${item.title}`);
+    }
+  }
+  return result.exitCode;
+}
+
 async function main(argv) {
   let parsed;
   try {
@@ -894,6 +926,8 @@ async function main(argv) {
         return await cmdInstallHooks({ values, repo, log });
       case 'runs':
         return await cmdRuns({ values, repo, log });
+      case 'eval':
+        return await cmdEval({ values, repo, log });
       default:
         throw usageError(`未知子命令: ${command}\n\n${USAGE}`);
     }

@@ -221,13 +221,14 @@ review scan  --path D [--effort ...] [--no-llm]                         # = scop
 review hook  pre-commit|pre-push [--repo D]
 review install-hooks [--repo D] [--uninstall]
 review runs  [--json]
+review eval  --case <caseDir> [--run R] [--json]              # case 回归（基线 vs 本次 run）
 ```
 
 - 共同参数：`--repo`（默认 cwd）、`--config`、`--json`、`--quiet`。
 - `--no-llm`（`run`/`all`/`scan`）：跳过 LLM 评审、**不要求任何 API key**，仍写空 `findings.json`、报告与 `gate.json`；用于无 key 的确定性 CI 路径（`scan --path . --effort quick --no-llm`）。
 - `--run latest` 对 `plan/gate/report/run` 均有效（经 `store.latestRun` 解析），不依赖磁盘 `runs/latest` 别名。
 - `--json` 时 stdout 只输出一个 JSON 对象（含 `runId`、产物路径、counts、usage、exitCode）；进度/日志走 stderr。
-- 退出码：0 通过；2 阻断（findings）；3 needs-human；4 必需门禁失败；5 引擎/配置错误；1 用法错误。
+- 退出码：0 通过；2 阻断（findings）或 case 回归；3 needs-human；4 必需门禁失败；5 引擎/配置错误；1 用法错误。
 - `review all`/`scan` 内部：scope → plan → run → gate → report，并把 `gate.exitCode` 作为进程退出码。
 
 ## 9. DSH 插件 `plugins/dsh/`
@@ -252,3 +253,5 @@ review runs  [--json]
 ## 11. 经验沉淀（`cases/`）
 
 每个样例仓库一个目录：`cases/<repo>/`，含 `README.md`（评审范围/结论）、`findings.json`（本次真实产出）、`dispositions.json`（每条：`accepted|rejected|ignored|fixed` + 原因）、`lessons.md`（提炼的规则/prompt 改进，注明落到哪个文件）。任何规则/prompt 改动必须在 `lessons.md` 里能追溯到某个 case。
+
+`review eval --case cases/<repo> [--run latest]` 做基线回归：`accepted` 必须仍被报出（漏报=召回回归）；`fixed` 不得再报出（再报=过期）；`rejected|ignored` 不得再报出（再报=精度回归）；基线外的新 finding 只作信息展示。有回归 exit 2，否则 0。

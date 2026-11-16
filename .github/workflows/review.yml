@@ -1,4 +1,4 @@
-name: PR Review
+﻿name: PR Review
 
 # Authoritative review gate for pull requests.
 #
@@ -9,7 +9,7 @@ name: PR Review
 #   3. SARIF upload to code scanning (same-repo runs where the token has security-events: write)
 #   4. one idempotent PR comment (marker `<!-- dsh-code-review -->`) summarizing report.json
 #
-# Secret policy (CONTRACT §10):
+# Secret policy (CONTRACT 搂10):
 #   - same-repo PR without DEEPSEEK_API_KEY  -> FAIL LOUDLY with a clear remediation message
 #   - fork PR                               -> secrets are unavailable by design: emit an explicit
 #                                              notice, skip the LLM, still run deterministic checks
@@ -20,7 +20,7 @@ name: PR Review
 # itself is injected into the single LLM step only.
 #
 # Model: DeepSeek `deepseek-flash` (V4.1 Flash), Anthropic transport, reasoningEffort `max`,
-# no token budget cap (defaults from CONTRACT §2 / .review/config.json).
+# no token budget cap (defaults from CONTRACT 搂2 / .review/config.json).
 
 on:
   pull_request:
@@ -52,12 +52,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout (full history, PR merge ref)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Node.js 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           # No `cache:` input on purpose: zero-dependency project with no lockfile to key on.
@@ -171,7 +171,7 @@ jobs:
       # One comment per PR, updated in place on every run (marker-based idempotency).
       - name: Post or update the single review PR comment
         if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           HAS_KEY: ${{ steps.key.outputs.present }}
           DET_EXIT: ${{ steps.deterministic.outputs.gate_exit }}
@@ -199,7 +199,7 @@ jobs:
                 .replace(/\r?\n/g, ' ')
                 .replace(/@/g, '@\u200B')
                 .trim();
-              return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+              return text.length > max ? `${text.slice(0, max - 1)}鈥 : text;
             };
             const fmtExit = (value) => {
               const text = String(value ?? '').trim();
@@ -235,18 +235,18 @@ jobs:
             const hasKey = process.env.HAS_KEY === 'true';
             const isFork = process.env.IS_FORK === 'true';
             const runId = report?.runId || 'latest';
-            const icon = { pass: '✅', block: '❌', fail: '❌', 'needs-human': '⚠️', needs_human: '⚠️', error: '💥' }[verdict] || '❔';
+            const icon = { pass: '鉁?, block: '鉂?, fail: '鉂?, 'needs-human': '鈿狅笍', needs_human: '鈿狅笍', error: '馃挜' }[verdict] || '鉂?;
 
             const body = [];
             body.push(MARKER);
-            body.push('## 🔎 DSH Code Review');
+            body.push('## 馃攷 DSH Code Review');
             body.push('');
             body.push(`**Verdict:** ${icon} ${verdict ? `\`${verdict}\`` : 'unavailable'}`);
             body.push(`**Review run:** [\`${runId}\`](${process.env.RUN_URL})`);
             const scopeCounts = report?.scope?.counts || det?.scope?.counts || det?.counts?.scope || null;
             if (scopeCounts) {
               body.push(
-                `**Diff scope:** ${scopeCounts.reviewable} reviewable / ${scopeCounts.total} files · +${scopeCounts.insertions} −${scopeCounts.deletions}`,
+                `**Diff scope:** ${scopeCounts.reviewable} reviewable / ${scopeCounts.total} files 路 +${scopeCounts.insertions} 鈭?{scopeCounts.deletions}`,
               );
             }
             body.push('');
@@ -262,7 +262,7 @@ jobs:
                 body.push(`| \`${command}\` | ${result} |`);
               }
               if (checks.length > 10) {
-                body.push(`| … ${checks.length - 10} more check(s) | |`);
+                body.push(`| 鈥?${checks.length - 10} more check(s) | |`);
               }
             } else {
               body.push(`- deterministic gate: ${fmtExit(process.env.DET_EXIT)}${gate?.verdict ? ` (${gate.verdict})` : ''}`);
@@ -271,15 +271,15 @@ jobs:
 
             body.push('### LLM review');
             if (hasKey) {
-              body.push(`- \`deepseek-flash\` · reasoningEffort \`max\` · effort \`standard\` — ${fmtExit(process.env.LLM_EXIT)}`);
+              body.push(`- \`deepseek-flash\` 路 reasoningEffort \`max\` 路 effort \`standard\` 鈥?${fmtExit(process.env.LLM_EXIT)}`);
             } else {
               body.push('- skipped: `DEEPSEEK_API_KEY` is not available in this workflow run, so only deterministic checks ran.');
               if (!isFork) {
                 body.push('');
-                body.push('> ❗ Same-repo PR without `DEEPSEEK_API_KEY`: this workflow fails by design. Configure the repository secret and re-run.');
+                body.push('> 鉂?Same-repo PR without `DEEPSEEK_API_KEY`: this workflow fails by design. Configure the repository secret and re-run.');
               } else {
                 body.push('');
-                body.push('> ℹ️ Fork PR: repository secrets are never exposed to fork workflows; deterministic checks are authoritative for this PR.');
+                body.push('> 鈩癸笍 Fork PR: repository secrets are never exposed to fork workflows; deterministic checks are authoritative for this PR.');
               }
             }
             body.push('');
@@ -287,7 +287,7 @@ jobs:
             if (findings.length > 0 || Object.keys(counts).length > 0) {
               const summary = ['blocker', 'major', 'minor', 'needsHuman', 'dropped']
                 .map((key) => `${key}: ${counts[key] ?? 0}`)
-                .join(' · ');
+                .join(' 路 ');
               body.push(`**Findings:** ${summary}`);
               const order = { blocker: 0, major: 1, minor: 2 };
               const sorted = [...findings].sort(
@@ -306,7 +306,7 @@ jobs:
                   const category = finding.category ? `(${truncate(finding.category, 40)}) ` : '';
                   const preexisting = finding.preexisting ? ' _(pre-existing)_' : '';
                   const problem = truncate(finding.problem || finding.title || finding.message || 'no description', 320);
-                  body.push(`- ${severity}${category}${location} — ${problem}${preexisting}`.replace(/\s+/g, ' '));
+                  body.push(`- ${severity}${category}${location} 鈥?${problem}${preexisting}`.replace(/\s+/g, ' '));
                 }
                 body.push('');
                 body.push('</details>');
@@ -315,7 +315,7 @@ jobs:
             body.push('');
             body.push('<sub>Hooks are a client-side fast net; this GitHub Actions check is the authoritative gate. This comment is updated in place.</sub>');
             const bodyText = body.join('\n');
-            const safeBody = bodyText.length > 60000 ? `${bodyText.slice(0, 60000)}\n\n… (comment truncated)` : bodyText;
+            const safeBody = bodyText.length > 60000 ? `${bodyText.slice(0, 60000)}\n\n鈥?(comment truncated)` : bodyText;
 
             const { owner, repo } = context.repo;
             const issue_number = context.payload.pull_request.number;
