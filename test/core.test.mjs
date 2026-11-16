@@ -771,6 +771,29 @@ test('plan: scan grouping enforces BOTH maxFilesPerUnit and maxLinesPerUnit', (t
   assert.equal(soloUnits[0].stats.changedLines, 50);
 });
 
+test('plan: oversized scan file is split into line-range units', (t) => {
+  const dir = initRepo();
+  t.after(() => removeTemp(dir));
+  const lines = Array.from({ length: 3000 }, (_, index) => `const v${index} = ${index};`).join('\n');
+  writeFile(dir, 'lib/big.js', `${lines}\n`);
+  commitAll(dir, 'init');
+  const config = baseConfig(dir, { plan: { splitSingleFileLines: 1000 } });
+  const scope = createScope({ cwd: dir, mode: 'scan', path: 'lib', config });
+  const plan = buildPlan({ scope, config, effort: 'quick' });
+  assert.equal(plan.units.length, 3, 'one oversized file becomes three line-range units');
+  const chunks = plan.units.map((unit) => unit.files[0].chunk);
+  assert.deepEqual(
+    chunks.map((chunk) => [chunk.startLine, chunk.endLine, chunk.totalLines]),
+    [
+      [1, 1000, 3000],
+      [1001, 2000, 3000],
+      [2001, 3000, 3000],
+    ],
+  );
+  assert.equal(plan.units.reduce((sum, unit) => sum + unit.files[0].newLineCount, 0), 3000);
+  assert.match(plan.units[1].files[0].patch, /@@ -0,0 \+1001,1000 @@/);
+});
+
 test('plan: scan mode drops the tests lens unless explicitly requested', (t) => {
   const dir = initRepo();
   t.after(() => removeTemp(dir));
