@@ -58,6 +58,7 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 - PR #1 在加入 `DSH_API_KEY` 后两次真实运行：`review.yml` 用 `deepseek-flash / max` 评了 PR diff（首轮 2 条、修复后 3 条 minor，全部落在我们为插件写的测试上）。
 - 首轮 2 条**是真问题**：归一化测试无法区分「null→空串」与「一律清空」；repo 参数测试受会话缓存影响、无法证明 repo 参与解析。→ 已按 finding 重写两个测试（不再依赖 review_scope 缓存，手动构造远端 run）。
 - 第二轮 3 条是测试判别力的纯增强建议（minor），推送了 P-4 prompt 约束降噪。
+- 第三轮（P-4 生效后）仍报 3 条 tests minor：模型把「断言无法区分『null→空串』与『一律清空』」视为「必然误通过」，属于 P-4 允许的报告范围。结论：**test-only diff 上的 tests 视角仍有 meta 噪声**，但都被判 minor、不阻断，可接受；后续可在 aggregate 增加「test-only diff 的 tests minor 降级」策略（待定）。
 - 这验证了「CI 权威门禁 + 真实模型评审 + 找自身问题」的闭环确实工作，也说明 `tests` 视角在 PR 场景需要更严格的报告门槛。
 
 ## 7. 结论摘要
