@@ -3211,5 +3211,275 @@
     "startLine": 752,
     "disposition": "accepted",
     "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6ee2ec65cabd085a6e1ba0ea4fad9c7776938405",
+    "file": "lib/graph.js",
+    "category": "errors",
+    "title": "putSnapshot 把快照文件写入错误整体吞掉，仍然返回成功；调用方随即把 node.snapshotId / data.snapshots[id] 记为已",
+    "startLine": 472,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "24df8ffcd75362c9d1f4b49c538758a3e66ea12a",
+    "file": "lib/graph.js",
+    "category": "correctness",
+    "title": "backfill 判断“该 note 已有入边”时不区分边类型：任何指向它的 reference/embed 边都会让 backfill 跳过父/结构边的补建，",
+    "startLine": 1159,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "18df51f8c0a76948b7a6b7e711c8c526ca750067",
+    "file": "lib/graph.js",
+    "category": "errors",
+    "title": "updateNode 标题回写 note JSON 失败时错误只写进日志，既不进入 runtimeWarnings 也没有失败计数，applyPatch 仍返回",
+    "startLine": 1851,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ef8f9027a821374e3e3e0b8afbd00b189cf16f3b",
+    "file": "lib/graph.js",
+    "category": "errors",
+    "title": "save() 先执行快照 GC（真实 unlink 快照文件），再写 graph.json；写盘失败时没有补偿或待删除记录，磁盘上的旧 graph.json 仍",
+    "startLine": 449,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "cef2e6332e8250b909e5de125c3af932ae35345d",
+    "file": "lib/graph.js",
+    "category": "security",
+    "title": "原始 fs/JSON 解析错误文本被写进 data.warnings 持久化到 graph.json，并由 summary() 原样返回给 API 调用方，泄露",
+    "startLine": 413,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "eae7c229a10a008c73f95e6885b9bca1b7f8bd41",
+    "file": "lib/graph.js",
+    "category": "errors",
+    "title": "隔离损坏 graph.json 的 rename 失败被吞掉，但仍无条件写入“已隔离到 graph.corrupt-*.json”的 warning，形成成功假",
+    "startLine": 430,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "18d45bee38f24126e78b14bcd3e80f58a4c96a11",
+    "file": "lib/graph.js",
+    "category": "correctness",
+    "title": "save() 在写 graph.json 之前先执行 pruneSnapshots，而 prune 会物理 unlink 快照文件；若随后的 writeFile",
+    "startLine": 446,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "955d1d7fff8505bc9738ef40cf42838462ca1e66",
+    "file": "lib/graph.js",
+    "category": "data",
+    "title": "save() 在 rename 之前把磁盘上现有的 graph.json 原样复制成 graph.json.bak；而 load() 正是在 graph.jso",
+    "startLine": 453,
+    "disposition": "accepted",
+    "reason": "batch-3 数据/状态问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "01ed3667fd77277fc523148bef39a955d4fe5477",
+    "file": "lib/graph.js",
+    "category": "correctness",
+    "title": "节点上限检查写在把节点写入 data.nodes 之后，且计数包含墓碑节点；抛错依赖调用方丢弃整份 data，但 syncNodeLockedInto 会吞掉该",
+    "startLine": 646,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "348e51f2cce0da62ffacbd489164d38f5eef14b4",
+    "file": "lib/graph.js",
+    "category": "correctness",
+    "title": "ensureNode 先插入节点再校验上限；syncNodeLockedInto 又吞掉该异常继续执行，最终把超限节点持久化",
+    "startLine": 647,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "69164677a4f6ce73e1815a76e2657e552844fa74",
+    "file": "lib/graph.js",
+    "category": "correctness",
+    "title": "无环校验 pathExists 在搜索深度超过 MAX_DEPTH 时直接返回 false，把“预算耗尽”当成“不存在路径”，导致长度超过 6 条结构边的祖先链",
+    "startLine": 688,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8f795e9c15700b02863330d3af56e3ff3f80e8ce",
+    "file": "lib/graph.js",
+    "category": "correctness",
+    "title": "pathExists 在超深时直接返回 false，使「父/分支边保持无环」的检查可被 7 层以上的链绕过",
+    "startLine": 689,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "621cd032677d826379edef0ba82e34ddd6da4afa",
+    "file": "lib/graph.js",
+    "category": "security",
+    "title": "pathExists 递归没有 visited/记忆化，每层还对全部边做一次线性 filter，边可被 patch 累积到 MAX_EDGES(2000)、深度",
+    "startLine": 695,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1fd9c3f1234f38e085201b007a34b5d9fc9f5088",
+    "file": "lib/graph.js",
+    "category": "security",
+    "title": "addEdgeLocked 对 from/to 不做 id 形式校验，只用 `data.nodes[from]` 的真值判断端点是否存在，Object.prot",
+    "startLine": 718,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b58180d656894f195715ca2880e638adc89bd57f",
+    "file": "lib/graph.js",
+    "category": "contract",
+    "title": "syncNode 的 deleted 分支返回两种不同结构，其中一种缺少 node 字段",
+    "startLine": 879,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "9aed5cb699f495d89772f3578a2394f254ce6736",
+    "file": "lib/graph.js",
+    "category": "contract",
+    "title": "addChildEdge 不保证父节点已有快照，可能持久化 baseSnapshot 为 null 的边，与 backfill 的行为不一致",
+    "startLine": 971,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c971495769e31081ad8b49840a93482758ec8455",
+    "file": "lib/graph.js",
+    "category": "errors",
+    "title": "`syncNodeLockedInto` 吞掉 resolveNotes/ensureNode 的所有异常，调用方 addChildEdge 随后把父节点缺失统",
+    "startLine": 1010,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0d2d60400989da49b17ebfc265850a6a1e0e9d75",
+    "file": "lib/graph.js",
+    "category": "correctness",
+    "title": "backfill（文件自述的 READ-driven 重建，被 GET /graph、GET /graph/export 触发）在文档超过容量上限时不会降级，而",
+    "startLine": 1146,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d889518e372130f4cb2763ce508927a4413c5903",
+    "file": "lib/graph.js",
+    "category": "contract",
+    "title": "错误信封不一致：同一语义的 4xx 只有部分带稳定 code。validatePatch 的 404、'graph edge endpoint not foun",
+    "startLine": 1219,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7ad204dfbce0c5d5ce76e25d2fbd859f8f826cc4",
+    "file": "lib/graph.js",
+    "category": "security",
+    "title": "节点/边字典直接用请求可控字符串做真值存在性检查与属性写入，`__proto__` 等原型键会取到 Object.prototype 并被当作节点写入，构成原型",
+    "startLine": 1236,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6279bd3927c1849cf9329d767f25257da306d4a9",
+    "file": "lib/graph.js",
+    "category": "contract",
+    "title": "同一批 patch op 的幂等语义不一致：removeNode 对已删除节点抛 409，而 removeEdge 对已移除边、restoreNode 对已可见",
+    "startLine": 1241,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e0f4e601387d9399f683303b4f3c8bd62b67075f",
+    "file": "lib/graph.js",
+    "category": "contract",
+    "title": "审计记录里 affected.reparented 是 string[]，而同一字段在 op 返回值与 aggregateAffected 中是 `{noteI",
+    "startLine": 1330,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f73131a043dca64cfa511f5e95c9b3f3c76d1dab",
+    "file": "lib/graph.js",
+    "category": "contract",
+    "title": "applyPatch().results[] 中每个 op 的返回对象在 no-op 分支缺字段，与正常分支的类型不一致：restoreNode 缺 resto",
+    "startLine": 1351,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e4df9ee4c3ebc2edb3c929ce2e5a8841175631ff",
+    "file": "lib/graph.js",
+    "category": "security",
+    "title": "reparentNode 只校验被移动节点在 agent 子树内，完全不校验目标 parentId，agent 可把子树嫁接到图上任意位置，绕过 addEdge",
+    "startLine": 1450,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e16b76594c03ba9ac5de2423a550f1bacaba1906",
+    "file": "lib/graph.js",
+    "category": "security",
+    "title": "reparentNode 只对「被移动节点」做 agent 作用域校验，对目标 parentId 不做 isWithinAgentSubtree 校验，绕过了同",
+    "startLine": 1451,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d862aebb08c9ba53df6d15f1614637393e45bb2c",
+    "file": "lib/graph.js",
+    "category": "correctness",
+    "title": "addEdge/addReference 分支在创建结构边（默认 type 为 'reply'，且允许显式 type:'parent'）时完全没有自环/成环/重",
+    "startLine": 1591,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "5bd8ebf7928f3d52abec133f395e825978f9a755",
+    "file": "lib/graph.js",
+    "category": "security",
+    "title": "注释声明审计是图变更的前置条件（fail-closed），但未注入 auditBackend 时只打日志并继续提交变更，审计控制实际 fail-open",
+    "startLine": 1682,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "01f9e83aa9bc2ec95fd291fa77c9f0707ef42f2d",
+    "file": "lib/graph.js",
+    "category": "errors",
+    "title": "audit 追加失败时原始 error 对象被丢弃，只把其 message 字符串降级放进对外的 details.cause，错误类型/错误码不可再被分支处理，",
+    "startLine": 1719,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0468dfa9dfbb26c1ddd75c6153dca801504b4062",
+    "file": "lib/graph.js",
+    "category": "security",
+    "title": "503 错误的 details 与 patch 结果的 warnings 里原样回传审计后端/文件系统错误文本，可能向调用方泄露内部路径与后端细节",
+    "startLine": 1730,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "705c66026e479bc6ca44312465c42024d4e036a4",
+    "file": "lib/graph.js",
+    "category": "contract",
+    "title": "applyPatch 的 actorKind 入参把任何非精确小写 'agent'/'system' 的值（缺省、'Agent'、'agent '、拼写错误）静",
+    "startLine": 1791,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
   }
 ]

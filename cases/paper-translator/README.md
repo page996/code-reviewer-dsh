@@ -37,7 +37,8 @@
 | batch-23 | `lib/skills.js` | standard（同 lenses） | `run-20261116-231724-694b` | 9 minor，全部 accepted；`review eval`：matched 9 / missed 0 → **pass** |
 | batch-24 | `lib/skill-store.js` | standard（同 lenses） | `run-20261116-232159-73ce` | **1 blocker** + 16 minor，全部 accepted；`review eval`：matched 17 / missed 0 → **pass**（scan 语义下 blocker 不阻断 gate） |
 | batch-25 | `lib/note-sessions.js` | standard（同 lenses） | `run-20261116-232552-70cc` | 16 minor，全部 accepted；首轮 1 视角传输失败，重跑成功；`review eval`：matched 16 / missed 0 → **pass** |
-| batch-26（待做） | 剩余大模块（graph/llm/katex-verify…） | standard / 需先支持单文件切分 | — | — |
+| batch-26 | `lib/graph.js`（2,041 行，首次启用单文件切分：2 个 1200 行单元） | standard（同 lenses） | `run-20261116-233634-8ec3` | 3 major + 27 minor（另有 3 条 style/docs minor 被聚合丢弃，不入基线）；`review eval`：matched 30 / missed 0 → **pass** |
+| batch-27（待做） | `lib/katex-verify.js`（1,286 行，将切 2 单元）、`lib/llm.js`（3,657 行，将切 4 单元） | standard | — | — |
 
 排除：`assets/katex/**`（vendored）、`python/__pycache__/**`、`*.pyc`、`locale/*.json`。
 
@@ -74,6 +75,7 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 | scan 模式下 tests 视角只报「本单元没测试」 | `lib/plan.mjs`：scan 默认跳过 tests 视角（显式 lenses 可覆盖）；`lib/aggregate.mjs` 兜底 drop `unit-scope-test-gap` |
 | scan 模式的既有代码缺陷被当成本次变更阻断（batch-5 实测 exit 2） | `lib/review.mjs` 给 scan findings 标 `preexisting=true`；`lib/gate.mjs` 对 scan 模式忽略 blocking（`gate.blockPreexisting=true` 可显式开启） |
 | 多视角把同一问题按不同类别重复报（batch-7 实测） | `lib/aggregate.mjs` 新增同文件同行的相似标题跨类别合并（votes 取并集、severity 取最高）；CLI 新增 `review aggregate --run` 可无模型重算 |
+| 超大单文件（>1200 行）单请求易触发传输失败/上下文过长 | `lib/plan.mjs` 新增 scan 模式单文件切分：按行区间切成多个 unit（`plan.splitSingleFileLines`，默认 1200），逐块评审并用行区间锚定；batch-26（graph.js 2041 行）实测 2 单元、无传输失败 |
 | case 回归误报：跨文件/跨类别/措辞漂移 | `lib/eval.mjs`：按 scope 过滤 + 同文件近似行/标题相似度 + 类别族约束 |
 | 路径/Windows/吞错误/审批元数据规则缺口 | `rules/lang-js-ts.md`、`rules/core-security.md`、`rules/core-concurrency.md` 新增条目 |
 
@@ -102,6 +104,7 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 - batch-23：`review eval --run run-20261116-231724-694b` → **pass**（matched 9 / missed 0 / notEvaluated 315）。
 - batch-24：`review eval --run run-20261116-232159-73ce` → **pass**（matched 17 / missed 0 / notEvaluated 324）。
 - batch-25：`review eval --run run-20261116-232552-70cc` → **pass**（matched 16 / missed 0 / notEvaluated 341）。
+- batch-26：`review eval --run run-20261116-233634-8ec3` → **pass**（matched 30 / missed 0 / notEvaluated 357）；单文件切分后两个单元、无传输失败。
 - batch-2：`--run run-20261116-193909-9bc6`（插件仍缓存旧 `lib/plan.mjs`，tests 视角未跳过；本机无重启）→ matched 13 / missed 0 / noise 2–4，exit 2；属运行时缓存而非代码回归。
 - 新增 `review.temperature=0` 与 reviewer 传输重试后，**重启 DSH** 重跑 batch-2 预期稳定通过（重复运行结果一致）。
 - eval 语义已按 run scope 过滤：其他批次基线在当前 run 中计 `notEvaluated`，不再误判漏报。
