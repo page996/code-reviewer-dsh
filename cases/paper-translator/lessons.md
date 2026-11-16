@@ -27,6 +27,7 @@
 | R-18 | batch-13/14：CSS 选择器拼接只转义引号、图片 URL 任意主机、`querySelector` 换行逃逸；重复函数定义/双 click 绑定；`{ok:false}` 被当成功 | JS 规则包缺「前端注入面/重复绑定/响应信封校验」判据 | 新增五条前端条目 | `rules/lang-js-ts.md`（已加） | batch-13/14 真实命中 |
 | R-19 | batch-15/16：审批对话框把「exists 未知」的覆盖写描述成新建；确认框不可用时破坏性操作改为无确认执行（fail-open）；视觉批量接口无条目/字节上限；provider 原始错误透传；`Number(null)=0` 参与 confidence/页码 | 安全规则缺「审批展示真实性/破坏性操作 fail-open/批量配额/错误透传」，coercion 规则已有但缺 confidence 场景 | 新增安全条目 + 复核 core-correctness coercion 条目 | `rules/core-security.md`（已加） | batch-15/16 真实命中 |
 | R-20 | batch-17/18：`Number(null)=0` 页码/confidence、未翻译用源文回填导致 `untranslated` 恒 false、协议字段缺失回落 `'en'`、blockId 键类型不一致、manifest 空 lockedImage 产出空 url | 数据规则缺「unknown vs 空」与「缺字段回落具体值」判据 | 新增数据生命周期补充条目 | `rules/core-data.md`（已加） | batch-18 真实命中 |
+| R-21 | batch-19/20：evidence 把原始 fs/JSON 错误文本持久化进 warnings；audit 的 actor 未知时静默回退 `system`、`maxRotated=0` 语义与文档相反、rotate 把 stat 错误当不存在 | 安全规则缺「审计身份回退最受信角色/错误文本持久化」判据 | 新增审计身份条目 | `rules/core-security.md`（已加） | batch-19/20 真实命中 |
 | R-8（补） | batch-10 首轮 4.7k 行 client.js 出现 2 次 `DeepSeek Messages transport failed`（大 prompt 更易瞬时失败），重跑成功 | 大文件单 unit 的请求更易触发传输中断；重试代码已在 main，插件尚缓存旧 lib | 重启后由 reviewer 重试覆盖；必要时后续加「超大单文件切 unit」 | `lib/review.mjs`（已加） | 重启后重跑 batch-10 观察不再丢视角 |
 
 ## 2. prompt 调整（→ `references/prompts.md` + `lib/prompts.mjs`）
@@ -61,6 +62,8 @@
 | E-228…E-240 | batch-16 的 13 条 visual.js 缺陷（accepted） | 仍被报出；batch-16 run 的 eval：matched 13 / missed 0 | `findings.json` |
 | E-241…E-246 | batch-17 的 6 条 compare.js 缺陷（accepted） | 仍被报出；batch-17 run 的 eval：matched 6 / missed 0 | `findings.json` |
 | E-247…E-256 | batch-18 的 10 条 document.js 缺陷（含 1 major，accepted） | 仍被报出；batch-18 run 的 eval：matched 10 / missed 0 | `findings.json` |
+| E-257…E-272 | batch-19 的 16 条 evidence.js 缺陷（accepted） | 仍被报出；batch-19 run 的 eval：matched 16 / missed 0 | `findings.json` |
+| E-273…E-286 | batch-20 的 14 条 audit.js 缺陷（accepted） | 仍被报出；batch-20 run 的 eval：matched 14 / missed 0 | `findings.json` |
 
 回归命令：
 
@@ -92,6 +95,8 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 | batch-16 | 13 条 | accepted | `Number(null)=0` 影响 confidence/页码、视觉探测失败与不支持混为一谈、provider 原始错误透传、批量图片无配额更、解析失败仍返回“干净成功”、未知 code 静默塌缩等 | R-19 已补安全条目 | eval 已 pass（13/13） |
 | batch-17 | 6 条 | accepted | blockById 缺可选链、caption 容器 key 归一化不一致、title/abstract 无条件跳过而 front 行按元数据生成（同一问题多视角重复，R-15 限制） | 规则已有部分覆盖 | eval 已 pass（6/6） |
 | batch-18 | 10 条（1 major） | accepted | `Number(null)=0` 页码、id 类型不一致、extraction/translations 损坏静默降级、源文回填使 untranslated 恒 false、协议字段缺失回落 `'en'`、空 lockedImage 产出空 url 等 | R-20 已补数据规则 | eval 已 pass（10/10） |
+| batch-19 | 16 条 | accepted | 原始 fs/解析错误文本持久化进 warnings、非 ENOENT 读错与损坏一视同仁、`.bak` 复制时机错误、entry 形状随接口不同、命中去重忽略 noteId/tags、blob 落盘失败仍写索引 | R-3/R-21 覆盖部分 | eval 已 pass（16/16） |
+| batch-20 | 14 条 | accepted | actor 未知回退 `system`（伪造系统操作）、`maxRotated=0` 语义与文档相反、rotate 把 stat 错误当不存在、readdir 错误吞成空、轮转段不可读被静默跳过等 | R-21 已补审计身份条目 | eval 已 pass（14/14） |
 
 ## 5. eval 机制自身的三次修正（meta lesson）
 
@@ -109,10 +114,10 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 
 ## 7. 结论摘要
 
-- 真实缺陷：batch-1…16 累计 236 + batch-17 6 + batch-18 10 = 252 条 accepted（含 6 条 major）。
+- 真实缺陷：batch-1…18 累计 252 + batch-19 16 + batch-20 14 = 282 条 accepted（含 6 条 major）。
 - 误报：batch-2 4 条 unit-scope 测试噪声（rejected）。
-- 新增规则：15 条（R-1/R-2/R-3/R-5/R-6/R-7/R-10/R-11/R-12/R-14/R-16/R-17/R-18/R-19/R-20 已落，R-4 待落 core-data）。
+- 新增规则：16 条（R-1/R-2/R-3/R-5/R-6/R-7/R-10/R-11/R-12/R-14/R-16/R-17/R-18/R-19/R-20/R-21 已落，R-4 待落 core-data）。
 - 编排修复：R-8 传输重试、R-9 temperature=0、R-13 scan 模式 preexisting/门禁语义、R-15 跨视角同类合并 + `review aggregate`。
 - prompt 调整：4 处（P-1/P-2/P-4 已落，P-3 待批次契约）。
-- 回归用例：252 accepted + 4 rejected；batch-3…18 的 eval 均全绿（missed 0 / noise 0）。
+- 回归用例：282 accepted + 4 rejected；batch-3…20 的 eval 均全绿（missed 0 / noise 0）。
 - 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则、重试、温度）。

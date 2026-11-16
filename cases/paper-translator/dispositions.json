@@ -2302,5 +2302,275 @@
     "startLine": 538,
     "disposition": "accepted",
     "reason": "batch-3 数据/状态问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "12ec615cdf96109ea2189a5b6cdf2faaf94de10c",
+    "file": "lib/evidence.js",
+    "category": "security",
+    "title": "load() 把原始 fs/JSON 解析错误文本拼进 tree.warnings，而 warnings 会持久化在 tree.json 并由 query()/",
+    "startLine": 103,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ecbc9a00b9eb29b7f7fe0d6c0633527d5fffd025",
+    "file": "lib/evidence.js",
+    "category": "errors",
+    "title": "load() 把任何非 ENOENT 的读错误（EACCES/EMFILE/EBUSY/EIO）与真正损坏一视同仁：主文件与备份都读不到时把索引当损坏隔离并返回",
+    "startLine": 121,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "cfe6b4728fc80f2aeebd6346973a9c83c8bd9be3",
+    "file": "lib/evidence.js",
+    "category": "intent",
+    "title": "save() 把当前（可能已损坏的）tree.json 复制进 .bak，违背文件头“tree.json.bak = previous valid copy”的",
+    "startLine": 138,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "376da43ec335a94553e01f25e6f77052fc4a691b",
+    "file": "lib/evidence.js",
+    "category": "contract",
+    "title": "同一个 entry 的对外形状随接口不同：get() 默认带 refs/links 数组，query()/summary() 用 includeRefs:fal",
+    "startLine": 164,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "116b68616665d7fe69213f74a085b29921e066bd",
+    "file": "lib/evidence.js",
+    "category": "contract",
+    "title": "命中去重时完全忽略本次传入的 noteId/tags/source：第二个 note 会话用相同 payload 调用 add 时，不会写入 created-b",
+    "startLine": 204,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f70782f1543b7c9de7f3e50f6a3e3d7c66f65b0b",
+    "file": "lib/evidence.js",
+    "category": "errors",
+    "title": "blob 落盘失败被 .catch(() => {}) 吞掉，add() 仍把 entry 写入索引并返回成功，产生“索引里有、payload 不存在”的证据。",
+    "startLine": 213,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "3c26641327801dfc5dbeef0a1caab56d3d25f97d",
+    "file": "lib/evidence.js",
+    "category": "correctness",
+    "title": "get()/link() 用用户输入直接下标访问 tree.entries，`__proto__`、`toString` 等原型键会命中原型对象，导致 500 ",
+    "startLine": 249,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "eb898208189a81d6164126dca17869d343869163",
+    "file": "lib/evidence.js",
+    "category": "errors",
+    "title": "读 blob 的失败（EACCES/EIO）与“blob 不存在”合并成 blob: null，调用方无法区分内容丢失与内容为空。",
+    "startLine": 251,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "3eef27aea7ae677b53e421dfd79c2bd2ecab0b4f",
+    "file": "lib/evidence.js",
+    "category": "contract",
+    "title": "get() 对 utf8 blob 的 text 静默截断到 60000 字符，但同一对象的 `bytes` 仍是完整字节数，没有 truncated 标记；二",
+    "startLine": 257,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "3989c4ec993f63024d13ad91c4c9ec38e3cf966d",
+    "file": "lib/evidence.js",
+    "category": "contract",
+    "title": "`Number(options.limit) || 100` 让显式传入的 limit=0（以及 NaN）被当成缺省值 100，`Math.max(1, ...",
+    "startLine": 267,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "da56d5f695a2050b82cff7361d1cdd1e97201d0f",
+    "file": "lib/evidence.js",
+    "category": "security",
+    "title": "query() 的文本检索在遍历全树（最多 MAX_ENTRIES=2000 条）时，每个条目都重新调用一次 paths(docId)（其中含 await fs",
+    "startLine": 287,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8c9a9f49f33baaafc7f4e0f092becc31c7db8d6e",
+    "file": "lib/evidence.js",
+    "category": "errors",
+    "title": "query 的内容级检索把整个 try 块的异常空 catch 掉，结果静默降级为仅元数据匹配，调用方无法得知检索不完整。",
+    "startLine": 292,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b8d3432f049a4041ef1dc486a7ef234eef46e87f",
+    "file": "lib/evidence.js",
+    "category": "correctness",
+    "title": "query() 在遍历时就按 limit 截断、之后才排序，匹配项超过 limit 时返回的是最早写入的一批，最新证据永远查不到。",
+    "startLine": 297,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0ea5e70356a1096eddc08bb39496fffff45ec664",
+    "file": "lib/evidence.js",
+    "category": "correctness",
+    "title": "用调用方可控字符串直接索引普通对象 tree.entries（无自有属性校验），`__proto__`/`constructor` 会命中 Object.pro",
+    "startLine": 323,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "20f14d5a3d29978f3369a74b1e3aef676b4f1bb2",
+    "file": "lib/evidence.js",
+    "category": "contract",
+    "title": "link() 两个分支返回不同字段集：`{ok, from, to, relation}` 与 `{ok, evidenceId, noteId, relati",
+    "startLine": 334,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "23fc21889f36194f50d12f5046dee3a556e1a0eb",
+    "file": "lib/evidence.js",
+    "category": "contract",
+    "title": "对外暴露 maxDeltaBytes 配置项，但模块内没有任何代码读取或强制执行 MAX_DELTA_BYTES（另外两个上限 maxEntries/maxBl",
+    "startLine": 408,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1dbb531265bbc0bb517a0bd3fe1213dda596364e",
+    "file": "lib/audit.js",
+    "category": "errors",
+    "title": "listRotated() 用 `.catch(() => [])` 把 readdir 的 EACCES/EMFILE/EIO 退化成「没有轮转段」，导致 s",
+    "startLine": 165,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "298c7cc9c6e99749b4494c7d6580bb9778a16a04",
+    "file": "lib/audit.js",
+    "category": "contract",
+    "title": "actor.kind 缺失或不在白名单时被静默写成 'system'，把来源未知的变更记成系统操作。",
+    "startLine": 100,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c77d0e2ae86e23f192ce84b625cb245d31736a51",
+    "file": "lib/audit.js",
+    "category": "security",
+    "title": "审计记录的操作者身份完全取自调用方入参，且未知/缺失的 kind 被静默回退成最受信的 'system'，模块内没有任何与已认证会话绑定的校验。",
+    "startLine": 100,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7c9ffcef82416911c9f256ce98f3661bfa191299",
+    "file": "lib/audit.js",
+    "category": "errors",
+    "title": "listRotated 把 stat/readdir 的 EACCES/EMFILE/EIO 静默降级为「不存在/空目录」，会导致清理逻辑删错段、summary",
+    "startLine": 172,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ab81737dab1f1de59b2d323d1618376d29e77e6f",
+    "file": "lib/audit.js",
+    "category": "correctness",
+    "title": "maxRotated=0 被当成「永不清理」，与「保留 N 个轮转段」的预算语义相反：0 应表示保留 0 段（全删），实际却是无限保留。",
+    "startLine": 196,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "3a2eb135c7dfa42b759a175aa7888eefd2898587",
+    "file": "lib/audit.js",
+    "category": "errors",
+    "title": "rotateIfNeeded 把 stat 的任何错误（EMFILE/EACCES/EIO）当成「文件不存在」，静默跳过轮转，2 MiB 上限失效且无日志",
+    "startLine": 211,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "668c746910d0932599387b6c737cf087eccddb6c",
+    "file": "lib/audit.js",
+    "category": "correctness",
+    "title": "limit: 0 被 `||` 当作假值替换成默认 50，而负数被夹到 1，同一个入参规范化的两个边界行为互相矛盾。",
+    "startLine": 245,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c3e64db7030cf46cc7d5de0fdea85204aafbe820",
+    "file": "lib/audit.js",
+    "category": "correctness",
+    "title": "limit 为 0 时被 `numericLimit || DEFAULT_LIMIT` 替换成 50，绕过了同一行 Math.max(1, …) 想表达的「最",
+    "startLine": 246,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d826d0da16b6dde6fd29f9ec23aa77144c79306f",
+    "file": "lib/audit.js",
+    "category": "concurrency",
+    "title": "read() 不进入 withDocLock，且把 ENOENT 当成「日志为空」，而 rotate() 会先把 audit.jsonl rename 走、再执",
+    "startLine": 248,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d520c1077e9dffc5921031dd1f905116d84b1aaf",
+    "file": "lib/audit.js",
+    "category": "contract",
+    "title": "read() 只读 live 的 audit.jsonl，rotate() 把整个文件 rename 走之后，历史条目和 before 游标会从查询 API 上",
+    "startLine": 249,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1b7ca96a60b15ef14805be5269feae43b521f461",
+    "file": "lib/audit.js",
+    "category": "intent",
+    "title": "read() 的 before 游标只在当前 live 的 audit.jsonl 中查找，且 read 完全不读旋转段：一旦发生旋转，上一页的 next 游标",
+    "startLine": 277,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "271d7a43fc5256c7ad9988783c46a4544cc3475f",
+    "file": "lib/audit.js",
+    "category": "errors",
+    "title": "分页游标找不到时静默回退为「返回最新一页」，调用方无法区分游标失效与正常页，导致重复条目与历史缺口",
+    "startLine": 280,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c555b68eae2d2a1c3f66963504ded0c35914f516",
+    "file": "lib/audit.js",
+    "category": "contract",
+    "title": "before 游标在 live 文件中找不到时，read() 退化为“返回最新一页”，违反同函数注释承诺的“entries strictly older tha",
+    "startLine": 280,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "796bcb625be6f401e050bb5d6f9ed5c8258077ab",
+    "file": "lib/audit.js",
+    "category": "security",
+    "title": "summary() 把审计文件的服务器绝对路径作为返回字段暴露给 health/UI 调用方。",
+    "startLine": 323,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
   }
 ]
