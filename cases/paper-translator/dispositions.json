@@ -205,5 +205,131 @@
     "startLine": 500,
     "disposition": "accepted",
     "reason": "错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b7a9218687bbb17a09cb1bb159a5bedd739e8a71",
+    "file": "lib/pipeline.js",
+    "category": "security",
+    "title": "runChromePdf 在打印 HTML 时无条件传入 Chromium 的 `--no-sandbox`，而该 HTML 及其图片素材来源于不可信的上传 P",
+    "startLine": 229,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f8ea9ff83ba0fd2b8f9a7e681cbb5211033b556b",
+    "file": "lib/pipeline.js",
+    "category": "errors",
+    "title": "runChromePdf 的临时资源（`.chrome-profile` 目录与 `<output>.chrome.pdf`）只在成功路径末尾清理；一旦 run",
+    "startLine": 263,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "3519eb96df738244419292095c9f0996a207f36d",
+    "file": "lib/pipeline.js",
+    "category": "intent",
+    "title": "fallback 渲染器优先用 translations.tables 重建单元格表格，与本文件冻结阶段“表格只输出原始裁图、禁止有损重建”的策略相矛盾。",
+    "startLine": 299,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "06c37e2ea63d0674b2d76b760a4c657e53c0aa70",
+    "file": "lib/pipeline.js",
+    "category": "errors",
+    "title": "freezeFigureTableAssets 读取 figure/table 裁图失败（EACCES/EIO/EBUSY 等）或读到 0 字节时用裸 `cat",
+    "startLine": 397,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d3efc3f0dbdd05e4f9408ccb79594cf651f5bbd5",
+    "file": "lib/pipeline.js",
+    "category": "correctness",
+    "title": "裸数字块（页码/公式号等）会抢在标题自身编号之前写入 next.number，使标题自带的章节号被丢弃，最终文档出现错误编号，且该数字块被删除。",
+    "startLine": 486,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6f18b8b8ac6d630da2f5589c17c5dfa847c78e32",
+    "file": "lib/pipeline.js",
+    "category": "correctness",
+    "title": "leading_separator 的字符类把 `\\s` 放在首位，任何以空白开头的行内公式（如 `\\( x \\)`）都会被判为“不完整数学”。",
+    "startLine": 605,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b97faca408df4da2ae3260ab5b73fc1c102b2b6e",
+    "file": "lib/pipeline.js",
+    "category": "contract",
+    "title": "未翻译覆盖检查把“translations.json 缺少 meta.untranslatedIds”当作“没有未翻译块”，缺失与空集合不可区分。",
+    "startLine": 663,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d541abe031f76fd3b8f23232112addd07bd9a440",
+    "file": "lib/pipeline.js",
+    "category": "intent",
+    "title": "检查 4 的注释承诺“每个 figure/table 裁图恰好插入一次”，但实现只累加出现次数，永远无法报告重复插入。",
+    "startLine": 794,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "07cfb0960b78149354ec6c9ceecd6f09092d0870",
+    "file": "lib/pipeline.js",
+    "category": "errors",
+    "title": "readIfExists（以及同类的 pathExists）把 EACCES/EMFILE/EIO 与 ENOENT 合并成「文件不存在」，让调用方在权限/IO",
+    "startLine": 827,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0f5ec5f0a6fa33d5c3de947795d9b473c6076382",
+    "file": "lib/pipeline.js",
+    "category": "correctness",
+    "title": "视觉 QA 的 280s 预算只覆盖模型检查循环，页面 PNG 渲染发生在预算之外，最坏可达 7×120s，远超代码注释声称的 300s 阶段目标。",
+    "startLine": 879,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d9ee7949865af43f0b0aa7806d5a3adbde7f223c",
+    "file": "lib/pipeline.js",
+    "category": "correctness",
+    "title": "当输出目录里存在与本次请求页无关的 PNG 时，`byName.size === names.length` 不成立，代码退化为按文件名下标位置映射，导致页码与",
+    "startLine": 907,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a49e86d0574b404d7619f12da596efe3f0b7c3b9",
+    "file": "lib/pipeline.js",
+    "category": "errors",
+    "title": "六项确定性 QA 检查共用一个 try/catch：任一检查抛错会跳过其后所有检查，包括唯一能把 gate 判为 blocked 的渲染产物检查，门禁只会降级成",
+    "startLine": 956,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c4b7f0fbadb5c1b18f2612898b2161d0a8df87fe",
+    "file": "lib/pipeline.js",
+    "category": "errors",
+    "title": "probeVisionCapability 的任何错误被 `.catch(() => null)` 吞掉，随后被解释成「模型路由不接受图片输入」，原始失败原因丢",
+    "startLine": 998,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fb648838b6863863f325f4ec6a3caa5f25eb3ea3",
+    "file": "lib/pipeline.js",
+    "category": "correctness",
+    "title": "qa-report.deterministic.status 未计入 blocked 级检查携带的 warnings（image_fallback），会与同一对",
+    "startLine": 1119,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
   }
 ]

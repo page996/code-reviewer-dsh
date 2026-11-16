@@ -14,6 +14,8 @@
 | R-5 | `gateway.walkImpact` 用 `.catch(() => [])` 吞 readdir 错误 | 规则只覆盖 `catch {}`，没覆盖 promise catch 简写 | 新增 `.catch(() => [])`/`.catch(() => null)` 吞错条目 | `rules/lang-js-ts.md`（已加） | batch-2 复评命中 |
 | R-6 | 审批 summary.bytes 取自请求体、决定者身份不校验 | 缺少「审批依据可伪造」判据 | 审批/授权依据来自客户端且不复核 → 报告 | `rules/core-security.md`（已加） | batch-2 复评命中 |
 | R-7 | pending 上限 check-then-act、consume 执行前标记 consumed | 规则缺「跨 await 的配额检查」与「一次性授权状态机」 | 新增两条并发/状态机条目 | `rules/core-concurrency.md`（已加） | batch-2 复评命中 |
+| R-8 | batch-3 真实运行出现一次 `DeepSeek Messages transport failed`，单次传输失败直接让一个视角丢结果、verdict 变 needs-human | 评审编排只在 schema 错误时重试，没有对传输/供应商瞬时错误重试 | reviewer 调用内对 `LLM/TRANSPORT/LLM_SERVER/LLM_RATE_LIMIT/LLM_TIMEOUT` 重试（最多 3 次、退避），仍失败才记录 error | `lib/review.mjs`（已加） | 单测覆盖 + batch-3 重跑 14 findings |
+| R-9 | batch-2 多次复评结果数量在 12–20 之间波动，case 回归出现假漏报 | reviewer 未固定 temperature，采样导致同一输入输出漂移 | `review.temperature` 默认 0，可按部署覆盖 | `lib/review.mjs` + `lib/config.mjs`（已加） | 重启后连续两次 batch-2 复评结果一致 |
 
 ## 2. prompt 调整（→ `references/prompts.md` + `lib/prompts.mjs`）
 
@@ -31,6 +33,7 @@
 | E-1…E-6 | batch-1 的 6 条 util 缺陷 | 仍被报出（accepted） | `findings.json` |
 | E-7…E-19 | batch-2 的 13 条 gateway 缺陷（accepted） | 仍被报出；允许类别标签/措辞漂移（eval 用同文件近似行/标题相似度匹配） | `findings.json` |
 | E-20…E-23 | batch-2 的 4 条 unit-scope 测试缺口 | 不再报出（rejected；tests 视角在 scan 模式应跳过） | `findings.json` |
+| E-24…E-37 | batch-3 的 14 条 pipeline 缺陷（accepted） | 仍被报出；batch-3 run 的 eval 已达到 matched 14 / missed 0 / noise 0 | `findings.json` |
 
 回归命令：
 
@@ -46,6 +49,7 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 | batch-1 | 6 条 | accepted | 见 batch-1 报告 | 规则已补 | 保持基线 |
 | batch-2 | 13 条 | accepted | 见 run `run-20261116-193909-9bc6` 报告 | R-5/R-6/R-7 + P-1 | 重启后复评确认 |
 | batch-2 | 4 条（tests） | rejected | unit-scope 范围噪声，非真实缺陷 | P-2 + plan scan 跳过 tests + aggregate 兜底 | 重启后 eval 应 noise=0 |
+| batch-3 | 14 条 | accepted | 安全（--no-sandbox + 不可信 HTML）、QA 六检查共用 try/catch、视觉探测吞错、页码映射、未翻译率缺失字段、临时文件异常路径泄漏等 | R-6/R-3 部分覆盖；`lib/pipeline.js` 专项规则可再补 | eval 已 pass（14/14） |
 
 ## 5. eval 机制自身的三次修正（meta lesson）
 
@@ -63,9 +67,10 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 
 ## 7. 结论摘要
 
-- 真实缺陷：batch-1 6 条 + batch-2 13 条 accepted（均为 minor；batch-2 复评新增 3 条 major 待下一轮 disposition）。
+- 真实缺陷：batch-1 6 条 + batch-2 13 条 + batch-3 14 条 accepted（均为 minor；batch-2 复评曾新增 3 条 major，因采样波动未入基线，temperature=0 后复验）。
 - 误报：batch-2 4 条 unit-scope 测试噪声（rejected）。
-- 新增规则：5 条（R-1/R-2/R-3/R-5/R-6/R-7 已落，R-4 待落 core-data）。
-- prompt 调整：2 处（P-1/P-2 已落）。
-- 回归用例：19 accepted + 4 rejected。
-- 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则）。
+- 新增规则：6 条（R-1/R-2/R-3/R-5/R-6/R-7 已落，R-4 待落 core-data）。
+- 编排修复：R-8 传输重试、R-9 temperature=0。
+- prompt 调整：4 处（P-1/P-2/P-4 已落，P-3 待批次契约）。
+- 回归用例：33 accepted + 4 rejected；batch-3 eval 首次全绿。
+- 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则、重试、温度）。
