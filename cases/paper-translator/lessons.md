@@ -24,6 +24,7 @@
 | R-15 | batch-7：同一问题被 correctness/security 两个视角在同行报成两条，措辞差异大，标题相似度 0.12 → 未合并 | 跨视角合并只看标题相似度，无法识别“同因不同表述” | 已加同文件同行相似标题合并 + `review aggregate` 无模型重算；措辞差异极大的重复仍会保留（已知限制，后续可加 LLM dedupe pass） | `lib/aggregate.mjs` + `bin/review.mjs`（已加） | batch-7 复算 20 条；R-15 限制记录 |
 | R-16 | batch-10（client.js）：fetch 无超时、fire-and-forget PUT 吞错、并发刷新旧响应覆盖新状态、updater 内改 ref、不可信 HTML iframe 无 sandbox、href 未校验协议 | JS 规则包缺「前端/React/网络调用」高频模式 | 新增前端与网络调用条目 | `rules/lang-js-ts.md`（已加） | batch-10 真实命中 |
 | R-17 | batch-11/12：workspace 的 SVG 内联预览 XSS、写最终目标未校验 symlink（TOCTOU）、`deleteEntry` 检查不可达；notes-store 的墓碑计入配额导致永久 409、schemaVersion 只写不读、孤儿节点 | 安全/数据规则缺「真实路径写入校验」「软删除/墓碑生命周期」判据 | 新增条目 | `rules/core-data.md`（已加）；workspace 安全项归 core-security/lang-js-ts | batch-11/12 真实命中 |
+| R-18 | batch-13/14：CSS 选择器拼接只转义引号、图片 URL 任意主机、`querySelector` 换行逃逸；重复函数定义/双 click 绑定；`{ok:false}` 被当成功 | JS 规则包缺「前端注入面/重复绑定/响应信封校验」判据 | 新增五条前端条目 | `rules/lang-js-ts.md`（已加） | batch-13/14 真实命中 |
 | R-8（补） | batch-10 首轮 4.7k 行 client.js 出现 2 次 `DeepSeek Messages transport failed`（大 prompt 更易瞬时失败），重跑成功 | 大文件单 unit 的请求更易触发传输中断；重试代码已在 main，插件尚缓存旧 lib | 重启后由 reviewer 重试覆盖；必要时后续加「超大单文件切 unit」 | `lib/review.mjs`（已加） | 重启后重跑 batch-10 观察不再丢视角 |
 
 ## 2. prompt 调整（→ `references/prompts.md` + `lib/prompts.mjs`）
@@ -52,6 +53,8 @@
 | E-124…E-140 | batch-10 的 17 条 client.js 缺陷（accepted） | 仍被报出；batch-10 run 的 eval：matched 17 / missed 0 | `findings.json` |
 | E-141…E-164 | batch-11 的 24 条 workspace.js 缺陷（accepted） | 仍被报出；batch-11 run 的 eval：matched 24 / missed 0 | `findings.json` |
 | E-165…E-180 | batch-12 的 16 条 notes-store.js 缺陷（accepted） | 仍被报出；batch-12 run 的 eval：matched 16 / missed 0 | `findings.json` |
+| E-181…E-198 | batch-13 的 18 条 doc-reader.js 缺陷（含 1 major，accepted） | 仍被报出；batch-13 run 的 eval：matched 18 / missed 0 | `findings.json` |
+| E-199…E-212 | batch-14 的 14 条 graph-view.js 缺陷（accepted） | 仍被报出；batch-14 run 的 eval：matched 14 / missed 0 | `findings.json` |
 
 回归命令：
 
@@ -77,6 +80,8 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 | batch-10 | 17 条 | accepted | 枚举值/实际值不一致、fetch 无超时、token 进 URL/iframe、成环文件夹树、破坏性确认未禁用、不可信 HTML iframe 同源无 sandbox、href 伪协议、active-view PUT 吞错与并发覆盖、updater 内改 ref 等 | R-16 已补前端/网络规则；R-8 记录大文件瞬态失败 | eval 已 pass（17/17） |
 | batch-11 | 24 条 | accepted | SVG 内联预览 XSS、写最终目标未校验 symlink、`deleteEntry` 检查不可达、`..` 前缀合法路径误判、保留路径大小写敏感、Windows 设备名、部分删除状态、doc.json 每次重写、回滚不完整等 | R-17 覆盖部分；安全项归 core-security | eval 已 pass（24/24） |
 | batch-12 | 16 条 | accepted | 墓碑计入配额导致永久 409、schemaVersion 只写不读、配额计数把 tmp/墓碑算进去、节点孤儿、`get`/`list` 校验不一致、字段命名不一致、parent 环未校验等 | R-17 已补软删除/墓碑条目 | eval 已 pass（16/16） |
+| batch-13 | 18 条（1 major） | accepted | CSS 选择器注入（换行逃逸）、图片 URL 任意主机、公式成功仍挂失败徽章、无 IntersectionObserver 时后续段永不渲染、KaTeX 未加载即删 data-tex、拖拽失败不回滚、teardown 未清 class 等 | R-18 已补前端条目 | eval 已 pass（18/18） |
+| batch-14 | 14 条 | accepted | 重复 click 绑定绕过忙锁、函数重复定义静默覆盖、`{ok:false}` 当成功、图加载失败永久占位、改名成功却报失败、预览与提交集合不一致、Esc 捕获关闭全屏等 | R-18 已补前端条目 | eval 已 pass（14/14） |
 
 ## 5. eval 机制自身的三次修正（meta lesson）
 
@@ -94,10 +99,10 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 
 ## 7. 结论摘要
 
-- 真实缺陷：batch-1…batch-10 累计 136 + batch-11 24 + batch-12 16 = 176 条 accepted（含 4 条 major）。
+- 真实缺陷：batch-1…batch-12 累计 176 + batch-13 18 + batch-14 14 = 208 条 accepted（含 5 条 major）。
 - 误报：batch-2 4 条 unit-scope 测试噪声（rejected）。
-- 新增规则：12 条（R-1/R-2/R-3/R-5/R-6/R-7/R-10/R-11/R-12/R-14/R-16/R-17 已落，R-4 待落 core-data）。
+- 新增规则：13 条（R-1/R-2/R-3/R-5/R-6/R-7/R-10/R-11/R-12/R-14/R-16/R-17/R-18 已落，R-4 待落 core-data）。
 - 编排修复：R-8 传输重试、R-9 temperature=0、R-13 scan 模式 preexisting/门禁语义、R-15 跨视角同类合并 + `review aggregate`。
 - prompt 调整：4 处（P-1/P-2/P-4 已落，P-3 待批次契约）。
-- 回归用例：176 accepted + 4 rejected；batch-3…12 的 eval 均全绿（missed 0 / noise 0），覆盖 JS/TS/Python + Web UI 契约 + 持久化/工作区。
+- 回归用例：208 accepted + 4 rejected；batch-3…14 的 eval 均全绿（missed 0 / noise 0），覆盖 JS/TS/Python + Web UI 三大文件。
 - 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则、重试、温度）。

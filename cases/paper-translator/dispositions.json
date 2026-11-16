@@ -1618,5 +1618,293 @@
     "startLine": 726,
     "disposition": "accepted",
     "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "318e4b0ef7a6aa2a3ccae20ef1af961bc32615b2",
+    "file": "assets/doc-reader.js",
+    "category": "correctness",
+    "title": "normalizeStyle 用 Number.isFinite(Number(x)) 判断数值字段，显式的 null / 空串会被当成 0 参与 clamp，",
+    "startLine": 544,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "03c7e698dbafe1c5ee4a28eafa47ba43a370c649",
+    "file": "assets/doc-reader.js",
+    "category": "contract",
+    "title": "options.i18n 直接写进模块级 STRINGS 表，mount/teardown 从不还原，文案覆盖会跨多次 mount 泄漏",
+    "startLine": 127,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "2202a2db88c3e7ea015a289ff13e0be3d9e5a3d7",
+    "file": "assets/doc-reader.js",
+    "category": "security",
+    "title": "CSS 选择器由不可信的模型 id 拼接，防护方式是“删除双引号和反斜杠”，只挡住了引号逃逸；id 中的换行/回车（CSS 字符串非法字符）会让 querySe",
+    "startLine": 192,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "993909c87b4a53a888f2f99cbcd4dc3698075fbf",
+    "file": "assets/doc-reader.js",
+    "category": "intent",
+    "title": "normalizeStyle 只处理 italic === true，无法按显式 italic: false 关闭 caption 的默认斜体。",
+    "startLine": 546,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ccfd5d73cfa6d982b401d3f00d72870ff8b95654",
+    "file": "assets/doc-reader.js",
+    "category": "correctness",
+    "title": "italic 只能被打开、不能被关闭：宿主显式给出 italic:false 会被忽略，caption 仍按默认斜体渲染。",
+    "startLine": 546,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "53d26ee4654d1db9ada9008b0d16e5dec00de990",
+    "file": "assets/doc-reader.js",
+    "category": "intent",
+    "title": "normalizeBlock 对所有 kind 的无 style 块执行列表前缀检测，包括 heading/title，导致“1. Introduction”这",
+    "startLine": 727,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "2caf1fb22f43fae60b771d472fd2c86ce6d0eb2d",
+    "file": "assets/doc-reader.js",
+    "category": "errors",
+    "title": "懒渲染缺少与数学水合对等的失败兜底：当环境没有 IntersectionObserver（或 observe 抛错被空 catch 吞掉）时，第 4 段之后的块",
+    "startLine": 1292,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4c90106a63b642130b210880e055ac3f8f4329a8",
+    "file": "assets/doc-reader.js",
+    "category": "correctness",
+    "title": "没有 IntersectionObserver 时，第 4 个及以后的 segment 永远不会被渲染，缺少滚动兜底。",
+    "startLine": 1292,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "53918e448b7f6f4cf3b8a5ca5110c0b02aa44aad",
+    "file": "assets/doc-reader.js",
+    "category": "intent",
+    "title": "renderEquation 的 eqImage 分支无条件追加 [公式] 失败徽章，成功渲染的公式图片旁始终显示“公式渲染失败”提示。",
+    "startLine": 1543,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8a290a5725eba67f8c76d7b25a16636b9093b8b8",
+    "file": "assets/doc-reader.js",
+    "category": "correctness",
+    "title": "带 eqImage 的公式在成功展示图片的同时，还无条件附加了一个“公式渲染失败”的 [公式] 徽章",
+    "startLine": 1543,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4c7510dc22783f5b456c316b2b2b3104727b398b",
+    "file": "assets/doc-reader.js",
+    "category": "correctness",
+    "title": "eqImage 分支在成功渲染公式图片后又追加一个 [公式] 失败徽章，其 tooltip 文案是“公式渲染失败…”。",
+    "startLine": 1550,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "55d16c38af22f22394030036f3643562fad7d8dc",
+    "file": "assets/doc-reader.js",
+    "category": "security",
+    "title": "模型数据中的图片地址（asset.url / eqImage）未做任何协议或主机校验就赋给 <img src>，读者一打开文档，浏览器就会向模型指定的任意 UR",
+    "startLine": 1580,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b444e53d9ea3f7dd88eb118ea9b4c76221aaec63",
+    "file": "assets/doc-reader.js",
+    "category": "errors",
+    "title": "公式水合把「KaTeX 尚未加载」与「TeX 解析失败」合并成同一个不可恢复的终态：先 removeAttribute('data-tex') 再渲染，失败后节",
+    "startLine": 1631,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d47a171c31f9409aaa2a830f4a432a83edda2844",
+    "file": "assets/doc-reader.js",
+    "category": "correctness",
+    "title": "hydrateMath 在确认 window.katex 可用之前就删除 data-tex，KaTeX 尚未加载时会把公式永久降级成 [公式] 徽章，之后任何公",
+    "startLine": 1631,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "72f60f7a5d8d6925a94070550ccf66ec194bd50c",
+    "file": "assets/doc-reader.js",
+    "category": "intent",
+    "title": "highlightQuote 只搜索已渲染的 segment，引文位于未渲染的懒加载段时返回 false；调用方无法区分“未找到”和“尚未渲染”。",
+    "startLine": 1938,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4a8de5f00b8165144053bd9c7c4264af7b430f72",
+    "file": "assets/doc-reader.js",
+    "category": "intent",
+    "title": "setSplitRatio（拖动/键盘调整分栏）没有触发懒加载段的高度重估，未渲染段的占位高度仍按旧列宽估算。",
+    "startLine": 1983,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "85fdfac66504f92c3e7106360b5bd4a4bdd609b5",
+    "file": "assets/doc-reader.js",
+    "category": "errors",
+    "title": "setPointerCapture 失败被空 catch 吞掉后，拖拽状态没有回滚：dragging 只能靠 splitter 自身的 pointerup/po",
+    "startLine": 2038,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1e13fd0529c8aa16be3bd98e30a47c25a1688fe8",
+    "file": "assets/doc-reader.js",
+    "category": "contract",
+    "title": "destroy()/teardown 只移除 addedClassNames 里登记的类，applyMode 加的 dr-single 与 buildShell",
+    "startLine": 2249,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e37ef3c32a77488d7642e7b5a6994a066318314e",
+    "file": "assets/graph-view.js",
+    "category": "correctness",
+    "title": "对话框 × 按钮被绑定两个 click 处理器，创建时的那个无条件 closeDialog，绕过了 submitting 忙锁，导致提交中的对话框可被关闭，且旧",
+    "startLine": 906,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "bde039c44e65ba0aa04ad897df5fe2fb40dd01b6",
+    "file": "assets/graph-view.js",
+    "category": "contract",
+    "title": "summary.nodes/summary.edges 只接受数组，与 graph.nodes/edges 的“键名对象或数组”容错不一致",
+    "startLine": 1145,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4ce3cef91257bfc946d39ffe4884b07f357678dc",
+    "file": "assets/graph-view.js",
+    "category": "other",
+    "title": "updateBusy 在同一作用域内被定义了两次，后者静默覆盖前者",
+    "startLine": 1927,
+    "disposition": "accepted",
+    "reason": "batch-3 人工复核后判定。"
+  },
+  {
+    "fingerprint": "85689d8f11c06dee033d104e7d93f6ab3aef6569",
+    "file": "assets/graph-view.js",
+    "category": "contract",
+    "title": "compact 模式单击节点会发起 /graph/audit 请求，但 compact 下没有任何界面消费该数据",
+    "startLine": 2472,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "87f7b708f958525e4a65748b947bed264d6a3f24",
+    "file": "assets/graph-view.js",
+    "category": "contract",
+    "title": "节点详情请求附加了文件头 Data 契约未声明的 includeDeleted=1 查询参数。",
+    "startLine": 2513,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "80c12c880f61dd3be45a6c8a00a828ca3f0ac58e",
+    "file": "assets/graph-view.js",
+    "category": "errors",
+    "title": "节点详情请求把任何 resolve 的响应都当作成功：`{ok:false,error}` 被当成有效详情静默使用，非对象响应则让同一节点无限重发请求。",
+    "startLine": 2514,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fe26aad22207a7d42d2b37c8ba08035f9dc12f94",
+    "file": "assets/graph-view.js",
+    "category": "correctness",
+    "title": "节点详情请求用图加载序号 state.loadSeq 作废，但失败的图加载也会自增该序号且不会重置 state.detail，导致检查器永久停在“正在加载节点详",
+    "startLine": 2650,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ca966b579a8459d30215d7ebd8dc969f0d498686",
+    "file": "assets/graph-view.js",
+    "category": "errors",
+    "title": "改名已经成功后，仅因随后的图刷新失败就把状态显示成“保存失败”，并把同一错误再次上报给宿主。",
+    "startLine": 2681,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "20df5c3932fdc7c0fc893c5c992313d314584ddf",
+    "file": "assets/graph-view.js",
+    "category": "contract",
+    "title": "删除叶子节点时会自动提交 policy: 'refuse'，但同一对话框的提交规则和文案都把 refuse 定义为“拒绝/不提交”，代码内部对此的语义自相矛盾。",
+    "startLine": 3070,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "348259e6fdac0b9e079bb5a7c58a057f60e700f9",
+    "file": "assets/graph-view.js",
+    "category": "intent",
+    "title": "prune 预览按“勾选节点会保留整棵子树”计算保留数，但提交的 op.keep 只包含显式勾选的节点，导致预览与提交的集合不一致。",
+    "startLine": 3080,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d97708d3d3e14c858aa8cabdf6e791e78e1767e0",
+    "file": "assets/graph-view.js",
+    "category": "errors",
+    "title": "审计接口的 `{ok:false,error}` 被当成“空日志”，界面显示“暂无审计记录”且不再自动重试。",
+    "startLine": 3647,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ea5d79fd5a2da327c41fd9ceb2a4fc9f959a5cd4",
+    "file": "assets/graph-view.js",
+    "category": "contract",
+    "title": "空图状态用 onOpenNote('') 调用宿主回调，违反文档声明的 onOpenNote(noteId) 契约",
+    "startLine": 3883,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a9798590c3a1b84dfd9f9dacd5379ff1705043cd",
+    "file": "assets/graph-view.js",
+    "category": "correctness",
+    "title": "applyModel 先处理 pendingFocus 再应用存储偏好，导致首屏加载前调用的 focusNode() 定位被 localStorage 里的 k",
+    "startLine": 3927,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c888bca43ea3708204b894b056880d6474264532",
+    "file": "assets/graph-view.js",
+    "category": "correctness",
+    "title": "搜索框内按 Esc 会连带关闭全屏 overlay：document 的 keydown 监听注册在捕获阶段，onSearchKey 里的 stopPropag",
+    "startLine": 4081,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
   }
 ]

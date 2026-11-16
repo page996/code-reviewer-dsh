@@ -44,3 +44,7 @@ alwaysApply: false
 - React `state updater` 内修改 ref/外部状态（StrictMode 双调用会重复副作用）；应在 updater 外同步。
 - “不可达/成环”的文件夹集合仍把环成员当根并保留父子关系，渲染会重复；检查树构建时是否断环。
 - 不可信 HTML 的预览 iframe 同源且无 `sandbox`（生成文档脚本可获得主页面权限）；`href` 未校验协议（`javascript:`/`data:`）可被点击触发。
+- `querySelector`/CSS 选择器由不可信字符串拼接时，只转义引号不够（换行等 CSS 非法字符可逃出字符串）——应使用 `CSS.escape`/属性选择器。
+- 模型/外部数据里的图片 URL 未校验协议与主机就赋给 `img.src`：读者打开文档即向任意主机发请求（隐私泄露/内网探测）。
+- 同一函数被重复定义、同一元素被绑定两次 click、模块级表在 mount/teardown 未还原：静默覆盖/跨实例泄漏，必须按实际执行路径指出。
+- 接口返回 `{ok:false,error}` 时仍被当成功使用（含“任何 resolve 都算成功”）、错误信封被当空数据：需显式检查 `ok` 并区分失败与空集。
