@@ -601,7 +601,8 @@ async function cmdGate({ values, repo, log }) {
   const runDir = resolveRunDir(repo, config, values.run);
   const run = readRun(runDir);
   const aggregate = run.aggregate ?? emptyAggregate();
-  const gate = await runGate({ cwd: repo, config, aggregate, runDir, log });
+  const scopeMode = run.scope?.mode ?? run.meta?.mode ?? null;
+  const gate = await runGate({ cwd: repo, config, aggregate, runDir, log, scopeMode });
   printGateHuman(values, gate, aggregate);
   if (values.json) {
     emitJson({
@@ -725,7 +726,7 @@ async function runPipeline({ values, repo, log, mode, pathValue }) {
     writeAggregateArtifacts(runDir, runId, aggregate);
   }
 
-  const gate = await runGate({ cwd: repo, config, aggregate, runDir, log });
+  const gate = await runGate({ cwd: repo, config, aggregate, runDir, log, scopeMode: scope?.mode ?? null });
   const meta = runMeta({
     run: { runId, meta: runMetaRecord },
     review: reviewRecord ? { ...reviewRecord, usage } : null,

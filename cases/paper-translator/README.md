@@ -16,8 +16,10 @@
 | batch-2 | `lib/gateway.js` | standard（intent/correctness/errors/security/contract；scan 模式跳过 tests 视角） | `run-20261116-193909-9bc6` | 首轮 17 minor（13 accepted + 4 判为 unit-scope 测试噪声 rejected），复评后 13/13 accepted 全命中、0 漏报；3 条 major 为新增 |
 | batch-3 | `lib/pipeline.js` | standard（同 batch-2 lenses） | `run-20261116-203528-92c0` | 14 minor，全部 accepted；`review eval`：matched 14 / missed 0 / noise 0 / notEvaluated 23 → **pass** |
 | batch-4 | `index.js`（Host：工具注册、HTTP API、任务队列） | standard（同 lenses，单文件 ~5k 行） | `run-20261116-204833-fc82` | 19 minor，全部 accepted；`review eval`：matched 19 / missed 0 / noise 0 → **pass** |
-| batch-5（待做） | `lib/{library,workspace,graph,notes-store}` | standard | — | — |
-| batch-6（待做） | `python/*.py` 与 `client/assets` 跨端契约 | standard | — | — |
+| batch-5 | `lib/library.js` | standard（同 lenses） | `run-20261116-205830-6e9b` | 2 major + 10 minor，全部 accepted；`review eval`：matched 12 / missed 0 / noise 0 → **pass**（修了 scan 模式把既有问题当阻断的门禁 bug） |
+| batch-6（待做） | `python/pageparse.py`（另含 floats/render_paper 后续） | standard | — | — |
+| batch-7（待做） | `lib/{workspace,graph,notes-store,...}` 剩余模块 | standard | — | — |
+| batch-8（待做） | `client/assets` 跨端契约 | standard | — | — |
 
 排除：`assets/katex/**`（vendored）、`python/__pycache__/**`、`*.pyc`、`locale/*.json`。
 
@@ -52,6 +54,7 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 | 插件输出 null 导致 harness schema 校验失败 | `plugins/dsh/index.js` 注册时按输出 schema 清洗 |
 | 跨仓库 run 无法解析 | 工具新增 `repo` 参数（plan/run/gate/report/ledger） |
 | scan 模式下 tests 视角只报「本单元没测试」 | `lib/plan.mjs`：scan 默认跳过 tests 视角（显式 lenses 可覆盖）；`lib/aggregate.mjs` 兜底 drop `unit-scope-test-gap` |
+| scan 模式的既有代码缺陷被当成本次变更阻断（batch-5 实测 exit 2） | `lib/review.mjs` 给 scan findings 标 `preexisting=true`；`lib/gate.mjs` 对 scan 模式忽略 blocking（`gate.blockPreexisting=true` 可显式开启） |
 | case 回归误报：跨文件/跨类别/措辞漂移 | `lib/eval.mjs`：按 scope 过滤 + 同文件近似行/标题相似度 + 类别族约束 |
 | 路径/Windows/吞错误/审批元数据规则缺口 | `rules/lang-js-ts.md`、`rules/core-security.md`、`rules/core-concurrency.md` 新增条目 |
 
@@ -59,6 +62,7 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 
 - batch-3：`review eval --run run-20261116-203528-92c0` → **pass**（matched 14 / missed 0 / noise 0 / notEvaluated 23）。
 - batch-4：`review eval --run run-20261116-204833-fc82` → **pass**（matched 19 / missed 0 / noise 0 / notEvaluated 37）。
+- batch-5：`review eval --run run-20261116-205830-6e9b` → **pass**（matched 12 / missed 0 / noise 0 / notEvaluated 56）；scan 模式门禁已修，`gate` 恢复 pass（exit 0）。
 - batch-2：`--run run-20261116-193909-9bc6`（插件仍缓存旧 `lib/plan.mjs`，tests 视角未跳过；本机无重启）→ matched 13 / missed 0 / noise 2–4，exit 2；属运行时缓存而非代码回归。
 - 新增 `review.temperature=0` 与 reviewer 传输重试后，**重启 DSH** 重跑 batch-2 预期稳定通过（重复运行结果一致）。
 - eval 语义已按 run scope 过滤：其他批次基线在当前 run 中计 `notEvaluated`，不再误判漏报。

@@ -502,5 +502,113 @@
     "startLine": 4958,
     "disposition": "accepted",
     "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a43cef7187a70f9ff8cbab0c8216982943d9b2c3",
+    "file": "lib/library.js",
+    "category": "errors",
+    "title": "上传字节先落盘（第 539 行），之后才调用 docWorkspaceRelative()（第 550 行）；该调用抛错时不会走到第 555-560 行的 un",
+    "startLine": 539,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "454cc4600c3ade54a5a2cace4ceed848315456a6",
+    "file": "lib/library.js",
+    "category": "concurrency",
+    "title": "reload() 不经过 enqueueWrite 写链，直接用一次磁盘读覆盖实例状态 data，与进行中的写操作交错时会丢掉已提交的更新",
+    "startLine": 375,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "aa89486cea44dd0d75976c6be328e64dd5795c9f",
+    "file": "lib/library.js",
+    "category": "contract",
+    "title": "清单写入了 `version` 字段，但读取端从不校验版本：sanitizeLibrary 忽略 raw.version，persist 会把任何版本的清单重写",
+    "startLine": 77,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ee4dc6cd1d92cf1cdd0b3459a169b83fc229ddfb",
+    "file": "lib/library.js",
+    "category": "contract",
+    "title": "名称超长返回 409（冲突/资源上限），与同函数内其它输入校验的 400 不一致，调用方无法区分「名字太长」和「同名已存在」",
+    "startLine": 150,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "910fc0d4d527e0e9a7e0c2f45081c3bb066bba4e",
+    "file": "lib/library.js",
+    "category": "correctness",
+    "title": "sanitizeLibrary 只把指向不存在文件夹的 parentId 置空，不打断 parentId 环；`subtreeHeight` 递归时没有 vis",
+    "startLine": 222,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e9e793aee43916ee6dd3869a14bb201ffdd34307",
+    "file": "lib/library.js",
+    "category": "correctness",
+    "title": "subtreeHeight 递归没有任何 visited/深度保护，一旦 manifest 里存在文件夹环（A.parentId=B, B.parentId=A",
+    "startLine": 225,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "dfc59ca199d1abe56d8df9f145434c7f925111f9",
+    "file": "lib/library.js",
+    "category": "errors",
+    "title": "sanitizeLibrary 静默丢弃不合格记录，loadFromDisk 只在 raw 为「真值且非对象」时打日志；下一次 persist 会把丢弃后的状态",
+    "startLine": 325,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f3a0e27908315304781b410d6a5754a1be504872",
+    "file": "lib/library.js",
+    "category": "concurrency",
+    "title": "reload() 在 enqueueWrite 串行队列之外直接替换共享状态 data，会用自己读到的旧快照覆盖并发写已经提交的新状态，随后任何一次写入再把这份",
+    "startLine": 377,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fc8a8f1549624a28e1ee93d0a025f3ddf60ab55e",
+    "file": "lib/library.js",
+    "category": "errors",
+    "title": "addDocumentFromBuffer 先落盘上传文件（539 行），再计算 `workspace: docWorkspaceRelative(id)`；后",
+    "startLine": 536,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "47066c3d18267b20066417a785f02f198b3fd9a4",
+    "file": "lib/library.js",
+    "category": "errors",
+    "title": "fsp.stat 的所有错误（EACCES/EMFILE/EIO/ELOOP）都被映射成 404「source file not found」，与真正不存在无法",
+    "startLine": 578,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f311cf8a3341c546a60d2fe8f1b7db720bf058e0",
+    "file": "lib/library.js",
+    "category": "errors",
+    "title": "resolveForJob 对 stat 的所有失败一律映射为 404「文件缺失」，EACCES/EMFILE/EIO/ELOOP 等服务端故障被伪装成客户端错",
+    "startLine": 728,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d3a7db71687c82d5f627a9ac788e6f351508e624",
+    "file": "lib/library.js",
+    "category": "contract",
+    "title": "JSDoc 把 maxBytes 定义为「上传/导入大小上限」，但 resolveForJob 用它拦截已登记文档的翻译，配置项作用域与文档不符",
+    "startLine": 735,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
   }
 ]

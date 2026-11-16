@@ -259,6 +259,34 @@ test('gate: blocking findings fail with exit 2 even without commands', async (t)
   assert.equal(gate.blocking[0].title, 'bug');
 });
 
+test('gate: scan mode treats blocking findings as pre-existing (no exit 2)', async (t) => {
+  const cwd = tempDir(t);
+  const blocking = [
+    { fingerprint: 'f'.repeat(40), file: 'src/a.js', startLine: 4, severity: 'major', title: 'bug' },
+  ];
+  const aggregate = aggregateWith({ blocking, counts: { major: 1 }, verdict: 'block' });
+  const scanGate = await runGate({
+    cwd,
+    config: { gate: { commands: [], autodetect: false } },
+    aggregate,
+    scopeMode: 'scan',
+    log: collectLog(),
+  });
+  assert.equal(scanGate.verdict, 'pass');
+  assert.equal(scanGate.exitCode, 0);
+  assert.equal(scanGate.blocking.length, 0);
+
+  const forced = await runGate({
+    cwd,
+    config: { gate: { commands: [], autodetect: false, blockPreexisting: true } },
+    aggregate,
+    scopeMode: 'scan',
+    log: collectLog(),
+  });
+  assert.equal(forced.verdict, 'fail');
+  assert.equal(forced.exitCode, 2);
+});
+
 test('gate: command failure takes precedence over blocking findings and needs-human', async (t) => {
   const cwd = tempDir(t);
   const blocking = [

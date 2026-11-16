@@ -117,7 +117,7 @@ test/                   node --test 单测 + hooks 契约测试
 ```
 
 `excludeReason ∈ binary | secret | user_exclude | unsupported_ext | default_path | too_large | deleted | user_include`（`user_include` 表示**被强制纳入**，仍 reviewable）。
-`mode=scan` 时 `status=existing`，无 diff 行；`reviewable` 由 include/exclude 决定。
+`mode=scan` 时 `status=existing`，无 diff 行；`reviewable` 由 include/exclude 决定。scan 模式下所有 finding 一律视为 `preexisting=true`（描述的是既有代码），因此默认 `gate.blockPreexisting=false` 时不会阻断门禁；要强制阻断可设 `gate.blockPreexisting=true`。
 
 ## 4. plan.json
 

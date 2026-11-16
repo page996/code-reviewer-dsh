@@ -1093,6 +1093,20 @@ test('runReview: persistent transport failure stops after the retry budget', asy
   assert.equal(result.reviews[0].error.code, 'LLM_SERVER');
 });
 
+test('runReview: scan-mode findings are marked pre-existing so they cannot block a gate', async (t) => {
+  const cwd = tempDir(t);
+  const llm = {
+    complete: async () => completion(reviewerJson({ findings: [FINDING_A], verdict: 'needs-fix' })),
+  };
+  const scanPlan = { ...planWithUnits(1, ['intent']), mode: 'scan' };
+  const scanRun = await runReview({ scope: {}, plan: scanPlan, config: {}, llm, cwd, log: () => {} });
+  assert.equal(scanRun.reviews[0].findings[0].preexisting, true);
+
+  const diffPlan = { ...scanPlan, mode: 'workspace' };
+  const diffRun = await runReview({ scope: {}, plan: diffPlan, config: {}, llm, cwd, log: () => {} });
+  assert.equal(diffRun.reviews[0].findings[0].preexisting, false);
+});
+
 test('runReview: concurrency is bounded by config.review.concurrency', async (t) => {
   const cwd = tempDir(t);
   const plan = planWithUnits(4, ['intent', 'correctness']);
