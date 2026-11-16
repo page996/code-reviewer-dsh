@@ -72,6 +72,7 @@ test/                   node --test 单测 + hooks 契约测试
     "votesForMajor": 2,
     "rounds": 1,
     "concurrency": 4,
+    "temperature": 0,
     "filter": true,
     "contractFile": null
   },

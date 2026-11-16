@@ -1044,6 +1044,23 @@ test('runReview: no units or missing llm behaves predictably', async (t) => {
   );
 });
 
+test('runReview: reviewer requests pin temperature 0 by default and honor an override', async (t) => {
+  const cwd = tempDir(t);
+  const plan = planWithUnits(1, ['intent']);
+  const temperatures = [];
+  const llm = {
+    complete: async (req) => {
+      temperatures.push(req.temperature);
+      return completion(reviewerJson());
+    },
+  };
+  await runReview({ scope: {}, plan, config: {}, llm, cwd, log: () => {} });
+  assert.deepEqual(temperatures, [0], 'default temperature keeps repeated runs reproducible');
+  temperatures.length = 0;
+  await runReview({ scope: {}, plan, config: { review: { temperature: 0.4 } }, llm, cwd, log: () => {} });
+  assert.deepEqual(temperatures, [0.4]);
+});
+
 test('runReview: concurrency is bounded by config.review.concurrency', async (t) => {
   const cwd = tempDir(t);
   const plan = planWithUnits(4, ['intent', 'correctness']);

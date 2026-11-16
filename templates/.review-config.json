@@ -13,8 +13,19 @@
     "include": [],
     "exclude": [],
     "maxFileBytes": 1048576,
-    "skipGlobs": ["**/*.lock", "**/dist/**", "**/node_modules/**", "**/.git/**"],
-    "secretGlobs": ["**/.env", "**/.env.*", "**/*.pem", "**/*.key", "**/.npmrc"]
+    "skipGlobs": [
+      "**/*.lock",
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/.git/**"
+    ],
+    "secretGlobs": [
+      "**/.env",
+      "**/.env.*",
+      "**/*.pem",
+      "**/*.key",
+      "**/.npmrc"
+    ]
   },
   "plan": {
     "maxFilesPerUnit": 10,
@@ -29,21 +40,39 @@
     "rounds": 1,
     "concurrency": 4,
     "filter": true,
-    "contractFile": null
+    "contractFile": null,
+    "temperature": 0
   },
   "rules": {
     "builtin": true,
-    "paths": [".review/rules"],
+    "paths": [
+      ".review/rules"
+    ],
     "maxCharsPerFile": 20000
   },
   "gate": {
     "commands": [
-      { "id": "lint", "cmd": "npm run lint", "required": true },
-      { "id": "typecheck", "cmd": "npm run typecheck", "required": true },
-      { "id": "test", "cmd": "npm test", "required": true }
+      {
+        "id": "lint",
+        "cmd": "npm run lint",
+        "required": true
+      },
+      {
+        "id": "typecheck",
+        "cmd": "npm run typecheck",
+        "required": true
+      },
+      {
+        "id": "test",
+        "cmd": "npm test",
+        "required": true
+      }
     ],
     "autodetect": true,
-    "blockOn": ["blocker", "major"],
+    "blockOn": [
+      "blocker",
+      "major"
+    ],
     "blockPreexisting": false,
     "timeoutMs": 900000
   },
@@ -53,7 +82,11 @@
     "enabled": true
   },
   "report": {
-    "formats": ["md", "json", "sarif"],
+    "formats": [
+      "md",
+      "json",
+      "sarif"
+    ],
     "outDir": ".review/runs"
   }
 }
