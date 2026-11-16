@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "model": {
+    "transport": "anthropic",
+    "baseUrl": null,
+    "baseUrlEnv": "DEEPSEEK_BASE_URL",
+    "apiKeyEnv": "DEEPSEEK_API_KEY",
+    "model": "deepseek-flash",
+    "reasoningEffort": "max",
+    "maxTokens": null
+  },
+  "scope": {
+    "include": [],
+    "exclude": [],
+    "maxFileBytes": 1048576,
+    "skipGlobs": ["**/*.lock", "**/dist/**", "**/node_modules/**", "**/.git/**"],
+    "secretGlobs": ["**/.env", "**/.env.*", "**/*.pem", "**/*.key", "**/.npmrc"]
+  },
+  "plan": {
+    "maxFilesPerUnit": 10,
+    "maxLinesPerUnit": 400,
+    "groupBy": "auto"
+  },
+  "review": {
+    "effort": "standard",
+    "lenses": null,
+    "maxComments": 30,
+    "votesForMajor": 2,
+    "rounds": 1,
+    "concurrency": 4,
+    "filter": true,
+    "contractFile": null
+  },
+  "rules": {
+    "builtin": true,
+    "paths": [".review/rules"],
+    "maxCharsPerFile": 20000
+  },
+  "gate": {
+    "commands": [
+      { "id": "lint", "cmd": "npm run lint", "required": true },
+      { "id": "typecheck", "cmd": "npm run typecheck", "required": true },
+      { "id": "test", "cmd": "npm test", "required": true }
+    ],
+    "autodetect": true,
+    "blockOn": ["blocker", "major"],
+    "blockPreexisting": false,
+    "timeoutMs": 900000
+  },
+  "hooks": {
+    "preCommit": "fast",
+    "prePush": "fast",
+    "enabled": true
+  },
+  "report": {
+    "formats": ["md", "json", "sarif"],
+    "outDir": ".review/runs"
+  }
+}

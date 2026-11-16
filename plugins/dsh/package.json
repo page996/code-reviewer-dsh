@@ -1,0 +1,24 @@
+{
+  "name": "@local/dsh-code-review",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Review code changes and repositories inside DSH: deterministic scope/plan, model review, aggregation, gate and md/json/sarif reports.",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" }
+  }
+}

@@ -1,0 +1,34 @@
+name: Hooks contract
+
+# Contract test for the real git hooks (CONTRACT.md §7 hooks / §10 tests):
+# a temporary repository proves that a failing deterministic gate blocks `git commit`,
+# a passing gate allows it, and REVIEW_SKIP_HOOKS=1 bypasses the hook.
+# Uses only Node.js + git; no secrets, no network.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs for the same ref.
+concurrency:
+  group: hooks-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hooks-contract:
+    name: Git hooks contract (block / pass / skip)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # No npm install: the test is a standalone Node script using only node: builtins + git.
+      - name: Run git-hook contract test
+        run: node test/hooks.contract.mjs

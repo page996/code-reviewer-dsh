@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Code review",
+    "description": "Run a deterministic code-review pipeline inside DSH: review_scope picks the range (workspace, staged, range, commit or directory scan), review_plan builds review units, review_run reviews them concurrently with the session model and aggregates and deduplicates findings, review_gate combines findings with project commands into a verdict, review_report writes md / json / sarif reports, and review_ledger browses past runs. Type /review to review the current directory end to end. The model follows the session selection by default (override with the plugin's model.provider / model.model config) and token usage is reported. The gate is advisory: it returns a verdict and exit code without blocking tool calls and installs no git hooks inside DSH. Review has no token budget cap, so long files and repeated model calls can consume significant quota."
+  }
+}

@@ -1,0 +1,91 @@
+name: CI
+
+# Deterministic CI: unit tests + the git-hook contract test + a no-secret self-review.
+# No repository secret is required here.
+#
+# Self-review uses `review scan --no-llm`: the deterministic pipeline
+# (scope --mode scan -> plan -> gate -> report) with the LLM pass disabled, so it is
+# secret-free. The LLM review is the job of review.yml on pull requests.
+#
+# Fallback if a CLI build predates --no-llm: `scope --mode scan --path . --json`
+# -> `plan --run latest --effort quick --json` -> `gate --run latest --json`
+# runs the same deterministic checks.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# Cancel superseded CI runs for the same ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests + hooks contract + deterministic self-review (node 24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          # No `cache:` input on purpose: zero-dependency project with no lockfile to key on.
+
+      - name: Unit tests
+        run: npm test
+
+      # Real `git commit` in a throwaway repo: failing gate blocks, passing gate passes,
+      # REVIEW_SKIP_HOOKS=1 bypasses. No secrets, no network.
+      - name: Git hooks contract (block / pass / skip)
+        run: node test/hooks.contract.mjs
+
+      # Deterministic self-review of the whole repo: no LLM, no secret. The `gate` phase
+      # (autodetect on this repo) re-runs `npm test`, which must stay deterministic.
+      - name: Deterministic self-review (scan --no-llm)
+        id: self_review
+        run: |
+          set -u
+          mkdir -p .review-ci
+          node bin/review.mjs scan --path . --effort quick --no-llm --json > .review-ci/self-review.json 2> .review-ci/self-review.stderr.log
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          tail -n 60 .review-ci/self-review.stderr.log || true
+          if [ "$code" -ne 0 ]; then
+            echo "::error title=Deterministic self-review failed::node bin/review.mjs scan --no-llm exited ${code} (0 pass, 2 blocking findings, 3 needs-human, 4 required gate command failed, 5 engine/config error)."
+          fi
+          exit "$code"
+
+      - name: Self-review summary
+        if: always()
+        env:
+          EXIT_CODE: ${{ steps.self_review.outputs.exit_code }}
+        run: |
+          {
+            echo "## Deterministic self-review (no LLM, no secrets)"
+            echo ""
+            echo "| step | exit code |"
+            echo "| --- | --- |"
+            echo "| scan --no-llm | \`${EXIT_CODE:-not reached}\` |"
+            echo ""
+            echo "Artifact \`ci-self-review\`: JSON command output, stderr log and \`.review/runs/**\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload self-review JSON and logs (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-self-review
+          path: |
+            .review-ci/
+            .review/
+          if-no-files-found: ignore
+          retention-days: 7

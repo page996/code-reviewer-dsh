@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "代码评审",
+    "description": "在 DSH 内运行确定性的代码评审流水线：review_scope 选定范围（工作区 / 暂存区 / 区间 / 提交 / 目录扫描），review_plan 生成评审单元，review_run 并发调用当前会话模型评审并聚合去重投票，review_gate 结合 findings 与项目命令给出阻断结论，review_report 产出 md / json / sarif 报告，review_ledger 回溯历史运行。也可直接输入 /review 对当前目录一条龙评审。模型默认跟随会话选择（可用插件配置 model.provider / model.model 覆盖），并回报 token 用量。门禁是软门禁：只返回 verdict 与退出码，不拦截工具调用，也不在 DSH 内安装 git hook；评审不设 token 预算上限，长文件/多次调用会消耗较多配额。"
+  }
+}

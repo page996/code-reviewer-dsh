@@ -1,0 +1,17 @@
+{
+  "name": "dsh-code-reviewer",
+  "version": "0.1.0",
+  "description": "DSH-native code review + CI: deterministic scope/plan/position/aggregate/report/gate, DSH Host plugin, upgraded ai-code-review skill, real git hooks.",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "engines": { "node": ">=22.19" },
+  "bin": { "review": "bin/review.mjs" },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "test:hooks": "node test/hooks.contract.mjs",
+    "self-review": "node bin/review.mjs scan --path . --effort quick",
+    "hooks:install": "node bin/review.mjs install-hooks"
+  },
+  "files": ["bin", "lib", "rules", "plugins", "skills", "templates", "hooks", "docs", "CONTRACT.md"]
+}

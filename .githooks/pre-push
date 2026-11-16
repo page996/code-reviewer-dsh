@@ -1,0 +1,29 @@
+#!/bin/sh
+# dsh-code-reviewer - pre-push hook
+#
+# Installed by:  node bin/review.mjs install-hooks
+# Scope:        range vs. upstream (default: @{upstream}, falling back to main),
+#               deterministic gate commands; "full" mode also runs the LLM review.
+# Mode:         .review/config.json -> { "hooks": { "prePush": "off|fast|full" } } (default fast)
+# Bypass:       REVIEW_SKIP_HOOKS=1 git push ...   (or: git push --no-verify)
+#
+# This hook is a client-side fast net. GitHub Actions is the authoritative gate:
+# the review workflow re-runs scope/plan/gate and the full LLM review on every pull request.
+set -u
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  exit 0
+}
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "dsh-code-review: pre-push hook skipped: 'node' was not found on PATH" >&2
+  exit 0
+fi
+
+if [ ! -f "$ROOT/bin/review.mjs" ]; then
+  echo "dsh-code-review: pre-push hook skipped: $ROOT/bin/review.mjs not found" >&2
+  exit 0
+fi
+
+cd "$ROOT" || exit 0
+exec node "$ROOT/bin/review.mjs" hook pre-push
