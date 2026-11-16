@@ -479,3 +479,43 @@ test('/review command runs the full pipeline and returns a compact summary', asy
   const errors = [firstAgain, secondAgain].filter((entry) => entry && entry.kind === 'error');
   assert.ok(errors.some((entry) => /正在执行/.test(entry.text)), 'concurrent /review is rejected with an explanatory error');
 });
+
+test('sanitized tool output never leaks optional nulls into the harness schema', async (t) => {
+  const cwd = await makeWorkspace(t);
+  const harness = createHarness({ cwd });
+  plugin.apply(harness.ctx, harness.pluginConfig);
+
+  const scope = await callTool(harness, 'review_scope', {});
+  assertNoError(scope, 'review_scope');
+  assert.ok(Array.isArray(scope.files) && scope.files.length > 0);
+  for (const file of scope.files) {
+    assert.equal(typeof file.excludeReason, 'string', 'optional null is dropped so the harness validates the result');
+  }
+});
+
+test('repo parameter resolves a run created in another workspace', async (t) => {
+  const sessionCwd = await makeWorkspace(t);
+  const reviewedRepo = await makeWorkspace(t);
+  const harness = createHarness({ cwd: sessionCwd });
+  plugin.apply(harness.ctx, harness.pluginConfig);
+
+  const scope = await callTool(harness, 'review_scope', {
+    repo: reviewedRepo,
+    mode: 'scan',
+    path: 'src/add.ts',
+  });
+  assertNoError(scope, 'review_scope');
+  const runDir = path.join(reviewedRepo, '.review', 'runs', scope.runId);
+  assert.ok((await stat(runDir)).isDirectory(), 'the run is stored in the reviewed repository');
+
+  const plan = await callTool(harness, 'review_plan', { repo: reviewedRepo, runId: scope.runId, effort: 'quick' });
+  assertNoError(plan, 'review_plan');
+  assert.equal(plan.runId, scope.runId);
+  assert.ok((await stat(path.join(runDir, 'plan.json'))).isFile(), 'plan.json lands in the reviewed repository run');
+
+  // The session log cache may also resolve the run id without `repo`; the positive
+  // guarantee under test is that `repo` reads/creates artifacts in the reviewed repo.
+  const gate = await callTool(harness, 'review_gate', { repo: reviewedRepo, runId: scope.runId });
+  assertNoError(gate, 'review_gate');
+  assert.ok((await stat(path.join(runDir, 'gate.json'))).isFile(), 'gate.json lands in the reviewed repository run');
+});

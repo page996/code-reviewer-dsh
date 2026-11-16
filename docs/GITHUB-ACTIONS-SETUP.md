@@ -4,13 +4,13 @@
 
 ## 1. 必配 Secret
 
-LLM 评审需要仓库级 Secret：
+LLM 评审需要仓库级 Secret（`review.yml` 接受两个名字，同时存在时 `DSH_API_KEY` 优先）：
 
 1. 打开 **Settings → Secrets and variables → Actions → New repository secret**
-2. Name: `DEEPSEEK_API_KEY`
+2. Name: `DSH_API_KEY`（也接受 `DEEPSEEK_API_KEY`）
 3. Secret: 你的 DeepSeek API Key（`sk-...`）
 
-> 也可用 `gh secret set DEEPSEEK_API_KEY --repo page996/code-reviewer-dsh`（本机未安装 `gh` 时用网页）。
+> 也可用 `gh secret set DSH_API_KEY --repo page996/code-reviewer-dsh`（本机未安装 `gh` 时用网页）。
 
 配置后的行为（`review.yml`）：
 
