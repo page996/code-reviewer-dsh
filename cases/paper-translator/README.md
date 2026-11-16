@@ -19,9 +19,10 @@
 | batch-5 | `lib/library.js` | standard（同 lenses） | `run-20261116-205830-6e9b` | 2 major + 10 minor，全部 accepted；`review eval`：matched 12 / missed 0 / noise 0 → **pass**（修了 scan 模式把既有问题当阻断的门禁 bug） |
 | batch-6 | `python/pageparse.py` | standard（同 lenses） | `run-20261116-210746-8607` | 8 minor，全部 accepted；`review eval`：matched 8 / missed 0 / noise 0 → **pass**（首个 Python 批次） |
 | batch-7 | `python/floats.py` | standard（同 lenses） | `run-20261116-211500-f3ee` | 2 major + 18 minor，全部 accepted；`review eval`：matched 20 / missed 0 → **pass**；跨视角同行重复项部分被新去重合并（措辞差异大者仍分开，见 lessons R-15） |
-| batch-8（待做） | `python/{render_paper,mathconv}.py` | standard | — | — |
-| batch-9（待做） | `lib/{workspace,graph,notes-store,...}` 剩余模块 | standard | — | — |
-| batch-10（待做） | `client/assets` 跨端契约 | standard | — | — |
+| batch-8 | `python/render_paper.py`（4,731 行） | standard（同 lenses） | `run-20261116-212301-f41d` | 15 minor，全部 accepted；`review eval`：matched 15 / missed 0 → **pass** |
+| batch-9 | `python/mathconv.py`（2,554 行） | standard（同 lenses） | `run-20261116-213124-06c8` | 12 minor，全部 accepted；`review eval`：matched 12 / missed 0 → **pass** |
+| batch-10（待做） | `client.js` / `assets/*` 跨端契约 | standard | — | — |
+| batch-11（待做） | `lib/{workspace,graph,notes-store,...}` 剩余模块 | standard | — | — |
 
 排除：`assets/katex/**`（vendored）、`python/__pycache__/**`、`*.pyc`、`locale/*.json`。
 
@@ -68,6 +69,8 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 - batch-5：`review eval --run run-20261116-205830-6e9b` → **pass**（matched 12 / missed 0 / noise 0 / notEvaluated 56）；scan 模式门禁已修，`gate` 恢复 pass（exit 0）。
 - batch-6（Python）：`review eval --run run-20261116-210746-8607` → **pass**（matched 8 / missed 0 / noise 0 / notEvaluated 68）。
 - batch-7（Python）：`review eval --run run-20261116-211500-f3ee` → **pass**（matched 20 / missed 0 / noise 0 / notEvaluated 76）。
+- batch-8（Python）：`review eval --run run-20261116-212301-f41d` → **pass**（matched 15 / missed 0 / notEvaluated 96）。
+- batch-9（Python）：`review eval --run run-20261116-213124-06c8` → **pass**（matched 12 / missed 0 / notEvaluated 111）。
 - batch-2：`--run run-20261116-193909-9bc6`（插件仍缓存旧 `lib/plan.mjs`，tests 视角未跳过；本机无重启）→ matched 13 / missed 0 / noise 2–4，exit 2；属运行时缓存而非代码回归。
 - 新增 `review.temperature=0` 与 reviewer 传输重试后，**重启 DSH** 重跑 batch-2 预期稳定通过（重复运行结果一致）。
 - eval 语义已按 run scope 过滤：其他批次基线在当前 run 中计 `notEvaluated`，不再误判漏报。

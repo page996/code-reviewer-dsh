@@ -862,5 +862,248 @@
     "startLine": 1090,
     "disposition": "accepted",
     "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "298e4c31e5c45d412bb27d121385ae14c5a1ef0b",
+    "file": "python/render_paper.py",
+    "category": "intent",
+    "title": "模块头声明的写入范围/交付文件清单与实际行为不一致：脚本还会写 `translated.print.html`、把整套 KaTeX（含 fonts）复制进 `<",
+    "startLine": 29,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c62593f6cc3c76c36f3a8ec5e6014a20037781ea",
+    "file": "python/render_paper.py",
+    "category": "correctness",
+    "title": "`_safe_asset` 的文件名白名单只允许 ASCII 字母数字、`._-`、CJK 统一表意文字和空格，注释里说的「usual punctuation」",
+    "startLine": 171,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "2406e4869d7392897419ed7b938ac818c628a095",
+    "file": "python/render_paper.py",
+    "category": "correctness",
+    "title": "对每个 display 公式的 LaTeX 都无条件剥离行尾的 `(数字)`，会把合法的公式内容当成编号截掉（如 `= F(1)` 变成 `= F`），并把截下",
+    "startLine": 492,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7f2af3fa4104f7d8c67090155337ac99764d77d7",
+    "file": "python/render_paper.py",
+    "category": "correctness",
+    "title": "注释声称把 `\"1.0\"` 归一化成 `\"1\"` 的兜底查表实际不成立：`str(float(\"1.0\"))` 仍是 `\"1.0\"`，永远匹配不到 `_buil",
+    "startLine": 551,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "2862a78ce477f6a902a5eed0251a85e3246cc1c4",
+    "file": "python/render_paper.py",
+    "category": "correctness",
+    "title": "`citations=False` 分支直接 `_esc(text)` 返回，完全跳过 `\\(...\\)`/`\\[...\\]` 的处理，参考文献里的内联公式在 ",
+    "startLine": 1103,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8cb57fbefbec67f2b297c2dd89a2eb1174756871",
+    "file": "python/render_paper.py",
+    "category": "correctness",
+    "title": "预扫描只把容器 `caption_block_id` 指向的 caption 块标记为已消费；靠「相邻标签匹配」兜底命中的 caption 块，如果按阅读顺序出",
+    "startLine": 1405,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e85d705d4001aee5503ebce034dc87f426a2ab42",
+    "file": "python/render_paper.py",
+    "category": "correctness",
+    "title": "`_split_aligned_rows` 在 `\\\\\\\\` 处切行时没有吞掉行距可选参数 `[len]`，该参数会变成下一行的字面内容被渲染进公式",
+    "startLine": 3546,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "705cb89c5ed0428b45094d1e2766ccaf68d813c0",
+    "file": "python/render_paper.py",
+    "category": "security",
+    "title": "translated.md 的代码块内容原样写入三反引号围栏，未做任何中和；同文件第 3963 行 `_md_escape` 的 docstring 明确声称 ",
+    "startLine": 4023,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a46bd0eebd15a708b2ab11d149f5cb5128131c88",
+    "file": "python/render_paper.py",
+    "category": "correctness",
+    "title": "`render_markdown` 不展开 `[[EQ:...]]` 公式标记，HTML 已内联的标记会以内部语法原样出现在 translated.md",
+    "startLine": 4082,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a40cf14afd0894d928d2ac9b1d21cd21b3144ee5",
+    "file": "python/render_paper.py",
+    "category": "errors",
+    "title": "render_pdf 对 custom 尝试的任何异常都无差别归因为「字体问题」并整篇重跑一次分页，错误分类错误且重试放大开销。",
+    "startLine": 4467,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "dc5cc7e998bdf4f70f0f97d38b3c416596c9b2e5",
+    "file": "python/render_paper.py",
+    "category": "correctness",
+    "title": "“正文字体与标题字体是同一文件时复用”的去重被紧随其后的赋值立刻撤销，同一份 CJK 字体被读两次并作为两个字体族嵌入 PDF",
+    "startLine": 4565,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0c4bc6f37a38ca828af336cd0b4908f1579bd2c4",
+    "file": "python/render_paper.py",
+    "category": "errors",
+    "title": "translations.json 缺失或结构损坏时被降级为一条 warning，随后仍按源文本渲染全文并 return 0，把翻译阶段失败伪装成成功交付。",
+    "startLine": 4869,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "38f3a5f96946baed36befc35ee5c958dd05b54b4",
+    "file": "python/render_paper.py",
+    "category": "errors",
+    "title": "print HTML 渲染阶段只捕获 OSError，render_html/render_markdown 抛出的非 OSError 异常会直接冒出 main",
+    "startLine": 4940,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8211baf76cb473b70aee0fb0998b10428d1e7842",
+    "file": "python/render_paper.py",
+    "category": "security",
+    "title": "render-meta.json 把 KaTeX 源目录的绝对路径（以及 warnings 中同样带绝对路径的文案）写进交付物，向读取该作业目录的一方泄露服务器",
+    "startLine": 5082,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "257fc3868258e24718a0eca25bc723fc1ab7bd55",
+    "file": "python/render_paper.py",
+    "category": "errors",
+    "title": "render-meta.json 以「先截断再逐块 json.dump」的方式写入，中途失败会破坏上一次运行的有效 meta，且异常路径没有任何回滚。",
+    "startLine": 5099,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fa714448a25bc24123f8a8d7a16674a1cbebc9f3",
+    "file": "python/mathconv.py",
+    "category": "security",
+    "title": "解析不可信 PDF 的 ToUnicode CMap 时既没有流长度上限也没有条目总量上限，且 `beginbfchar(.*?)endbfchar` 的惰性匹",
+    "startLine": 624,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fd4eaefd09a93f040f8d974fe7d7d1d0a17f15d0",
+    "file": "python/mathconv.py",
+    "category": "errors",
+    "title": "FontDecoder 用一个覆盖整段字体发现循环的宽泛 except 吞掉任何异常并直接 return，已发现的字体被整体丢弃且不记录任何降级信号；随后的字形",
+    "startLine": 683,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f5f8eee6354502a315b1db36889680dbd5a90c67",
+    "file": "python/mathconv.py",
+    "category": "contract",
+    "title": "`Piece.glyphs` 的类型契约是 `Tuple[Glyph, ...]`，消费方按 `Glyph` 的 `.kind/.text/.latex` 访问",
+    "startLine": 785,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "5f778d81c4c03a59cb5c35bcfc0a0b7609844715",
+    "file": "python/mathconv.py",
+    "category": "contract",
+    "title": "模块自身会输出的 `\\mathtt{...}`（以及 `_delim_char_latex` 产生的 `\\backslash`）不在 `KNOWN_COMMAN",
+    "startLine": 970,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "38a0e5836c9b450c8f72a6262ca522bec416e9ae",
+    "file": "python/mathconv.py",
+    "category": "intent",
+    "title": "`latexify_piece` 的 docstring 声称返回的 `plain` 是“canonical Unicode linearisation use",
+    "startLine": 1035,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7337b339da8c8e5740bdc53276a2d7da9873bb36",
+    "file": "python/mathconv.py",
+    "category": "security",
+    "title": "`latexify_text` 对 `_`/`^` 之后的花括号内容递归调用自身，递归深度等于不可信文本的花括号嵌套层数，没有任何深度上限；PDF 文本层里 1",
+    "startLine": 1061,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a1fca11ab2e82544a3f8f4460f635a3ab2315ecb",
+    "file": "python/mathconv.py",
+    "category": "correctness",
+    "title": "resolve_sqrt 把 √ 之后的前导分隔符（含 `-`/`+`）移动到 `\\sqrt{...}` 的后面，导致公式被重新排序，被开方数被截断。",
+    "startLine": 1168,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "30d5135c5c0053dfbbe7c3862840f2b8bf429c35",
+    "file": "python/mathconv.py",
+    "category": "correctness",
+    "title": "检测和删除悬空 script 标记时没有区分转义字符：`\\_` 被当作悬空下标删除，留下一个裸反斜杠；而 `validate_latex` 检测不到行尾的裸反斜",
+    "startLine": 1330,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "42c76748d98702469b466a3ec81e8e3a890f988c",
+    "file": "python/mathconv.py",
+    "category": "intent",
+    "title": "`plain_text_latex` 被注释/文档称为“always parseable”的兜底，但无法映射的非 ASCII 字符会原样进入 `\\text{..",
+    "startLine": 1372,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "2a7be983e263a6608ba2305d1123361b6fd9601b",
+    "file": "python/mathconv.py",
+    "category": "correctness",
+    "title": "_fold_sqrt 只把\"√ 之后的其它原子\"放进 \\sqrt{}，完全丢弃携带 SQRT_MARK 的原子自身的 latex，因此同一 span 内 √ 之",
+    "startLine": 2053,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "cb03a5c862443ea2d4cb6b55071908587031426f",
+    "file": "python/mathconv.py",
+    "category": "errors",
+    "title": "装配结果为空/失败时的 return 分支把刚计算出的 `issues` 丢掉，失败原因（结构性重建覆盖率不足、花括号结构等）不会传给调用方。",
+    "startLine": 2756,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fd6f90d75a165d8c848219374459c426e957333f",
+    "file": "python/mathconv.py",
+    "category": "correctness",
+    "title": "build_display_equation 的 KaTeX 硬化分支判定写反：sanitize 修好（repaired 合法，validate_latex 返",
+    "startLine": 2785,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
   }
 ]

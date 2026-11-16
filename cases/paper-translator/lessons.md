@@ -44,6 +44,8 @@
 | E-57…E-68 | batch-5 的 12 条 library.js 缺陷（含 2 条 major，accepted） | 仍被报出；batch-5 run 的 eval：matched 12 / missed 0 / noise 0 | `findings.json` |
 | E-69…E-76 | batch-6 的 8 条 pageparse.py 缺陷（accepted） | 仍被报出；batch-6 run 的 eval：matched 8 / missed 0 / noise 0 | `findings.json` |
 | E-77…E-96 | batch-7 的 20 条 floats.py 缺陷（含 2 major，accepted） | 仍被报出；batch-7 run 的 eval：matched 20 / missed 0 / noise 0 | `findings.json` |
+| E-97…E-111 | batch-8 的 15 条 render_paper.py 缺陷（accepted） | 仍被报出；batch-8 run 的 eval：matched 15 / missed 0 | `findings.json` |
+| E-112…E-123 | batch-9 的 12 条 mathconv.py 缺陷（accepted） | 仍被报出；batch-9 run 的 eval：matched 12 / missed 0 | `findings.json` |
 
 回归命令：
 
@@ -63,6 +65,9 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 | batch-4 | 19 条 | accepted | token 走 URL/写进页面、Sec-Fetch-Site 鉴权回退、symlink 越界、completed 后被改判 failed、错误码 400/404、流式读无 error 处理、审批自铸自批、library 删除不可回滚等 | R-10/R-11/R-12 已补规则 | eval 已 pass（19/19） |
 | batch-5 | 12 条（2 major） | accepted | reload 绕过写链导致丢更新、上传落盘后异常留下孤儿文件、manifest 版本不校验、parentId 环无 visited、stat 错误被伪装 404 等 | R-13 编排修复；R-3/R-11 规则覆盖部分 | eval 已 pass（12/12），scan gate 已修 |
 | batch-6 | 8 条 | accepted | 几何未钳制导致无界分配、解析异常吞成空页、FontDecoder 失败重复尝试、栏缝分配 off-by-one、居中短行固定落第 0 栏、死代码、混排打平破坏栏带 | R-14 已补 Python 规则 | eval 已 pass（8/8） |
+| batch-7 | 20 条（2 major） | accepted | 中文题注「表」判成 figure、无上限 O(n²) drawings、契约外 kind=region、解析异常吞成空、调试日志泄露原文、渲染上限滞后等 | R-15 去重机制 + R-14 部分 | eval 已 pass（20/20） |
+| batch-8 | 15 条 | accepted | markdown 围栏未中和（注入）、公式编号被剥、缺 translations 仍 return 0、meta 泄露绝对路径/先截断后写、字体重复嵌入等 | core-security/core-errors + R-14 | eval 已 pass（15/15） |
+| batch-9 | 12 条 | accepted | CMap 解析无上限、字体发现宽泛 except、`Piece.glyphs` 契约不一致、花括号递归无深度上限、√ 分隔符错序、KaTeX 硬化分支写反等 | R-14 补充「不可信文本递归/CMap 上限」 | eval 已 pass（12/12） |
 
 ## 5. eval 机制自身的三次修正（meta lesson）
 
@@ -80,10 +85,10 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 
 ## 7. 结论摘要
 
-- 真实缺陷：batch-1 6 + batch-2 13 + batch-3 14 + batch-4 19 + batch-5 12（含 2 major）+ batch-6 8 + batch-7 20（含 2 major）= 92 条 accepted。
+- 真实缺陷：batch-1 6 + batch-2 13 + batch-3 14 + batch-4 19 + batch-5 12（含 2 major）+ batch-6 8 + batch-7 20（含 2 major）+ batch-8 15 + batch-9 12 = 119 条 accepted。
 - 误报：batch-2 4 条 unit-scope 测试噪声（rejected）。
 - 新增规则：10 条（R-1/R-2/R-3/R-5/R-6/R-7/R-10/R-11/R-12/R-14 已落，R-4 待落 core-data）。
 - 编排修复：R-8 传输重试、R-9 temperature=0、R-13 scan 模式 preexisting/门禁语义、R-15 跨视角同类合并 + `review aggregate`。
 - prompt 调整：4 处（P-1/P-2/P-4 已落，P-3 待批次契约）。
-- 回归用例：92 accepted + 4 rejected；batch-3/4/5/6/7 的 eval 均全绿（missed 0 / noise 0），覆盖 JS/TS/Python。
+- 回归用例：119 accepted + 4 rejected；batch-3…9 的 eval 均全绿（missed 0 / noise 0），覆盖 JS/TS 与 Python（解析、渲染、公式、浮动体）。
 - 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则、重试、温度）。
