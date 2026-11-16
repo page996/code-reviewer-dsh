@@ -1061,6 +1061,38 @@ test('runReview: reviewer requests pin temperature 0 by default and honor an ove
   assert.deepEqual(temperatures, [0.4]);
 });
 
+test('runReview: transient LLM errors are retried before giving up', async (t) => {
+  const cwd = tempDir(t);
+  const plan = planWithUnits(1, ['intent']);
+  let calls = 0;
+  const llm = {
+    complete: async () => {
+      calls += 1;
+      if (calls === 1) throw Object.assign(new Error('transport down'), { code: 'LLM_SERVER' });
+      return completion(reviewerJson({ findings: [FINDING_A], verdict: 'needs-fix' }));
+    },
+  };
+  const result = await runReview({ scope: {}, plan, config: {}, llm, cwd, log: () => {} });
+  assert.equal(calls, 2, 'a transient failure is retried once');
+  assert.equal(result.reviews[0].error, undefined);
+  assert.equal(result.reviews[0].findings.length, 1);
+});
+
+test('runReview: persistent transport failure stops after the retry budget', async (t) => {
+  const cwd = tempDir(t);
+  const plan = planWithUnits(1, ['intent']);
+  let calls = 0;
+  const llm = {
+    complete: async () => {
+      calls += 1;
+      throw Object.assign(new Error('still down'), { code: 'LLM_SERVER' });
+    },
+  };
+  const result = await runReview({ scope: {}, plan, config: {}, llm, cwd, log: () => {} });
+  assert.equal(calls, 3);
+  assert.equal(result.reviews[0].error.code, 'LLM_SERVER');
+});
+
 test('runReview: concurrency is bounded by config.review.concurrency', async (t) => {
   const cwd = tempDir(t);
   const plan = planWithUnits(4, ['intent', 'correctness']);
