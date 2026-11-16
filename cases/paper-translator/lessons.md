@@ -22,6 +22,7 @@
 | P-1 | 全局 | `human_attention` 无上限，无契约时 11 条泛泛问题把 verdict 顶成 needs-human | `lib/prompts.mjs` BASE_RULES：≤3 条、只保留影响合并/发布的问题 | batch-2 复评 human_attention 明显减少 |
 | P-2 | tests | unit 只含被审文件时仍报「本单元没有测试」 | `lib/prompts.mjs` tests 视角禁止范围性观察；`lib/plan.mjs` scan 模式跳过 tests 视角；`lib/aggregate.mjs` 兜底 drop `unit-scope-test-gap` | 重启后重跑 batch-2，eval noise=0 |
 | P-3 | 全局 | 无任务契约时 intent 视角仍会报“无法核对意图” | 批次 3 起在 case README 提供最小契约（目标/非目标/验收）再评审 | human_attention 数量下降 |
+| P-4 | tests | PR 自评审（GitHub Actions 真实跑）对测试代码报「判别力不足/断言可以更强」这类纯增强建议（3 条 minor） | `lib/prompts.mjs` tests 视角：只报会掩盖真实回归的测试缺陷（断言与实现矛盾、必然误通过、删弱/跳过断言、mock 掩盖真实调用），不报增强建议 | 下次 PR 评审中 tests 类 minor 减少 |
 
 ## 3. 回归用例（→ `findings.json` 基线 + `review eval`）
 
@@ -52,7 +53,14 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 2. **措辞/行号漂移**：同一问题两次运行标题不同、行号移动 → 增加「同文件近似行（±20）+ 中文 bigram 标题相似度」兜底。
 3. **类别漂移 vs 类别族**：errors/security/concurrency 允许互认；tests 与代码类别不互认，避免「测试缺口」误配到代码 finding。
 
-## 6. 结论摘要
+## 6. CI 自评审回合（真实 GitHub Actions，2026-11-16）
+
+- PR #1 在加入 `DSH_API_KEY` 后两次真实运行：`review.yml` 用 `deepseek-flash / max` 评了 PR diff（首轮 2 条、修复后 3 条 minor，全部落在我们为插件写的测试上）。
+- 首轮 2 条**是真问题**：归一化测试无法区分「null→空串」与「一律清空」；repo 参数测试受会话缓存影响、无法证明 repo 参与解析。→ 已按 finding 重写两个测试（不再依赖 review_scope 缓存，手动构造远端 run）。
+- 第二轮 3 条是测试判别力的纯增强建议（minor），推送了 P-4 prompt 约束降噪。
+- 这验证了「CI 权威门禁 + 真实模型评审 + 找自身问题」的闭环确实工作，也说明 `tests` 视角在 PR 场景需要更严格的报告门槛。
+
+## 7. 结论摘要
 
 - 真实缺陷：batch-1 6 条 + batch-2 13 条 accepted（均为 minor；batch-2 复评新增 3 条 major 待下一轮 disposition）。
 - 误报：batch-2 4 条 unit-scope 测试噪声（rejected）。

@@ -54,11 +54,11 @@
 | `data` | 序列化、迁移、兼容、索引、数据校验、回滚 |
 | `security` | 注入、越权、密钥、依赖、日志/PII 泄露 |
 | `contract` | API/事件/配置/前后端/版本兼容 |
-| `tests` | 断言是否真能失败、mock 过度、失败路径/边界覆盖 |
+| `tests` | 断言是否真能失败、mock 过度、失败路径/边界覆盖；只报会掩盖真实回归的缺陷（断言与实现矛盾/必然误通过/删弱或跳过断言/mock 掩盖真实调用），不报「本单元没测试」或「断言可以更强」 |
 | `scope` | 无关改动、最小 diff、配置/CI 变更是否必要 |
 | `history` | git log/blame、旧逻辑、被删除行为、历史事故 |
 
-视角由 effort 决定：quick=`intent,correctness`；standard=`+errors,security,tests,contract`；deep=全部 10 个且 rounds≥2。
+视角由 effort 决定：quick=`intent,correctness`；standard=`+errors,security,tests,contract`；deep=全部 10 个且 rounds≥2。scan 模式默认跳过 `tests` 视角（unit 只含被审文件，测试缺口不可判定；显式 `lenses` 可覆盖）。
 
 ## 3. 过滤器（filter，保守删假阳性）
 
