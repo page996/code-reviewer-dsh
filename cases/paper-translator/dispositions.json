@@ -610,5 +610,77 @@
     "startLine": 735,
     "disposition": "accepted",
     "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "5f665560f5dfef5dbbc894aa755a58798876e313",
+    "file": "python/pageparse.py",
+    "category": "errors",
+    "title": "page.get_text(\"rawdict\") 的异常被吞掉并替换为空 blocks，调用方无法区分“空页”和“文本提取失败”。",
+    "startLine": 202,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "5ef79f2332b6e2e8071ed45278defe6a3b38936b",
+    "file": "python/pageparse.py",
+    "category": "errors",
+    "title": "get_drawings 异常被吞掉并清空 drawings，且会丢弃异常前已收集的 drawing。",
+    "startLine": 266,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4c2e00b055d050e36647e184ba6acff27692d506",
+    "file": "python/pageparse.py",
+    "category": "errors",
+    "title": "parse_pages 在 FontDecoder 初始化失败后传 None，parse_page 会对每一页重复尝试同一个失败的初始化。",
+    "startLine": 272,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "abf7be9882b8704ef927b400fdee52f078cc8b14",
+    "file": "python/pageparse.py",
+    "category": "security",
+    "title": "detect_columns 用未设上限的 page_width 直接分配覆盖数组，并按行的横向跨度逐点累加，攻击者可控的页面几何（PDF MediaBox/R",
+    "startLine": 330,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6a68c088d48d30c4131967d311a62a59dcc4beb1",
+    "file": "python/pageparse.py",
+    "category": "correctness",
+    "title": "detect_columns 扫描栏缝时用未钳制的 `hi = int(math.ceil(max_x))` 作为 coverage 的上界，只要有一行的 bb",
+    "startLine": 339,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7dc85e0172a25612ef41b8b906bc30fd3664c334",
+    "file": "python/pageparse.py",
+    "category": "correctness",
+    "title": "与所有栏重叠都为 0 的行（完全落在栏缝内的居中短行）因 `best_overlap` 初始为 -1.0 而被固定分配给第 0 栏，而不是按“居中/全宽”单独处",
+    "startLine": 400,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "bf6fe015a80be9d79aa63b050f616a97e679bfe7",
+    "file": "python/pageparse.py",
+    "category": "scope",
+    "title": "非多栏分支里的 `full` 处理是不可达死代码：assign_columns 在 `not layout.is_multi` 时固定返回 `full = []",
+    "startLine": 417,
+    "disposition": "accepted",
+    "reason": "batch-3 人工复核后判定。"
+  },
+  {
+    "fingerprint": "eb36834c22d5d8c6e73d176eb91180809b41aca6",
+    "file": "python/pageparse.py",
+    "category": "intent",
+    "title": "混排（多栏 + 通栏）分支把所有栏内的行打平成一个按 (y0, x0) 排序的 flow，破坏了 assign_columns 已算出的栏带结构，与本函数 do",
+    "startLine": 442,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
   }
 ]

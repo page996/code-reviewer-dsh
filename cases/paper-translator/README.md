@@ -17,9 +17,10 @@
 | batch-3 | `lib/pipeline.js` | standard（同 batch-2 lenses） | `run-20261116-203528-92c0` | 14 minor，全部 accepted；`review eval`：matched 14 / missed 0 / noise 0 / notEvaluated 23 → **pass** |
 | batch-4 | `index.js`（Host：工具注册、HTTP API、任务队列） | standard（同 lenses，单文件 ~5k 行） | `run-20261116-204833-fc82` | 19 minor，全部 accepted；`review eval`：matched 19 / missed 0 / noise 0 → **pass** |
 | batch-5 | `lib/library.js` | standard（同 lenses） | `run-20261116-205830-6e9b` | 2 major + 10 minor，全部 accepted；`review eval`：matched 12 / missed 0 / noise 0 → **pass**（修了 scan 模式把既有问题当阻断的门禁 bug） |
-| batch-6（待做） | `python/pageparse.py`（另含 floats/render_paper 后续） | standard | — | — |
-| batch-7（待做） | `lib/{workspace,graph,notes-store,...}` 剩余模块 | standard | — | — |
-| batch-8（待做） | `client/assets` 跨端契约 | standard | — | — |
+| batch-6 | `python/pageparse.py` | standard（同 lenses） | `run-20261116-210746-8607` | 8 minor，全部 accepted；`review eval`：matched 8 / missed 0 / noise 0 → **pass**（首个 Python 批次） |
+| batch-7（待做） | `python/{floats,render_paper,mathconv}.py` | standard | — | — |
+| batch-8（待做） | `lib/{workspace,graph,notes-store,...}` 剩余模块 | standard | — | — |
+| batch-9（待做） | `client/assets` 跨端契约 | standard | — | — |
 
 排除：`assets/katex/**`（vendored）、`python/__pycache__/**`、`*.pyc`、`locale/*.json`。
 
@@ -63,6 +64,7 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 - batch-3：`review eval --run run-20261116-203528-92c0` → **pass**（matched 14 / missed 0 / noise 0 / notEvaluated 23）。
 - batch-4：`review eval --run run-20261116-204833-fc82` → **pass**（matched 19 / missed 0 / noise 0 / notEvaluated 37）。
 - batch-5：`review eval --run run-20261116-205830-6e9b` → **pass**（matched 12 / missed 0 / noise 0 / notEvaluated 56）；scan 模式门禁已修，`gate` 恢复 pass（exit 0）。
+- batch-6（Python）：`review eval --run run-20261116-210746-8607` → **pass**（matched 8 / missed 0 / noise 0 / notEvaluated 68）。
 - batch-2：`--run run-20261116-193909-9bc6`（插件仍缓存旧 `lib/plan.mjs`，tests 视角未跳过；本机无重启）→ matched 13 / missed 0 / noise 2–4，exit 2；属运行时缓存而非代码回归。
 - 新增 `review.temperature=0` 与 reviewer 传输重试后，**重启 DSH** 重跑 batch-2 预期稳定通过（重复运行结果一致）。
 - eval 语义已按 run scope 过滤：其他批次基线在当前 run 中计 `notEvaluated`，不再误判漏报。
