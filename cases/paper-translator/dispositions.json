@@ -331,5 +331,176 @@
     "startLine": 1119,
     "disposition": "accepted",
     "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "bf45b03f1bc910c4c38bcb1b0050334da7aaf2ca",
+    "file": "index.js",
+    "category": "correctness",
+    "title": "用 `Number.isFinite(Number(source.page))` 判断页码，对 null / '' / false 都成立，会给没有页码的选区注",
+    "startLine": 243,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fbc342ba2176f19163bd9a5be83f59c6859968dc",
+    "file": "index.js",
+    "category": "contract",
+    "title": "batch 把“job 不在内存 Map 里”一律记为 failed，而 resumeBatch 又会为这类条目重新建 job，导致已完成的论文被重复翻译。",
+    "startLine": 720,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e9c74850feb87ca7b5c3642012014dc3765d8a19",
+    "file": "index.js",
+    "category": "errors",
+    "title": "删除作业目录失败只写日志，接口仍返回成功；作业已从内存 Map 移除，但磁盘上的 job 目录与 job.json 还在，重启后会被 loadHistory 重",
+    "startLine": 1036,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "dbb200de53a929831793cf41a547670669fb58f5",
+    "file": "index.js",
+    "category": "contract",
+    "title": "未知 docId 的建 job 请求返回 400 而不是 404，破坏 POST /api/jobs 的错误码契约。",
+    "startLine": 1102,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4c9c344a12794257ec6b5f388b269ec2da203432",
+    "file": "index.js",
+    "category": "security",
+    "title": "源 PDF 的『必须位于工作区内』边界只用字面路径比较，未做 realpath，工作区内的符号链接/目录联接可指向工作区外并绕过校验。",
+    "startLine": 1175,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fd54373eea46c0e4e46b304b3c126f85b3dd48ff",
+    "file": "index.js",
+    "category": "contract",
+    "title": "为了给 checker 提供终态快照，先把 job 置为 completed 落盘、再运行校验，但此时 job.result 里没有 verification；",
+    "startLine": 1663,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "753451ce8acd566e670852bdb3706ece94fd6d13",
+    "file": "index.js",
+    "category": "contract",
+    "title": "contract checks 崩溃时的降级对象缺少 `render` 字段，`result.verification` 的形状不稳定。",
+    "startLine": 1674,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "2a70027171f34d6be9a07816a32584f5cb7931c0",
+    "file": "index.js",
+    "category": "errors",
+    "title": "文档工作区聚合输出的调用没有 try/catch，失败会顺着 runJob 的外层 catch 把已经置为 completed 的 job 改判为 failed",
+    "startLine": 1740,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "3288f9e374cb72c5c86bd0ed79f80fe755570929",
+    "file": "index.js",
+    "category": "security",
+    "title": "per-process bearer token 允许通过 URL query 传递，并在 `serveFile` 重写 HTML 时被写进页面内所有资源 UR",
+    "startLine": 1823,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "9e1455249a50b5d1d864033b9ce5d56f0cd73124",
+    "file": "index.js",
+    "category": "errors",
+    "title": "「作业已完成」之后仍在主 try 里执行没有本地保护的收尾 await（render-meta 二次写盘、collectJobOutputs、aggregate",
+    "startLine": 1835,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0df0c81eb9f1039800023dbaf9a76cf6c98d5331",
+    "file": "index.js",
+    "category": "security",
+    "title": "鉴权回退依赖客户端可任意伪造的 `Sec-Fetch-Site` 与 `Host` 头，使 per-process token 实际失效，全部 /paper-t",
+    "startLine": 1839,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b8bb82ee0ee878c8b0f4b6bd7faa347a66a44e85",
+    "file": "index.js",
+    "category": "errors",
+    "title": "所有二进制/流式响应都用 `fs.createReadStream(...).pipe(res)` 直接推流，读流没有注册 'error' 处理器；stat 与",
+    "startLine": 2137,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b96b9d9f767b99c1572113a8f6d5a8555d9a14a0",
+    "file": "index.js",
+    "category": "errors",
+    "title": "Office→PDF 预览把一次性创建、永不 abort 的 AbortController 传给外部转换器，且没有超时；转换卡死或客户端断开时无法取消，请求会",
+    "startLine": 2218,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "102153163f1d716ff8ff81c8c1b9ebd3cc9a757f",
+    "file": "index.js",
+    "category": "concurrency",
+    "title": "job 级便签的读-改-写没有任何串行化：loadNotes 返回共享的 `job._notes` 数组，多个请求各自修改后以整体覆盖方式写 notes.jso",
+    "startLine": 2870,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f577cd76731d03af7625026a6203d2ae23b3d7d5",
+    "file": "index.js",
+    "category": "concurrency",
+    "title": "一次性文件审批在真正的写/删/mkdir 执行之前就被 consume，执行失败没有 release/回滚，重放会被“已使用”挡住。",
+    "startLine": 2895,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "bb21a00ec24a53c6d8163df50cc1771b5a3ae9f7",
+    "file": "index.js",
+    "category": "security",
+    "title": "『人类审批』闸门可被同一客户端自铸自批绕过，且审计中的操作者身份/影响规模全部来自请求体，服务端不复核。",
+    "startLine": 3480,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "bcc865826b13c22e625c0680e3f08aa64706f285",
+    "file": "index.js",
+    "category": "errors",
+    "title": "POST /paper-translator/api/jobs 把没有 status 的异常一律归类为 400，把服务端故障（磁盘满、EACCES、librar",
+    "startLine": 4235,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "566eaea78aa78c2fa812e5d8c2b3221221708299",
+    "file": "index.js",
+    "category": "errors",
+    "title": "删除 library 文档时先删文档工作区、再删库记录；第二步失败会留下“记录还在、数据已删”的空壳文档，且无法回滚。",
+    "startLine": 4418,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a2d77cca90fdbf8b73f2153c0cef98a6a435ad97",
+    "file": "index.js",
+    "category": "correctness",
+    "title": "请求 URL 用不可信的 Host 头作为 base 在 try/catch 之外构造，解析失败时异常逃出 handleRequest 自己的错误处理，客户端拿",
+    "startLine": 4958,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
   }
 ]

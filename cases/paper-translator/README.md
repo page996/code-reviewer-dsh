@@ -15,7 +15,7 @@
 | batch-1 | `lib/util.js` | quick（intent/correctness） | `run-20261116-190955-746b` | 6 minor，全部 accepted |
 | batch-2 | `lib/gateway.js` | standard（intent/correctness/errors/security/contract；scan 模式跳过 tests 视角） | `run-20261116-193909-9bc6` | 首轮 17 minor（13 accepted + 4 判为 unit-scope 测试噪声 rejected），复评后 13/13 accepted 全命中、0 漏报；3 条 major 为新增 |
 | batch-3 | `lib/pipeline.js` | standard（同 batch-2 lenses） | `run-20261116-203528-92c0` | 14 minor，全部 accepted；`review eval`：matched 14 / missed 0 / noise 0 / notEvaluated 23 → **pass** |
-| batch-4（待做） | `index.js`（Host：工具注册、HTTP API、任务队列） | standard/deep（大文件，考虑分两次） | — | — |
+| batch-4 | `index.js`（Host：工具注册、HTTP API、任务队列） | standard（同 lenses，单文件 ~5k 行） | `run-20261116-204833-fc82` | 19 minor，全部 accepted；`review eval`：matched 19 / missed 0 / noise 0 → **pass** |
 | batch-5（待做） | `lib/{library,workspace,graph,notes-store}` | standard | — | — |
 | batch-6（待做） | `python/*.py` 与 `client/assets` 跨端契约 | standard | — | — |
 
@@ -57,10 +57,11 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 
 ## 当前回归状态（诚实记录）
 
-- batch-3 复验：`review eval --run run-20261116-203528-92c0` → **pass**（matched 14 / missed 0 / noise 0 / notEvaluated 23 / new 0）。
-- batch-2 复验：`--run run-20261116-193909-9bc6`（插件仍缓存旧 `lib/plan.mjs`，tests 视角未跳过；本机无重启）→ matched 13 / missed 0 / noise 2–4，exit 2；属运行时缓存而非代码回归。
+- batch-3：`review eval --run run-20261116-203528-92c0` → **pass**（matched 14 / missed 0 / noise 0 / notEvaluated 23）。
+- batch-4：`review eval --run run-20261116-204833-fc82` → **pass**（matched 19 / missed 0 / noise 0 / notEvaluated 37）。
+- batch-2：`--run run-20261116-193909-9bc6`（插件仍缓存旧 `lib/plan.mjs`，tests 视角未跳过；本机无重启）→ matched 13 / missed 0 / noise 2–4，exit 2；属运行时缓存而非代码回归。
 - 新增 `review.temperature=0` 与 reviewer 传输重试后，**重启 DSH** 重跑 batch-2 预期稳定通过（重复运行结果一致）。
-- eval 语义已按 run scope 过滤：batch-1 的 6 条基线在 batch-2/3 run 中计 `notEvaluated`，不再误判漏报。
+- eval 语义已按 run scope 过滤：其他批次基线在当前 run 中计 `notEvaluated`，不再误判漏报。
 
 ## 下一步
 

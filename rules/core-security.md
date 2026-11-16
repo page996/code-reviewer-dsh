@@ -20,6 +20,8 @@ alwaysApply: false
 8. Web 边界：CORS 通配 + 凭据、CSRF 缺失、Cookie 缺 `HttpOnly/Secure/SameSite`、原型污染（`__proto__`/`constructor`）、开放重定向。
 9. 依赖与配置：危险默认（`debug=true` 进生产、关闭 TLS 校验、宽泛 IAM/AWS 权限）。
 10. 审批/授权依据可伪造：审批人看到的规模/影响/操作者身份来自客户端请求体（bytes、actor、role）且服务端不复核；或决定者身份未与申请者/会话校验（可自称 `system`/`user`），使“人类审批”形同虚设。
+11. 鉴权令牌可泄漏/可绕过：per-process token 允许走 URL query 并被写进 HTML 资源；鉴权失败时回退依赖客户端可伪造的头（`Sec-Fetch-Site`、`Origin`、`Host`）即可放行全部接口。
+12. 不可信输入进入危险执行面：把上传 PDF/LLM 输出拼成 HTML 后交给带 `--no-sandbox` 的浏览器渲染、`child_process` 执行用户可控命令、或把用户路径直接交给外部转换器。
 
 ## 证据要求
 - 攻击者能控制哪个输入（请求参数/文件/环境），经过哪条路径到达危险点（文件:行）。

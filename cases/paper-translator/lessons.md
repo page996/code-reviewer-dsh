@@ -16,6 +16,9 @@
 | R-7 | pending 上限 check-then-act、consume 执行前标记 consumed | 规则缺「跨 await 的配额检查」与「一次性授权状态机」 | 新增两条并发/状态机条目 | `rules/core-concurrency.md`（已加） | batch-2 复评命中 |
 | R-8 | batch-3 真实运行出现一次 `DeepSeek Messages transport failed`，单次传输失败直接让一个视角丢结果、verdict 变 needs-human | 评审编排只在 schema 错误时重试，没有对传输/供应商瞬时错误重试 | reviewer 调用内对 `LLM/TRANSPORT/LLM_SERVER/LLM_RATE_LIMIT/LLM_TIMEOUT` 重试（最多 3 次、退避），仍失败才记录 error | `lib/review.mjs`（已加） | 单测覆盖 + batch-3 重跑 14 findings |
 | R-9 | batch-2 多次复评结果数量在 12–20 之间波动，case 回归出现假漏报 | reviewer 未固定 temperature，采样导致同一输入输出漂移 | `review.temperature` 默认 0，可按部署覆盖 | `lib/review.mjs` + `lib/config.mjs`（已加） | 重启后连续两次 batch-2 复评结果一致 |
+| R-10 | batch-4：per-process token 允许 URL query 传递且被写进页面；鉴权回退依赖客户端可伪造的 `Sec-Fetch-Site`/`Host` | 安全规则缺「令牌泄漏面」与「伪造头回退即绕过」判据 | 新增令牌泄漏/鉴权回退条目 | `rules/core-security.md`（已加） | batch-4 真实命中 |
+| R-11 | batch-4：job 已 completed 后收尾抛错改判 failed；服务端故障被映射成 400；流式响应读流无 error 处理 | 错误处理规则缺「终态不可改写 / 错误分类 / 流错误」 | 新增三条错误处理条目 | `rules/core-errors.md`（已加） | batch-4 真实命中 |
+| R-12 | batch-4：未知 docId 返回 400 而非 404；契约检查崩溃降级对象缺字段 | 契约规则缺「状态码/响应形状稳定性」判据 | 新增契约高频问题清单 | `rules/core-contract.md`（已加） | batch-4 真实命中 |
 
 ## 2. prompt 调整（→ `references/prompts.md` + `lib/prompts.mjs`）
 
@@ -34,6 +37,7 @@
 | E-7…E-19 | batch-2 的 13 条 gateway 缺陷（accepted） | 仍被报出；允许类别标签/措辞漂移（eval 用同文件近似行/标题相似度匹配） | `findings.json` |
 | E-20…E-23 | batch-2 的 4 条 unit-scope 测试缺口 | 不再报出（rejected；tests 视角在 scan 模式应跳过） | `findings.json` |
 | E-24…E-37 | batch-3 的 14 条 pipeline 缺陷（accepted） | 仍被报出；batch-3 run 的 eval 已达到 matched 14 / missed 0 / noise 0 | `findings.json` |
+| E-38…E-56 | batch-4 的 19 条 index.js 缺陷（accepted） | 仍被报出；batch-4 run 的 eval：matched 19 / missed 0 / noise 0 | `findings.json` |
 
 回归命令：
 
@@ -50,6 +54,7 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 | batch-2 | 13 条 | accepted | 见 run `run-20261116-193909-9bc6` 报告 | R-5/R-6/R-7 + P-1 | 重启后复评确认 |
 | batch-2 | 4 条（tests） | rejected | unit-scope 范围噪声，非真实缺陷 | P-2 + plan scan 跳过 tests + aggregate 兜底 | 重启后 eval 应 noise=0 |
 | batch-3 | 14 条 | accepted | 安全（--no-sandbox + 不可信 HTML）、QA 六检查共用 try/catch、视觉探测吞错、页码映射、未翻译率缺失字段、临时文件异常路径泄漏等 | R-6/R-3 部分覆盖；`lib/pipeline.js` 专项规则可再补 | eval 已 pass（14/14） |
+| batch-4 | 19 条 | accepted | token 走 URL/写进页面、Sec-Fetch-Site 鉴权回退、symlink 越界、completed 后被改判 failed、错误码 400/404、流式读无 error 处理、审批自铸自批、library 删除不可回滚等 | R-10/R-11/R-12 已补规则 | eval 已 pass（19/19） |
 
 ## 5. eval 机制自身的三次修正（meta lesson）
 
@@ -67,10 +72,10 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 
 ## 7. 结论摘要
 
-- 真实缺陷：batch-1 6 条 + batch-2 13 条 + batch-3 14 条 accepted（均为 minor；batch-2 复评曾新增 3 条 major，因采样波动未入基线，temperature=0 后复验）。
+- 真实缺陷：batch-1 6 条 + batch-2 13 条 + batch-3 14 条 + batch-4 19 条 accepted（共 52 条，均为 minor；batch-2 复评曾新增 3 条 major，因采样波动未入基线，temperature=0 后复验）。
 - 误报：batch-2 4 条 unit-scope 测试噪声（rejected）。
-- 新增规则：6 条（R-1/R-2/R-3/R-5/R-6/R-7 已落，R-4 待落 core-data）。
+- 新增规则：9 条（R-1/R-2/R-3/R-5/R-6/R-7/R-10/R-11/R-12 已落，R-4 待落 core-data）。
 - 编排修复：R-8 传输重试、R-9 temperature=0。
 - prompt 调整：4 处（P-1/P-2/P-4 已落，P-3 待批次契约）。
-- 回归用例：33 accepted + 4 rejected；batch-3 eval 首次全绿。
+- 回归用例：52 accepted + 4 rejected；batch-3 与 batch-4 的 eval 均全绿（missed 0 / noise 0）。
 - 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则、重试、温度）。
