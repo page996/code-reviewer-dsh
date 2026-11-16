@@ -2158,5 +2158,149 @@
     "startLine": 463,
     "disposition": "accepted",
     "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "22646e569b34278b96cf51d99a355a3d416899a8",
+    "file": "lib/compare.js",
+    "category": "errors",
+    "title": "建立 blockById 索引时直接解引用 block.id，缺少同文件其他循环普遍使用的可选链保护；extraction.blocks 含 null/unde",
+    "startLine": 314,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "9e4099b8dfd73b0e9f68f358dcacd87aec4ca5cb",
+    "file": "lib/compare.js",
+    "category": "correctness",
+    "title": "captionContainer 的 key 在写入时做了 String() 归一化，但第 485 行查询使用的是未归一化的 block.id，二者类型不一致时",
+    "startLine": 334,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "08d54ba5bb6f1f38f987113e440b2101de3fab69",
+    "file": "lib/compare.js",
+    "category": "correctness",
+    "title": "buildCompareModel 无条件跳过 title/abstract 块，但对应的 front 行只在文档级元数据非空时才创建；当标题/摘要只存在于 e",
+    "startLine": 480,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b1b4e93534445b4fd919bac5c39362d2ec94f4d9",
+    "file": "lib/compare.js",
+    "category": "contract",
+    "title": "buildCompareModel 无条件跳过 kind 为 title/abstract 的块，而 buildAlignmentV2 只在文档级元数据存在时才",
+    "startLine": 480,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "bffe45023537da96bd16a8229d99a9f311475dff",
+    "file": "lib/compare.js",
+    "category": "intent",
+    "title": "buildCompareModel 无条件跳过 title/abstract 块，而 buildAlignmentV2 只在存在文档级 title/abstra",
+    "startLine": 480,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "18ac595646c519a9431c13f9e48e211aef7993d5",
+    "file": "lib/compare.js",
+    "category": "correctness",
+    "title": "buildCompareModel 无条件跳过 title/abstract 两类块，但对应的 front 行只在存在文档级元数据时才生成；当抽取器只以 blo",
+    "startLine": 481,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "cea78468694d14c261f6ea1cc5d3e119ac51ead5",
+    "file": "lib/document.js",
+    "category": "correctness",
+    "title": "clampNumber 用 Number(value) + Number.isFinite 判定“无效值”，但 Number(null)===0、Number(",
+    "startLine": 50,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6c03a7b79a506fcba3a5a2c031b065cef02f885c",
+    "file": "lib/document.js",
+    "category": "correctness",
+    "title": "block.page 为 null 或空字符串时被 Number() 转成 0，输出 page=0 而不是 null（未知页）。",
+    "startLine": 391,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "bf60eee404f1cecb7ed8c1b4d100f34faf7b4721",
+    "file": "lib/document.js",
+    "category": "correctness",
+    "title": "pairUntranslated 用原始 id 查 sentenceById，而该 Map 的键是 String(sentence.id)；数字型 id 永远查",
+    "startLine": 234,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "95dd98d58c7dd79db2d7b239992a4727b766e170",
+    "file": "lib/document.js",
+    "category": "errors",
+    "title": "extraction/translations 缺失或结构损坏被静默降级为空输入，warnings 不记录，函数返回「成功」的空 reader 模型。",
+    "startLine": 266,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ccde74d62a8f0d56ae3dbd3797d2dc49a9b0a1be",
+    "file": "lib/document.js",
+    "category": "errors",
+    "title": "alignment 只缺 `blocks`（或 `pairs`）一个数组就整体判为不可用，所有句子/配对被丢弃，warning 却固定说「sentences a",
+    "startLine": 289,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "3c87de8767c664defb342b4b903ff7b45a7fb39f",
+    "file": "lib/document.js",
+    "category": "errors",
+    "title": "标题/摘要/作者的 target 在译文缺失时回退成源文，导致 `entry.untranslated` 恒为 false，把「未翻译」伪装成「已翻译」。",
+    "startLine": 374,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "536d0513e85d2ae6a07ab4f6730eaa5b4ed3e856",
+    "file": "lib/document.js",
+    "category": "correctness",
+    "title": "前置内容（title/abstract/authors）在没有译文时把 source 文本回填成 target，使 entry.untranslated 对这几",
+    "startLine": 374,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "9c7e0772dbb48b849620ecdaad9366a24a44f307",
+    "file": "lib/document.js",
+    "category": "contract",
+    "title": "manifest 中存在该 blockId 的记录但 lockedImage 为空时，entry.asset.url 变成空串，同时图块自带的 containe",
+    "startLine": 415,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "87de9971a274149cd714b580b0ecc241d0499b89",
+    "file": "lib/document.js",
+    "category": "contract",
+    "title": "模型协议字段 sourceLang/targetLang 缺失时被硬编码回落为 'en'，非英语文档会被标注成英文，且调用方无法区分「真的是 en」与「未知」。",
+    "startLine": 535,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ccf0bb0a975a44c0d95d7c61c6863422f5e94e48",
+    "file": "lib/document.js",
+    "category": "data",
+    "title": "顶层 abstractTarget 与 abstract 块条目的 target 使用了不同的查找键和不同优先级，同一份输入下两者可能不一致，甚至在块条目有译文",
+    "startLine": 538,
+    "disposition": "accepted",
+    "reason": "batch-3 数据/状态问题成立，保留为 accepted 基线。"
   }
 ]
