@@ -1,6 +1,6 @@
-﻿name: Hooks contract
+name: Hooks contract
 
-# Contract test for the real git hooks (CONTRACT.md 搂7 hooks / 搂10 tests):
+# Contract test for the real git hooks (CONTRACT.md section 7 hooks / section 10 tests):
 # a temporary repository proves that a failing deterministic gate blocks `git commit`,
 # a passing gate allows it, and REVIEW_SKIP_HOOKS=1 bypasses the hook.
 # Uses only Node.js + git; no secrets, no network.

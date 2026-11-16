@@ -1,26 +1,25 @@
-﻿name: PR Review
+name: PR Review
 
 # Authoritative review gate for pull requests.
 #
 # Flow:
 #   1. deterministic half: `review all --no-llm` (scope -> plan -> gate -> report), always
 #      runs and never needs a secret
-#   2. LLM review `all --mode range --effort standard` (only when DEEPSEEK_API_KEY is available)
+#   2. LLM review: `all --mode range --effort standard` (only when DEEPSEEK_API_KEY exists)
 #   3. SARIF upload to code scanning (same-repo runs where the token has security-events: write)
 #   4. one idempotent PR comment (marker `<!-- dsh-code-review -->`) summarizing report.json
 #
-# Secret policy (CONTRACT 搂10):
-#   - same-repo PR without DEEPSEEK_API_KEY  -> FAIL LOUDLY with a clear remediation message
-#   - fork PR                               -> secrets are unavailable by design: emit an explicit
-#                                              notice, skip the LLM, still run deterministic checks
+# Secret policy:
+#   - same-repo PR without DEEPSEEK_API_KEY -> FAIL LOUDLY with a remediation message
+#   - fork PR                               -> secrets are unavailable by design: emit a notice,
+#                                              skip the LLM, keep the deterministic gate authoritative
 #   - manual run without a key              -> notice + deterministic checks only
 #
-# `secrets` cannot be referenced inside `if:` or a workflow-level `env:`. The first step
-# detects key presence into `steps.key.outputs.present` (boolean string); the secret value
-# itself is injected into the single LLM step only.
+# `secrets` cannot be referenced in `if:` or a workflow-level `env:`. The first step detects
+# key presence into `steps.key.outputs.present`; the secret value reaches only the LLM step.
 #
 # Model: DeepSeek `deepseek-flash` (V4.1 Flash), Anthropic transport, reasoningEffort `max`,
-# no token budget cap (defaults from CONTRACT 搂2 / .review/config.json).
+# no token budget cap (defaults from CONTRACT.md section 2 / .review/config.json).
 
 on:
   pull_request:
@@ -32,7 +31,6 @@ permissions:
   pull-requests: write
   security-events: write
 
-# Cancel superseded review runs for the same PR/branch.
 concurrency:
   group: review-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -41,9 +39,6 @@ env:
   # workflow_dispatch has no base_ref: fall back to the repository default branch.
   BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
   ARTIFACT_DIR: .review-ci
-  # NOTE: secret presence is detected by the first step below and exposed only as the
-  # boolean `steps.key.outputs.present`, so no `if:` ever references `secrets` directly.
-
 
 jobs:
   review:
@@ -60,7 +55,7 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
-          # No `cache:` input on purpose: zero-dependency project with no lockfile to key on.
+          # No cache input on purpose: zero-dependency project with no lockfile to key on.
 
       - name: Check DEEPSEEK_API_KEY presence
         id: key
@@ -75,39 +70,10 @@ jobs:
             echo "DEEPSEEK_API_KEY: not available in this workflow run."
           fi
 
-      - name: Fail loudly when DEEPSEEK_API_KEY is missing on a same-repo PR
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.key.outputs.present != 'true'
-        run: |
-          echo "::error title=Missing DEEPSEEK_API_KEY::Same-repo pull requests must run the LLM review, but the DEEPSEEK_API_KEY repository secret is not configured."
-          cat >&2 <<'MSG'
-
-          [strict] DEEPSEEK_API_KEY is required for the LLM review of same-repo pull requests,
-          and this workflow fails by design when it is missing. Fork PRs are exempt because
-          GitHub never exposes repository secrets to fork workflows.
-
-          Fix (one of):
-            1. Repository Settings -> Secrets and variables -> Actions -> New repository secret
-            2. gh secret set DEEPSEEK_API_KEY --repo <owner>/<repo>
-
-          Then re-run this workflow. Deterministic checks still run in this job.
-          MSG
-          exit 1
-
-      - name: "Notice: fork PR runs deterministic checks only"
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && steps.key.outputs.present != 'true'
-        run: |
-          echo "::notice title=Fork PR: LLM review skipped (secrets unavailable)::GitHub does not expose repository secrets to workflows triggered by fork pull requests. Deterministic scope/plan/gate checks run and remain authoritative for this PR; the deterministic gate exit code decides pass/fail."
-          echo "Fork PR (${GITHUB_REPOSITORY}): DEEPSEEK_API_KEY unavailable -> LLM review skipped, deterministic checks only."
-
-      - name: "Notice: manual run without DEEPSEEK_API_KEY"
-        if: github.event_name == 'workflow_dispatch' && steps.key.outputs.present != 'true'
-        run: |
-          echo "::notice title=LLM review skipped::DEEPSEEK_API_KEY is not configured for this manual run; running deterministic checks only."
-
       # Deterministic half of the gate: always runs (fork PRs included) and never needs a secret.
       # `--no-llm` runs scope -> plan -> gate -> report without the LLM pass and exits with the
       # deterministic gate verdict (0 pass, 2 blocking findings, 3 needs-human, 4 command failed,
-      # 5 engine/config error). The reports land in the run dir for the SARIF/comment steps.
+      # 5 engine/config error).
       - name: Deterministic review (all --no-llm, always runs)
         id: deterministic
         if: always()
@@ -125,8 +91,38 @@ jobs:
           fi
           exit "$gate_exit"
 
-      # Full pipeline (scope -> plan -> run -> gate -> report) with the LLM. Exit code is the
-      # authoritative gate verdict: 2 blocking findings / 3 needs-human / 4 command failure / 5 error.
+      - name: Fail loudly when DEEPSEEK_API_KEY is missing on a same-repo PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.key.outputs.present != 'true'
+        run: |
+          echo "::error title=Missing DEEPSEEK_API_KEY::Same-repo pull requests must run the LLM review, but the DEEPSEEK_API_KEY repository secret is not configured."
+          cat >&2 <<'MSG'
+
+          [strict] DEEPSEEK_API_KEY is required for the LLM review of same-repo pull requests,
+          and this workflow fails by design when it is missing. Fork PRs are exempt because
+          GitHub never exposes repository secrets to fork workflows.
+
+          Fix (one of):
+            1. Repository Settings -> Secrets and variables -> Actions -> New repository secret
+            2. gh secret set DEEPSEEK_API_KEY --repo page996/code-reviewer-dsh
+
+          Then re-run this workflow. Deterministic checks still ran in this job.
+          MSG
+          exit 1
+
+      - name: "Notice: fork PR runs deterministic checks only"
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && steps.key.outputs.present != 'true'
+        run: |
+          echo "::notice title=Fork PR: LLM review skipped (secrets unavailable)::GitHub does not expose repository secrets to workflows triggered by fork pull requests. Deterministic scope/plan/gate checks run and remain authoritative for this PR."
+          echo "Fork PR (${GITHUB_REPOSITORY}): DEEPSEEK_API_KEY unavailable -> LLM review skipped, deterministic checks only."
+
+      - name: "Notice: manual run without DEEPSEEK_API_KEY"
+        if: github.event_name == 'workflow_dispatch' && steps.key.outputs.present != 'true'
+        run: |
+          echo "::notice title=LLM review skipped::DEEPSEEK_API_KEY is not configured for this manual run; running deterministic checks only."
+
+      # Full pipeline (scope -> plan -> run -> gate -> report) with the LLM. The process exit code
+      # is the authoritative gate verdict: 2 blocking findings / 3 needs-human / 4 command failure
+      # / 5 engine error.
       - name: LLM review (all, effort standard)
         id: llm
         if: steps.key.outputs.present == 'true'
@@ -145,9 +141,8 @@ jobs:
           fi
           exit "$llm_exit"
 
-      # Stable paths for the SARIF upload and the PR comment. `--run latest` resolves the newest
-      # run (the LLM run when it ran, otherwise the deterministic --no-llm run);
-      # `report --out` copies the artifact to a known location.
+      # Stable paths for the SARIF upload and the PR comment: `--run latest` resolves the newest
+      # run (the LLM run when it ran, otherwise the deterministic run).
       - name: Collect review artifacts
         id: collect
         if: always()
@@ -159,11 +154,10 @@ jobs:
           node bin/review.mjs report --run latest --format md --out "${ARTIFACT_DIR}/report.md" || true
           ls -la "${ARTIFACT_DIR}" || true
 
-      # Fork PRs get a read-only GITHUB_TOKEN, so `security-events: write` is not granted and this
-      # upload must be limited to same-repo runs. Public repos have code scanning available.
+      # Fork PRs get a read-only GITHUB_TOKEN, so `security-events: write` is not granted there.
       - name: Upload SARIF to GitHub code scanning
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && hashFiles('.review-ci/report.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: .review-ci/report.sarif
           category: dsh-code-review
@@ -176,11 +170,10 @@ jobs:
           HAS_KEY: ${{ steps.key.outputs.present }}
           DET_EXIT: ${{ steps.deterministic.outputs.gate_exit }}
           LLM_EXIT: ${{ steps.llm.outputs.exit_code }}
-          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           REPORT_JSON: .review-ci/report.json
           REVIEW_JSON: .review-ci/review.json
           DETERMINISTIC_JSON: .review-ci/deterministic.json
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
             const fs = require('node:fs');
@@ -195,11 +188,9 @@ jobs:
             };
             const truncate = (value, max) => {
               const text = String(value ?? '')
-                .replace(/`/g, "'")
                 .replace(/\r?\n/g, ' ')
-                .replace(/@/g, '@\u200B')
                 .trim();
-              return text.length > max ? `${text.slice(0, max - 1)}鈥 : text;
+              return text.length > max ? `${text.slice(0, max - 3)}...` : text;
             };
             const fmtExit = (value) => {
               const text = String(value ?? '').trim();
@@ -208,24 +199,24 @@ jobs:
 
             const report = readJson(process.env.REPORT_JSON) || readJson(process.env.REVIEW_JSON);
             const det = readJson(process.env.DETERMINISTIC_JSON);
-            const aggregate = report?.aggregate || null;
-            const gate = report?.gate || det?.gate || null;
+            const aggregate = (report && report.aggregate) || null;
+            const gate = (report && report.gate) || (det && det.gate) || null;
             const counts =
-              report?.counts?.findings ||
-              report?.counts ||
-              aggregate?.counts ||
-              det?.counts?.findings ||
-              det?.counts ||
+              (report && report.counts && report.counts.findings) ||
+              (report && report.counts) ||
+              (aggregate && aggregate.counts) ||
+              (det && det.counts && det.counts.findings) ||
+              (det && det.counts) ||
               {};
-            const findings = Array.isArray(report?.findings)
+            const findings = Array.isArray(report && report.findings)
               ? report.findings
-              : Array.isArray(aggregate?.findings)
+              : Array.isArray(aggregate && aggregate.findings)
                 ? aggregate.findings
                 : [];
-            const aggregateVerdict = aggregate?.verdict || report?.verdict || det?.verdict || null;
-            const gateVerdict = gate?.verdict || null;
-            // The deterministic gate is authoritative: a failing gate must win over an
-            // aggregate "pass" (e.g. `npm test` failed with zero review findings).
+            const aggregateVerdict = (aggregate && aggregate.verdict) || (report && report.verdict) || (det && det.verdict) || null;
+            const gateVerdict = (gate && gate.verdict) || null;
+            // The deterministic gate is authoritative: a failing gate must win over an aggregate
+            // "pass" (e.g. `npm test` failed with zero review findings).
             const verdict =
               aggregateVerdict && aggregateVerdict !== 'pass'
                 ? aggregateVerdict
@@ -233,26 +224,24 @@ jobs:
                   ? gateVerdict
                   : aggregateVerdict || gateVerdict || null;
             const hasKey = process.env.HAS_KEY === 'true';
-            const isFork = process.env.IS_FORK === 'true';
-            const runId = report?.runId || 'latest';
-            const icon = { pass: '鉁?, block: '鉂?, fail: '鉂?, 'needs-human': '鈿狅笍', needs_human: '鈿狅笍', error: '馃挜' }[verdict] || '鉂?;
+            const runId = (report && report.runId) || (det && det.runId) || 'latest';
 
             const body = [];
             body.push(MARKER);
-            body.push('## 馃攷 DSH Code Review');
+            body.push('## DSH Code Review');
             body.push('');
-            body.push(`**Verdict:** ${icon} ${verdict ? `\`${verdict}\`` : 'unavailable'}`);
+            body.push(`**Verdict:** \`${verdict || 'unavailable'}\``);
             body.push(`**Review run:** [\`${runId}\`](${process.env.RUN_URL})`);
-            const scopeCounts = report?.scope?.counts || det?.scope?.counts || det?.counts?.scope || null;
+            const scopeCounts = (report && report.scope && report.scope.counts) || (det && det.scope && det.scope.counts) || (det && det.counts && det.counts.scope) || null;
             if (scopeCounts) {
               body.push(
-                `**Diff scope:** ${scopeCounts.reviewable} reviewable / ${scopeCounts.total} files 路 +${scopeCounts.insertions} 鈭?{scopeCounts.deletions}`,
+                `**Diff scope:** ${scopeCounts.reviewable} reviewable / ${scopeCounts.total} files, +${scopeCounts.insertions} / -${scopeCounts.deletions}`,
               );
             }
             body.push('');
 
             body.push('### Deterministic gate');
-            const checks = Array.isArray(gate?.checks) ? gate.checks : [];
+            const checks = Array.isArray(gate && gate.checks) ? gate.checks : [];
             if (checks.length > 0) {
               body.push('| command | exit |');
               body.push('| --- | --- |');
@@ -262,32 +251,27 @@ jobs:
                 body.push(`| \`${command}\` | ${result} |`);
               }
               if (checks.length > 10) {
-                body.push(`| 鈥?${checks.length - 10} more check(s) | |`);
+                body.push(`| ... ${checks.length - 10} more check(s) | |`);
               }
             } else {
-              body.push(`- deterministic gate: ${fmtExit(process.env.DET_EXIT)}${gate?.verdict ? ` (${gate.verdict})` : ''}`);
+              body.push(`- deterministic gate: ${fmtExit(process.env.DET_EXIT)}${gate && gate.verdict ? ` (${gate.verdict})` : ''}`);
             }
             body.push('');
 
             body.push('### LLM review');
             if (hasKey) {
-              body.push(`- \`deepseek-flash\` 路 reasoningEffort \`max\` 路 effort \`standard\` 鈥?${fmtExit(process.env.LLM_EXIT)}`);
+              body.push(`- \`deepseek-flash\` / reasoningEffort \`max\` / effort \`standard\`: ${fmtExit(process.env.LLM_EXIT)}`);
             } else {
               body.push('- skipped: `DEEPSEEK_API_KEY` is not available in this workflow run, so only deterministic checks ran.');
-              if (!isFork) {
-                body.push('');
-                body.push('> 鉂?Same-repo PR without `DEEPSEEK_API_KEY`: this workflow fails by design. Configure the repository secret and re-run.');
-              } else {
-                body.push('');
-                body.push('> 鈩癸笍 Fork PR: repository secrets are never exposed to fork workflows; deterministic checks are authoritative for this PR.');
-              }
+              body.push('');
+              body.push('> Same-repo PR without `DEEPSEEK_API_KEY`: this workflow fails by design. Configure the repository secret and re-run.');
             }
             body.push('');
 
             if (findings.length > 0 || Object.keys(counts).length > 0) {
               const summary = ['blocker', 'major', 'minor', 'needsHuman', 'dropped']
                 .map((key) => `${key}: ${counts[key] ?? 0}`)
-                .join(' 路 ');
+                .join(' / ');
               body.push(`**Findings:** ${summary}`);
               const order = { blocker: 0, major: 1, minor: 2 };
               const sorted = [...findings].sort(
@@ -306,7 +290,7 @@ jobs:
                   const category = finding.category ? `(${truncate(finding.category, 40)}) ` : '';
                   const preexisting = finding.preexisting ? ' _(pre-existing)_' : '';
                   const problem = truncate(finding.problem || finding.title || finding.message || 'no description', 320);
-                  body.push(`- ${severity}${category}${location} 鈥?${problem}${preexisting}`.replace(/\s+/g, ' '));
+                  body.push(`- ${severity}${category}${location}: ${problem}${preexisting}`.replace(/\s+/g, ' '));
                 }
                 body.push('');
                 body.push('</details>');
@@ -315,7 +299,7 @@ jobs:
             body.push('');
             body.push('<sub>Hooks are a client-side fast net; this GitHub Actions check is the authoritative gate. This comment is updated in place.</sub>');
             const bodyText = body.join('\n');
-            const safeBody = bodyText.length > 60000 ? `${bodyText.slice(0, 60000)}\n\n鈥?(comment truncated)` : bodyText;
+            const safeBody = bodyText.length > 60000 ? `${bodyText.slice(0, 60000)}\n\n... (comment truncated)` : bodyText;
 
             const { owner, repo } = context.repo;
             const issue_number = context.payload.pull_request.number;
