@@ -3481,5 +3481,311 @@
     "startLine": 1791,
     "disposition": "accepted",
     "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d3064b67ada319fb3df416a4bef4a75f064fd7fb",
+    "file": "lib/katex-verify.js",
+    "category": "correctness",
+    "title": "productOperatorIssue 的上标分支写成 ^([A-Za-z0-9])（行首锚点），而不是 \\^([A-Za-z0-9])（字面 caret），",
+    "startLine": 1203,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ebad66abb014b13176d3cb71da71ea5266f04a32",
+    "file": "lib/katex-verify.js",
+    "category": "correctness",
+    "title": "loadKatex(assetUrl) 在缓存命中时直接返回，完全忽略传入的 assetUrl；同时 resetKatexLoader 注释声称「keeps t",
+    "startLine": 37,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "44b1650a7d70fc162bb43198efa9d71bbcb6144d",
+    "file": "lib/katex-verify.js",
+    "category": "errors",
+    "title": "katexVersion() 用空 catch 吞掉 loadKatex() 的所有失败并返回空字符串，把“bundle 缺失/损坏”伪装成“KaTeX 没有版",
+    "startLine": 65,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "36c73fbcb2e21aef0314dc2c7e8fb9c57634b081",
+    "file": "lib/katex-verify.js",
+    "category": "errors",
+    "title": "KaTeX bundle 的加载失败与 LaTeX 解析失败被合并成同一个 {ok:false}，上层无法区分「环境/资产坏了」和「模型写错了公式」。",
+    "startLine": 77,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f9e55f68166e1f19775f0c0f3c63bb92f32731f1",
+    "file": "lib/katex-verify.js",
+    "category": "security",
+    "title": "`katexParse()` 的 catch 把 `loadKatex()` 抛出的非解析错误（`fs.readFileSync` 的 ENOENT/EACCE",
+    "startLine": 86,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "f8ffca9af921b9dd7f4785ff47e23f446949ec1b",
+    "file": "lib/katex-verify.js",
+    "category": "correctness",
+    "title": "\\mathrm{...} 停用词聚合判定没有排除 MATH_FONT_WORD_ALLOWLIST，把白名单里明确认可的标记词当成散文硬错误。",
+    "startLine": 364,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6b7678b5758dd68ebe2b66bc031d4bddda380395",
+    "file": "lib/katex-verify.js",
+    "category": "contract",
+    "title": "extractEquationNumber 从传入的 latex 尾部匹配数字括号提取编号，超出了函数文档声明的来源（math.number / \\tag / ",
+    "startLine": 504,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "50ba8674e5465da1faeb4522102773c227589fd8",
+    "file": "lib/katex-verify.js",
+    "category": "correctness",
+    "title": "parenthesisBalance 只统计圆括号、只对 `\\left.`/`\\right.` 放行，半开区间和异形定界符这类合法 KaTeX 会被判成硬错误",
+    "startLine": 555,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "10fc9cc1ea2ec51a7fffc067667b33341b1fdb7e",
+    "file": "lib/katex-verify.js",
+    "category": "correctness",
+    "title": "commandMissingArgument 的所有分支都在第一个匹配处 return，公式里有多个 \\log/\\exp 时只检查第一个，后续截断漏报",
+    "startLine": 635,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e3498b62e9652dc2a48ec9332105985a52298647",
+    "file": "lib/katex-verify.js",
+    "category": "contract",
+    "title": "structuralRisks/commandArguments 在 \\exp 后使用 \\b 边界，而 JS 的 \\b 在 'p' 与 '_' 之间不成立，导致",
+    "startLine": 683,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d5783d97d26a2e356ca50c5187305699f214cb88",
+    "file": "lib/katex-verify.js",
+    "category": "contract",
+    "title": "validateEquationLatex 让 LaTeX 中的 \\tag 覆盖调用方传入的 number，而 extractEquationNumber 让显",
+    "startLine": 717,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d7ab66e0eb802cc9adf2fade246edf880f85de24",
+    "file": "lib/katex-verify.js",
+    "category": "contract",
+    "title": "validateEquationLatex 的空输入早退分支返回对象缺少正常路径具有的 blockingSoft 与 summary 字段，同一函数返回类型在不",
+    "startLine": 723,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "5383a31e7520e0132411be70324a58ea1699c939",
+    "file": "lib/katex-verify.js",
+    "category": "security",
+    "title": "校验器把“可解析”当成“可安全渲染”：`acceptable` 只由一次 `trust:false` 的 KaTeX 解析决定，既不拒绝也不剥离 `\\href`",
+    "startLine": 765,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "67b1134af5097644522139c59094c1bd5c8fb678",
+    "file": "lib/katex-verify.js",
+    "category": "intent",
+    "title": "validateInlineLatex 先用 sanitizeLatex 剥掉定界符与 \\tag/\\label，导致紧随其后的三个 hard 检查（$/\\\\(\\",
+    "startLine": 826,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0f4452b12fec13af44041cbd21b7a58ae6ac6b17",
+    "file": "lib/katex-verify.js",
+    "category": "errors",
+    "title": "修复后的验收残留 unresolvedInlineCodes() 不包含 inlineSuspicion() 会报出的 katex_parse_error，Ka",
+    "startLine": 1201,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d58a587d960c016f5f80f297ad5f16f78216127a",
+    "file": "lib/katex-verify.js",
+    "category": "correctness",
+    "title": "garbledScriptEquals 把合法的 `_{\\ell=1}` 极限误判为 garbled：去掉一个反斜杠后 `\\ell` 变成三字母 `ell`，不",
+    "startLine": 1279,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d04a44bbb8a96372e38bdbb28dff352aeb02c5cd",
+    "file": "lib/katex-verify.js",
+    "category": "correctness",
+    "title": "验收残留 unresolvedInlineCodes 从不包含 katex_parse_error，而 katex_parse_error 是 inlineSu",
+    "startLine": 1325,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "29206620b44be0a46c607396fca33c1dd341907f",
+    "file": "lib/katex-verify.js",
+    "category": "correctness",
+    "title": "isProseInlineFragment 把任意 1–3 位纯数字的行内公式判为“可整段删除的 prose”，而纯数字本身是完全合法的行内数学。",
+    "startLine": 1339,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "8a37c7941a179a57d0cae0ee575bc39f519f9fd1",
+    "file": "lib/katex-verify.js",
+    "category": "contract",
+    "title": "导出的删除许可谓词 `isProseInlineFragment()` 把任何 1-3 位纯数字片段（如 `\\(2\\)`、`\\(42\\)`）判为 prose，与",
+    "startLine": 1339,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "259dfc74bb6cbde496058c879caa58cca0168fc1",
+    "file": "lib/gateway.js",
+    "category": "errors",
+    "title": "同一统计函数内错误策略自相矛盾：readdir 错误被吞，lstat 的非 ENOENT 错误却直接冒泡中断 mint，且抛出的是无 status/code 的",
+    "startLine": 96,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "639c84f5c01b3af870e8c95fe37ef3fd2b9d8e0e",
+    "file": "lib/gateway.js",
+    "category": "errors",
+    "title": "readdir 失败被 `.catch(() => [])` 吞成「空目录」，删除影响面统计静默变成 0 个文件且无任何降级标记",
+    "startLine": 107,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e47a0001897ac9e5c584dd66d15ccf4c7cf9cc3d",
+    "file": "lib/gateway.js",
+    "category": "correctness",
+    "title": "walkImpact 在文件数正好等于 limit 时把 truncated 置为 true，即使整棵目录已经被完整遍历，产生 off-by-one 的假截断标",
+    "startLine": 114,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "545df462d99d001bb32b6aebde57500ca90256e9",
+    "file": "lib/gateway.js",
+    "category": "security",
+    "title": "write 操作的影响摘要 bytes 完全来自请求体 `options.bytes`，且 consume 只比对 op/path/recursive、不校验实",
+    "startLine": 134,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b36b5a20567010fdc2ff75952dc3a53f8921c65d",
+    "file": "lib/gateway.js",
+    "category": "security",
+    "title": "文档目录边界校验只做字面 path.relative 比较，未做 realpath/逐段 lstat；lstat 与 readdir 会跟随中间路径分量上的符号",
+    "startLine": 142,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "088bfcec40cbabe4e642705370e1d1de029bd5f8",
+    "file": "lib/gateway.js",
+    "category": "contract",
+    "title": "ttlMs/approvedTtlMs/maxImpactFiles 三个配置项对非法值（含 0）静默回退默认值，调用方无法发现自己配错。",
+    "startLine": 190,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a6059ed7f8291a1184903145e9b995113a8a3728",
+    "file": "lib/gateway.js",
+    "category": "security",
+    "title": "approvals 以任意 docId 为键、由 docMap 无条件创建条目，且全文件没有任何 `approvals.delete(...)`，空 map 永",
+    "startLine": 206,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "cc027ca92cdcba52dfd79f8cf719345e65dddf4d",
+    "file": "lib/gateway.js",
+    "category": "intent",
+    "title": "mint 路径会调用注入的 executors（resolveDocDir / ensureDocumentDirectory），与“executors … n",
+    "startLine": 226,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "9b695a142c3b624604c02ff3755dc4ba396d7e5d",
+    "file": "lib/gateway.js",
+    "category": "errors",
+    "title": "审计写入失败被吞掉（只 logLine），mint/approve/deny/expire 继续返回成功，安全决策在无审计记录的情况下放行。",
+    "startLine": 240,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6b16fcef2d7a629e2bde73832b93e8e294624128",
+    "file": "lib/gateway.js",
+    "category": "errors",
+    "title": "mint() 直接把 options.path 交给 normalizeRelative，缺少 consume() 里已有的“字符串非空 + try/catch",
+    "startLine": 319,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0c6e859cfb3725139982b273d4f164bf6759ae77",
+    "file": "lib/gateway.js",
+    "category": "concurrency",
+    "title": "mint() 的待审批配额检查是 check-then-act：检查后要经过 await resolveDirFor()/await computeImpact",
+    "startLine": 337,
+    "disposition": "accepted",
+    "reason": "batch-3 并发问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ccf20d209dbf22542ece6214f6fe9d71ec9d4f9a",
+    "file": "lib/gateway.js",
+    "category": "contract",
+    "title": "decide() 把已 consumed 的记录映射成 status:'approved'，与同一个响应体里的 approval.status:'consume",
+    "startLine": 409,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "33ce3d9b2e8a4ea00f23d126d709033e52d9037a",
+    "file": "lib/gateway.js",
+    "category": "contract",
+    "title": "decide() 记录了批准人 decidedBy 并写入审计，但 publicApproval 不输出该字段，响应里的 actor 永远是发起 mint 的请",
+    "startLine": 420,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "2555bbecc5b4942a2a552096469dfd801bb7ba26",
+    "file": "lib/gateway.js",
+    "category": "errors",
+    "title": "consume 把路径规范化异常吞成 null，非法路径最终被报成 403 approval-mismatch，真实错误原因与输入都丢失",
+    "startLine": 486,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "6152dd3e426d20c5e63e95acaeb8538aa443cc80",
+    "file": "lib/gateway.js",
+    "category": "intent",
+    "title": "consume() 把一次性凭据标记为已消费时不写任何审计事件，审批生命周期中“已执行”这一关键转换在审计里缺失。",
+    "startLine": 500,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
   }
 ]

@@ -31,6 +31,8 @@
 | R-22 | batch-21/22/23：viewer-state 先改内存再持久化失败不回滚、`Boolean('false')`/`Number(null)` 清洗、clean 重写 updatedAt；alignment 缩写表与真实 `e.g.` 不匹配、裸 `$...$` 跨句；skills 空串 skill 与互斥校验不一致、服务端状态映射成 400 | 数据规则缺「持久化顺序/类型强转/时间戳保真」；契约规则缺「字段存在性 vs 值语义」判据 | 新增数据顺序条目 + 契约高频问题补充 | `rules/core-data.md`（已加）；契约项归 core-contract | batch-21/22/23 真实命中 |
 | R-23 | batch-24/25：skill-store 把非 ENOENT 读错误当文件缺失→seed 覆盖用户数据（blocker）、版本不认识=损坏并隔离重建；note-sessions 的 `note.cwd` 未规范化直接作 Agent 工作目录、文档称 fail-closed 但策略绑定失败仍继续 | 安全规则缺「声明 fail-closed 却 fail-open」「未校验路径直接进 Agent 作用域」判据 | 新增安全条目 | `rules/core-security.md`（已加） | batch-24/25 真实命中 |
 | R-24 | batch-26：2,041 行 graph.js 单请求易触发传输失败/上下文过长；跨视角同行重复合并后 votes 并集让 2 条 major 达到票数门槛 | 大文件需要切 unit；跨视角去重会改变 votes 语义（可能把降级为 minor 的 major 恢复） | 新增 scan 单文件按行切分（`plan.splitSingleFileLines`，默认 1200）+ 行区间锚定；聚合去重的 votes 并集语义写入文档 | `lib/plan.mjs`（已加）；`lib/aggregate.mjs` 已有 | batch-26 实测 2 单元、28→30 条（含 3 major）、无传输失败 |
+| R-25 | batch-27/batch-2b（DSH 重启后）：新 lib 生效后 scan 自动跳过 tests、temperature=0、单文件自动切分；gateway 复评旧基线 matched 13/13、noise 0，新增 5 条并入后 28/28 | 之前 batch-2 的 noise/漂移确为旧运行时缓存 + 未固定采样导致，非代码回归 | 无需再改；把「重启后复验」写入运维检查清单 | `docs/ARCHITECTURE.md` 或 README 运维节（后续补） | 已实测通过 |
+| R-26 | batch-27：`loadKatex(assetUrl)` 缓存命中忽略新 assetUrl；`katexVersion()` 空 catch 把环境失败当空；bundle 加载失败与 LaTeX 解析失败合并成同一个 `{ok:false}` | 错误域混同/缓存键不完整 | core-errors 新增「失败域混同」条目 | `rules/core-errors.md`（已加） | batch-27 真实命中 |
 | R-8（补） | batch-10 首轮 4.7k 行 client.js 出现 2 次 `DeepSeek Messages transport failed`（大 prompt 更易瞬时失败），重跑成功 | 大文件单 unit 的请求更易触发传输中断；重试代码已在 main，插件尚缓存旧 lib | 重启后由 reviewer 重试覆盖；必要时后续加「超大单文件切 unit」 | `lib/review.mjs`（已加） | 重启后重跑 batch-10 观察不再丢视角 |
 
 ## 2. prompt 调整（→ `references/prompts.md` + `lib/prompts.mjs`）
@@ -73,6 +75,8 @@
 | E-325…E-341 | batch-24 的 17 条 skill-store.js 缺陷（含 1 blocker，accepted） | 仍被报出；batch-24 run 的 eval：matched 17 / missed 0 | `findings.json` |
 | E-342…E-357 | batch-25 的 16 条 note-sessions.js 缺陷（accepted） | 仍被报出；batch-25 run 的 eval：matched 16 / missed 0 | `findings.json` |
 | E-358…E-387 | batch-26 的 30 条 graph.js 缺陷（3 major + 27 minor，accepted） | 仍被报出；batch-26 run 的 eval：matched 30 / missed 0 | `findings.json` |
+| E-388…E-406 | batch-27 的 19 条 katex-verify.js 缺陷（1 major + 18 minor，accepted） | 仍被报出；batch-27 run 的 eval：matched 19 / missed 0 | `findings.json` |
+| E-407…E-421 | batch-2b 的 15 条 gateway.js 复评 findings（5 条新增并入基线） | 仍被报出；重启后 eval matched 28/28（含旧 13 accepted + 新增 5 + 其他批次 notEvaluated） | `findings.json` |
 
 回归命令：
 
@@ -112,6 +116,8 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 | batch-24 | 17 条（1 blocker） | accepted | 非 ENOENT 读错当文件缺失→seed 覆盖用户数据、版本不认识=损坏并隔离重建、atomicWrite 把好备份覆盖成损坏、load 提前置 loaded、list 契约不一致等 | R-23 + R-3/core-data 覆盖 | eval 已 pass（17/17）；scan gate 不阻断 |
 | batch-25 | 16 条 | accepted | 消息正则误判 session 不存在、TODO 白名单未生效、create 失败原因丢失、`note.cwd` 未校验进 Agent 作用域、声明 fail-closed 却 fail-open、exists/approval 只凭进程内缓存等 | R-23 已补安全条目 | eval 已 pass（16/16） |
 | batch-26 | 30 条（3 major） | accepted | 快照写失败仍成功、GC 先删快照后写主文件无补偿、fs/JSON 错误文本持久化进 warnings、隔离 rename 失败仍写成功、节点上限检查在插入后且含墓碑、无环校验超深当不存在、跨视角重复合并后 votes 并集使 major 达标 | R-24 单文件切分 + 聚合 votes 语义 | eval 已 pass（30/30）；无传输失败 |
+| batch-27 | 19 条（1 major） | accepted | 上标分支写成行首锚点、loadKatex 缓存命中忽略 assetUrl、环境失败与解析失败合并、fs 错误文本进 catch、白名单未排除、编号提取超出文档来源、括号平衡只统计圆括号等 | R-26 已补「失败域混同」 | eval 已 pass（19/19） |
+| batch-2b | 15 条（5 条新增） | accepted | 重启后新 lib 复评 gateway：旧 13 条全部命中、无 tests 噪声、采样稳定；新增 5 条并入基线 | R-25 验证记录 | eval 已 pass（28/28） |
 
 ## 5. eval 机制自身的三次修正（meta lesson）
 
@@ -129,10 +135,10 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 
 ## 7. 结论摘要
 
-- 真实缺陷：batch-1…25 累计 353 + batch-26 30（3 major）= 383 条 accepted（含 1 blocker + 10 major）。
+- 真实缺陷：batch-1…26 累计 383 + batch-27 19 + batch-2b 新增 5 = 417 条 accepted（含 1 blocker + 11 major）。
 - 误报：batch-2 4 条 unit-scope 测试噪声（rejected）。
-- 新增规则：18 条（R-1…R-23 中除 R-4 外均已落）。
-- 编排/机制修复：R-8 传输重试、R-9 temperature=0、R-13 scan preexisting/门禁语义、R-15 跨视角同类合并 + `review aggregate`、R-24 单文件切分。
+- 新增规则：19 条（R-1…R-23 除 R-4 外均已落 + R-26 失败域混同）。
+- 编排/机制修复：R-8 传输重试、R-9 temperature=0、R-13 scan preexisting/门禁语义、R-15 跨视角同类合并 + `review aggregate`、R-24 单文件切分；R-25 重启后复验通过。
 - prompt 调整：4 处（P-1/P-2/P-4 已落，P-3 待批次契约）。
-- 回归用例：383 accepted + 4 rejected；batch-3…26 的 eval 均全绿（missed 0 / noise 0）。
+- 回归用例：417 accepted + 4 rejected；batch-3…27 与 batch-2b 的 eval 均全绿（missed 0 / noise 0）。
 - 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则、重试、温度）。
