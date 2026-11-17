@@ -981,7 +981,7 @@ test('runReview: a single reviewer failure is recorded and the run continues', a
   assert.equal(succeeded.findings.length, 1);
 });
 
-test('runReview: schema error retries once, then yields a needs-human finding', async (t) => {
+test('runReview: schema errors retry up to the attempt budget, then yield a needs-human finding', async (t) => {
   const cwd = tempDir(t);
   const plan = planWithUnits(1, ['intent']);
 
@@ -1020,7 +1020,7 @@ test('runReview: schema error retries once, then yields a needs-human finding', 
   assert.equal(entry.findings.length, 1);
   assert.equal(entry.findings[0].needsHuman, true);
   assert.equal(entry.findings[0].evidence, '');
-  assert.equal(entry.calls, 2);
+  assert.equal(entry.calls, 3, 'schema failures use the full attempt budget');
 });
 
 test('runReview: round 2 reviews only previously-confirmed findings / affected files', async (t) => {

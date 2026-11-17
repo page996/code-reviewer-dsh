@@ -33,6 +33,7 @@
 | R-24 | batch-26：2,041 行 graph.js 单请求易触发传输失败/上下文过长；跨视角同行重复合并后 votes 并集让 2 条 major 达到票数门槛 | 大文件需要切 unit；跨视角去重会改变 votes 语义（可能把降级为 minor 的 major 恢复） | 新增 scan 单文件按行切分（`plan.splitSingleFileLines`，默认 1200）+ 行区间锚定；聚合去重的 votes 并集语义写入文档 | `lib/plan.mjs`（已加）；`lib/aggregate.mjs` 已有 | batch-26 实测 2 单元、28→30 条（含 3 major）、无传输失败 |
 | R-25 | batch-27/batch-2b（DSH 重启后）：新 lib 生效后 scan 自动跳过 tests、temperature=0、单文件自动切分；gateway 复评旧基线 matched 13/13、noise 0，新增 5 条并入后 28/28 | 之前 batch-2 的 noise/漂移确为旧运行时缓存 + 未固定采样导致，非代码回归 | 无需再改；把「重启后复验」写入运维检查清单 | `docs/ARCHITECTURE.md` 或 README 运维节（后续补） | 已实测通过 |
 | R-26 | batch-27：`loadKatex(assetUrl)` 缓存命中忽略新 assetUrl；`katexVersion()` 空 catch 把环境失败当空；bundle 加载失败与 LaTeX 解析失败合并成同一个 `{ok:false}` | 错误域混同/缓存键不完整 | core-errors 新增「失败域混同」条目 | `rules/core-errors.md`（已加） | batch-27 真实命中 |
+| R-27 | batch-30：llm.js 单视角 schema 失败（坏转义 JSON）导致该视角缺失；callLlm 对一切错误一律重试、provider status/code 未参与判定 | schema 重试预算过小（1 次）；重试策略未分类 | reviewer schema 重试提升到 attempt 预算（3 次）；scan 模式 needs-human 不再单独触发 exit 3（仅 reviewer 失败保留）；core-errors 新增重试分类条目 | `lib/review.mjs` + `lib/gate.mjs` + `rules/core-errors.md`（已加） | 单测 + batch-30 重跑完整 30 条 |
 | R-8（补） | batch-10 首轮 4.7k 行 client.js 出现 2 次 `DeepSeek Messages transport failed`（大 prompt 更易瞬时失败），重跑成功 | 大文件单 unit 的请求更易触发传输中断；重试代码已在 main，插件尚缓存旧 lib | 重启后由 reviewer 重试覆盖；必要时后续加「超大单文件切 unit」 | `lib/review.mjs`（已加） | 重启后重跑 batch-10 观察不再丢视角 |
 
 ## 2. prompt 调整（→ `references/prompts.md` + `lib/prompts.mjs`）
@@ -79,6 +80,7 @@
 | E-407…E-421 | batch-2b 的 15 条 gateway.js 复评 findings（5 条新增并入基线） | 仍被报出；重启后 eval matched 28/28（含旧 13 accepted + 新增 5 + 其他批次 notEvaluated） | `findings.json` |
 | E-422…E-451 | batch-28 的 30 条 extract_paper.py 缺陷（accepted） | 仍被报出；batch-28 run 的 eval：matched 30 / missed 0 / new 0 | `findings.json` |
 | E-452…E-459 | batch-29 的 8 条 pages_to_png.py 缺陷（accepted） | 仍被报出；batch-29 run 的 eval：matched 8 / missed 0 | `findings.json` |
+| E-460…E-489 | batch-30 的 30 条 llm.js 缺陷（accepted） | 仍被报出；batch-30 run 的 eval：matched 30 / missed 0 | `findings.json` |
 
 回归命令：
 
@@ -122,6 +124,7 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 | batch-2b | 15 条（5 条新增） | accepted | 重启后新 lib 复评 gateway：旧 13 条全部命中、无 tests 噪声、采样稳定；新增 5 条并入基线 | R-25 验证记录 | eval 已 pass（28/28） |
 | batch-28 | 30 条 | accepted | 不可信页面宽度当计数桶/循环次数（无界内存与 CPU）、栏缝扫描未钳制索引、docstring 与人名形态矛盾、`detect_style_columns` 契约不一致等 | R-14/R-19 覆盖部分 | eval 已 pass（30/30） |
 | batch-29 | 8 条 | accepted | 空 `--pages` 当 all、默认全量渲染无页数/字节配额、`NAME_RE` 尾 `$` 放行换行、渲染尺寸未限制页面几何、多文件写失败不清理/不记录、失败退出契约与实现不符 | R-14/R-19 覆盖 | eval 已 pass（8/8） |
+| batch-30 | 30 条 | accepted | callLlm 覆盖 onUsage、重试不看 provider status/code、搜索 URL 无协议校验、maxTerms 1–3 被当未设置、glossary 返回契约不稳定、术语条数无硬上限（可放大 web 搜索）、verified 判定过弱、状态覆盖后不重算等 | R-27 + core-errors/core-security 覆盖 | eval 已 pass（30/30） |
 
 ## 5. eval 机制自身的三次修正（meta lesson）
 
@@ -139,10 +142,10 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 
 ## 7. 结论摘要
 
-- 真实缺陷：batch-1…27 累计 417 + batch-28 30 + batch-29 8 = 455 条 accepted（含 1 blocker + 11 major）。
+- 真实缺陷：batch-1…29 累计 455 + batch-30 30 = 485 条 accepted（含 1 blocker + 11 major）。
 - 误报：batch-2 4 条 unit-scope 测试噪声（rejected）。
-- 新增规则：19 条（R-1…R-23 除 R-4 外均已落 + R-26 失败域混同）。
-- 编排/机制修复：R-8 传输重试、R-9 temperature=0、R-13 scan preexisting/门禁语义、R-15 跨视角同类合并 + `review aggregate`、R-24 单文件切分、eval 排除 dropped；R-25 重启后复验通过。
+- 新增规则：20 条（R-1…R-23 除 R-4 外均已落 + R-26 失败域混同 + R-27 重试分类）。
+- 编排/机制修复：R-8 传输重试、R-9 temperature=0、R-13 scan preexisting/门禁语义、R-15 跨视角同类合并 + `review aggregate`、R-24 单文件切分、R-27 schema 重试预算 + scan needs-human 语义、eval 排除 dropped；R-25 重启后复验通过。
 - prompt 调整：4 处（P-1/P-2/P-4 已落，P-3 待批次契约）。
-- 回归用例：455 accepted + 4 rejected；batch-3…29 与 batch-2b 的 eval 均全绿（missed 0 / noise 0）。
+- 回归用例：485 accepted + 4 rejected；batch-3…30 与 batch-2b 的 eval 均全绿（missed 0 / noise 0）。
 - 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则、重试、温度）。

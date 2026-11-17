@@ -177,7 +177,7 @@ export async function runReview({ scope, plan, config, llm, cwd, log, signal })
   "verdict": "pass|needs-fix|needs-human", "human_attention": ["..."] }
 ```
 
-- 解析失败：重试同一 (unit,lens) 一次，仍失败记 `SCHEMA` 并在 findings 中产出 `needs-human` 记录，不吞掉。
+- 解析失败：重试同一 (unit,lens) 至 attempt 预算（默认 3 次，含 schema 与瞬时传输错误），仍失败记 `SCHEMA` 并在 findings 中产出 `needs-human` 记录，不吞掉。
 - `position.mjs::anchorFindings(findings, unit)`：优先 `existing_code` 在该文件新内容中滑窗匹配（±40 行、允许 trim 空白），匹配到则给 `startLine/endLine`；否则用 `line` 夹到 diff 新行集合；都不行 → `anchored=false` 且保留 `hunkId`（如有）。文件不在 unit 内 → `anchored=false` 并标 `out-of-scope`。
 - `filter.mjs::filterFindings(...)`：每个 unit 一次过滤调用；prompt 要求「只删除本 diff 能证明为假的」；返回 `[{fingerprint, decision:"keep"|"drop", reason}]`；解析失败 → 全部 keep。
 - `aggregate.mjs::aggregateFindings({reviews, anchored, config})`：
@@ -200,7 +200,7 @@ export async function runReview({ scope, plan, config, llm, cwd, log, signal })
     "exitCode": 0 }
   ```
   - `commands` 为空且 `autodetect=true`：按顺序探测 `package.json` 的 `scripts.lint`/`scripts.typecheck`/`scripts.test`（用 `npm run <s>`），`pyproject.toml`/`pytest`，`Makefile` 的 `test`；只探测存在的，去重；全部用 `sh -c`（Windows 用 `cmd /c`）执行。
-  - verdict：任一 required 命令非 0 → `fail` + exitCode 4；blocking findings 非空 → `fail` + exitCode 2；needsHuman>0 → `needs-human` + 3；否则 `pass` + 0；引擎异常 → 5。
+  - verdict：任一 required 命令非 0 → `fail` + exitCode 4；blocking findings 非空 → `fail` + exitCode 2；needsHuman>0 → `needs-human` + 3（**scan 模式下 findings 一律 advisory：blocking 与 needs-human finding 均不阻断；仅 reviewer 失败 errors 仍 exit 3**）；否则 `pass` + 0；引擎异常 → 5。
 - `hooks.mjs`：`installHooks({cwd, log})` 写 `.githooks/pre-commit`、`.githooks/pre-push`（`#!/bin/sh`，调用 `node <root>/bin/review.mjs hook <name>`），设置 `git config core.hooksPath .githooks`；`uninstallHooks` 还原（删除 config，保留文件）；`runHook({name, cwd, config})`：
   - 尊重 `REVIEW_SKIP_HOOKS=1`（打印一行并 exit 0）；
   - `pre-commit`：`scope --mode staged` → rules/plan → **不调 LLM** → 跑 gate 的确定性命令（`gate.commands`，若为空则不跑）→ 有 `blocking` 才非零；

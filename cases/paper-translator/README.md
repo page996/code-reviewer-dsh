@@ -42,7 +42,7 @@
 | batch-2b | `lib/gateway.js` 复评（新 lib 验证） | standard（新 lib：temperature=0 + scan lens + 去重） | `run-20261116-193909-9bc6` | 15 minor；对旧基线 eval：matched 13/13、noise 0，新增 5 条并入基线；再次 eval **pass 28/28** |
 | batch-28 | `python/extract_paper.py`（4,889 行 → 5 单元） | standard（新 lib，自动切分） | `run-20261117-182124-660a` | 30 minor（另有 30 条 style/docs 丢弃）；`review eval`：matched 30 / missed 0 / new 0 → **pass** |
 | batch-29 | `python/pages_to_png.py` | standard（新 lib） | `run-20261117-184744-bc51` | 8 minor，全部 accepted；`review eval`：matched 8 / missed 0 → **pass** |
-| batch-30（待做） | `lib/llm.js`（3,657 行 → 4 单元） | standard | — | — |
+| batch-30 | `lib/llm.js`（3,657 行 → 4 单元） | standard（新 lib） | `run-20261117-185223-98fd` | 30 minor，全部 accepted；两次运行（首轮 1 视角 schema 失败，重跑完整）；`review eval`：matched 30 / missed 0 → **pass** |
 
 排除：`assets/katex/**`（vendored）、`python/__pycache__/**`、`*.pyc`、`locale/*.json`。
 
@@ -113,6 +113,7 @@ node bin/review.mjs eval --repo <pt> --case cases/paper-translator --run latest
 - batch-2b（重启后复评 gateway.js）：旧基线 matched 13/13、noise 0（此前的 tests 噪声与采样漂移消失）；新增 5 条并入基线后再 eval → **pass 28/28**。
 - batch-28（extract_paper.py，5 单元）：`review eval --run run-20261117-182124-660a` → **pass**（matched 30 / missed 0 / new 0 / notEvaluated 421）。
 - batch-29（pages_to_png.py）：`review eval --run run-20261117-184744-bc51` → **pass**（matched 8 / missed 0 / notEvaluated 451）。
+- batch-30（llm.js，4 单元）：`review eval --run run-20261117-185223-98fd` → **pass**（matched 30 / missed 0 / notEvaluated 459）。
 - batch-2：`--run run-20261116-193909-9bc6`（插件仍缓存旧 `lib/plan.mjs`，tests 视角未跳过；本机无重启）→ matched 13 / missed 0 / noise 2–4，exit 2；属运行时缓存而非代码回归。
 - 新增 `review.temperature=0` 与 reviewer 传输重试后，**重启 DSH** 重跑 batch-2 预期稳定通过（重复运行结果一致）。
 - eval 语义已按 run scope 过滤：其他批次基线在当前 run 中计 `notEvaluated`，不再误判漏报。

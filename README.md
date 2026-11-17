@@ -48,6 +48,20 @@ DSH 专属 code review 工具链：确定性的评审核心 + 双宿主（DSH Ho
 | DSH 插件 | `plugins/dsh` | 是 | `review_*` 工具 + `/review` 命令 |
 | skill | `skills/ai-code-review` | — | 装到 `.dsh/skills/` 或 `~/.dsh/skills/` |
 
+## 验证状态（本机实测，2026-11）
+
+| 项 | 证据 |
+|---|---|
+| 单测 | `node --test "test/**/*.test.mjs"` → **110 tests pass**（含 hooks 契约、插件、eval、SIL/scan 语义） |
+| 真实 git hooks | `node test/hooks.contract.mjs` → 5/5 PASS（本地 Windows + CI ubuntu 均绿） |
+| GitHub Actions | `ci.yml`、`hooks-contract.yml` 绿；PR #1 上 `review.yml` 用 `DSH_API_KEY` 真实跑通 LLM 评审 → SARIF 上传 + 单条幂等评论 + job success |
+| DSH Host 插件 | `install_bundle` 成功；6 个 `review_*` 工具 + `/review` 命令实机可用（含 `repo` 参数、输出 schema 清洗、单文件切分） |
+| skill v2 | 已装到项目 `.dsh/skills/` 与全局 `~/.dsh/skills/`，技能目录已刷新 |
+| 样例仓库真实评审 | `dsh-paper-translator-v8`：**31 个批次 / 489 条 findings（485 accepted，含 1 blocker + 11 major）**，覆盖 lib / index.js / client.js / assets / python；`review eval` 全部 **missed 0 / noise 0** |
+| 经验沉淀 | 20 条规则库更新（JS/TS、Python、安全、错误、数据、契约、并发）+ prompt 4 处 + case lessons R/P/E 台账；每个规则改动可追溯到 case |
+
+已知未做（不在本仓库范围）：PR #1 合并留待人工；DSH 内 UI 面板 / 硬门禁 / OCR delegate 适配器为 P4 可选项。
+
 ## 快速开始
 
 ### 1. 本地 CLI
@@ -61,7 +75,7 @@ node bin/review.mjs scan --path . --effort quick --json
 node bin/review.mjs all --mode range --base main --effort standard --json
 node bin/review.mjs gate --run <runId>
 node bin/review.mjs runs --json
-node --test test/
+node --test "test/**/*.test.mjs"
 ```
 
 ### 2. DSH 插件 + skill
@@ -101,7 +115,7 @@ Copy-Item <repo>\templates\AGENTS.md .
 code-reviewer-dsh/
 ├── CONTRACT.md              # 接口契约（唯一事实源）
 ├── package.json             # name dsh-code-reviewer, bin.review
-├── bin/review.mjs           # CLI：scope/plan/run/gate/report/all/scan/hook/install-hooks/runs/eval
+├── bin/review.mjs           # CLI：scope/plan/run/gate/report/all/scan/hook/install-hooks/runs/aggregate/eval
 ├── lib/                     # 确定性核心 + LLM 编排（scope/plan/rules/review/position/filter/aggregate/report/gate/store/hooks/config/llm/prompts）
 ├── rules/*.md               # 内置规则包（frontmatter + 正文）
 ├── plugins/dsh/             # DSH bundle：工具、/review 命令、配置 patch

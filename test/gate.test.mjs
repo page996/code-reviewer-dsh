@@ -264,7 +264,13 @@ test('gate: scan mode treats blocking findings as pre-existing (no exit 2)', asy
   const blocking = [
     { fingerprint: 'f'.repeat(40), file: 'src/a.js', startLine: 4, severity: 'major', title: 'bug' },
   ];
-  const aggregate = aggregateWith({ blocking, counts: { major: 1 }, verdict: 'block' });
+  const needsHumanFinding = { fingerprint: 'n'.repeat(40), file: 'src/a.js', startLine: 9, severity: 'minor', status: 'needs-human', title: 'unproven' };
+  const aggregate = aggregateWith({
+    blocking,
+    findings: [...aggregateWith({ blocking }).findings, needsHumanFinding],
+    counts: { major: 1, needsHuman: 1 },
+    verdict: 'block',
+  });
   const scanGate = await runGate({
     cwd,
     config: { gate: { commands: [], autodetect: false } },
