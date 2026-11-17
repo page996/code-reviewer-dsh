@@ -3787,5 +3787,347 @@
     "startLine": 500,
     "disposition": "accepted",
     "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "dc5fb9944e5eaa1d4d29ea2aed370823ed92eba4",
+    "file": "python/extract_paper.py",
+    "category": "security",
+    "title": "不受信任的 PDF 页面宽度被直接当作计数桶大小和逐坐标循环次数，没有任何上限/钳制，恶意 PDF 可造成无界内存分配与 CPU 放大。",
+    "startLine": 435,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "04fcbabf71fd16205bbe0e9dbebabf9c48e8cc2d",
+    "file": "python/extract_paper.py",
+    "category": "correctness",
+    "title": "`detect_style_columns` 按页面宽度线性分配覆盖数组并逐点扫描，页面宽度来自不可信 PDF 的页面尺寸。",
+    "startLine": 436,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "950e69fa5f38e8dc805ab16886f38c2cc032ce76",
+    "file": "python/extract_paper.py",
+    "category": "correctness",
+    "title": "`detect_style_columns` 的间隙扫描用未钳制的 `min_x`/`max_x` 计算索引区间去访问 `coverage`，而填充循环已经钳制",
+    "startLine": 446,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d0d85c125b982cabd6676e1145570b19d28b8c2b",
+    "file": "python/extract_paper.py",
+    "category": "intent",
+    "title": "detect_style_columns 的 docstring 承诺“only returns bounds when it finds exactly th",
+    "startLine": 470,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c9d900156f9f6eaced8b629d97fb866f5b23029f",
+    "file": "python/extract_paper.py",
+    "category": "correctness",
+    "title": "`_looks_like_person_name` 会把它自己文档声明支持的两种人名形态判为否：首字母缩写（\"J. Smith\"）和前置粒子姓名（\"van de",
+    "startLine": 487,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "011cb7b638b21b017350ad1dbf7c94c4a69da533",
+    "file": "python/extract_paper.py",
+    "category": "correctness",
+    "title": "`_looks_like_person_name` 会把使用首字母缩写或以小写介词开头的姓名判定为非人名，导致 `source.authors` 丢掉作者。",
+    "startLine": 488,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "ea5b345a7f91a738b455f65c7954ba7ac3b83d92",
+    "file": "python/extract_paper.py",
+    "category": "errors",
+    "title": "清理上次运行遗留 PNG 时用 except OSError: pass 静默吞掉删除失败，且不记录任何 warning，与本段注释声明的 “assets/ o",
+    "startLine": 714,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "72bd9924ad2dc12c3403c60576bff88dd238c221",
+    "file": "python/extract_paper.py",
+    "category": "errors",
+    "title": "run() 对输入侧致命错误采用了两套语义：文件不存在/加密返回约定返回码 2/3 并打印 [extract] error，而 fitz.open() 失败与 ",
+    "startLine": 745,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "251675d1195b915c11365907934d3c4073e1d57f",
+    "file": "python/extract_paper.py",
+    "category": "errors",
+    "title": "page 级 catch-all 把提取失败降级为一条 warning 后继续，循环结束后没有任何“至少有一页成功”的校验，全部页面失败时 run() 仍返回 ",
+    "startLine": 749,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "81348657702f96552ff6f6361599eb4b7e7ddb13",
+    "file": "python/extract_paper.py",
+    "category": "security",
+    "title": "页面处理异常的原始字符串被原样持久化进交付物 extraction.json 的 warnings 里（错误信息穿透）。",
+    "startLine": 752,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "0798d758952205319f251482f9d4083f565613fc",
+    "file": "python/extract_paper.py",
+    "category": "errors",
+    "title": "注释声明可选的 style pass “never allowed to fail extraction”，但 self.compute_styles() 没有",
+    "startLine": 799,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "62fd79302485efaffae6cef8c08e6bdfdfbf653f",
+    "file": "python/extract_paper.py",
+    "category": "contract",
+    "title": "`sanitize_blocks()` 在 `assign_ids()`/`_resolve_cleanup_ids()`/`add_equation_cont",
+    "startLine": 799,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "3a5d248fbcbadcfbb6b96c8be3f029deb0d7e411",
+    "file": "python/extract_paper.py",
+    "category": "security",
+    "title": "sanitize_blocks 中用于切分行内公式的正则对不可信 PDF 文本存在二次方扫描（CPU 放大），恶意段落可让单个 block 的处理时间爆炸。",
+    "startLine": 844,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "175c8323c6f278be2cbfe94bbc914066ca453477",
+    "file": "python/extract_paper.py",
+    "category": "intent",
+    "title": "caption 锚定的矢量图恢复用的是整页条件 `not fig_cands`：只要页面上存在任意 figure candidate（哪怕属于另一张图），该分支",
+    "startLine": 1040,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "bd4014c5063880ecee7391dd41658ab0179209f7",
+    "file": "python/extract_paper.py",
+    "category": "intent",
+    "title": "sanitize_blocks() 自称“deliberately last, so every downstream consumer sees the sa",
+    "startLine": 1186,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "91d200f66dc9cbbf478a8f7ccc85c5689e55f8b1",
+    "file": "python/extract_paper.py",
+    "category": "correctness",
+    "title": "把嵌套量词 `(?:….*?…\\s*)+$` 用于长度不受限的块文本，在匹配失败时会指数级回溯。",
+    "startLine": 1349,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "a719f9970f3f48c26ce8b0c50ba7316e4dcf07d3",
+    "file": "python/extract_paper.py",
+    "category": "security",
+    "title": "INLINE_PURE_RE（第 1349 行 `^(?:\\\\(.*?\\\\)\\s*)+$`）是外层 `+` 与内层惰性 `.*?` 组合的灾难性回溯正则，直接作",
+    "startLine": 1416,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "036ef708337d59ab567816f4ddcaf9865273f8d7",
+    "file": "python/extract_paper.py",
+    "category": "correctness",
+    "title": "括号配平修复向后找合并目标时既不限制页、也不在非文本块处停止，会把标题/图注乃至其它页的段落吞进当前段落。",
+    "startLine": 1465,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "614637478b0e96df4567d487e80198c26bb22183",
+    "file": "python/extract_paper.py",
+    "category": "errors",
+    "title": "inline-math 计数不平衡时的“修复”分支会把块列表中后面第一个文本类块（不校验页码、不校验距离，并跳过中间的 table/code/reference",
+    "startLine": 1465,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "2af78a75fc881498743cf6fce2d04b5d13ebfcc9",
+    "file": "python/extract_paper.py",
+    "category": "intent",
+    "title": "inline-math 括号配平循环会把紧随其后的 heading/caption/other 块整体并入当前块，且没有任何页面/栏位边界限制，与函数自述的“j",
+    "startLine": 1468,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "c4b0d0312ee2df2a165fbcc6919a50da751bb463",
+    "file": "python/extract_paper.py",
+    "category": "correctness",
+    "title": "名字网格合并的纵向间距条件只有上界、没有下界，`block` 位于 `merged[-1]` 上方（间距为负）时同样被判为相邻，导致跨栏/跨 flow 合并。",
+    "startLine": 1505,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "18bc87918ef4d93f59218ae991ba24a8b77e573c",
+    "file": "python/extract_paper.py",
+    "category": "contract",
+    "title": "_merge_name_list_blocks 假定 Block.lines 始终是列表，而同一文件的其他路径把 Block.lines 当作 Optional",
+    "startLine": 1516,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b56f05eb0823a2346a0e98f79fb69633085f17dd",
+    "file": "python/extract_paper.py",
+    "category": "intent",
+    "title": "同一 span 内已经用“前一个字符是空白”证明标签与公式分离，却又把 `gap` 置 0 交给“紧贴字母/括号即视为函数实参”的判定，使这条注释声明的规则在实",
+    "startLine": 2124,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "b8a72495ddb352dace81b40ac6151237a5980bc4",
+    "file": "python/extract_paper.py",
+    "category": "correctness",
+    "title": "同 span 内已用空白证明是右边界公式编号，却把 gap 置 0.0，再被紧邻 span 的“粘连”判定反判为函数参数，导致编号无法分离。",
+    "startLine": 2124,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "e4559a31aa636ec683c2b105831768d4c7daa96b",
+    "file": "python/extract_paper.py",
+    "category": "contract",
+    "title": "_split_trailing_eqnum 在标签位于后续 span 时会错误套用“紧贴前一个 span”的判断，导致合法的右缘式编号无法被拆分",
+    "startLine": 2136,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "4fe51ab9dd30f63d09e174935c7ce3248a81f0dd",
+    "file": "python/extract_paper.py",
+    "category": "intent",
+    "title": "merge_equation_fragments 的重建路径与 process_flow 的 emit_equation 调用同一个 mc.build_disp",
+    "startLine": 2401,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "58e0408b5203823ba9406a159ea360fe4162df88",
+    "file": "python/extract_paper.py",
+    "category": "security",
+    "title": "对每条编号行都全量排序一次所有公式组件（O(L·C log C)），而 L（numbering_lines）和 C（comp_extent）都直接来自不可信 P",
+    "startLine": 2401,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "06c9c44c69bf0e790631be94e239da3446e4f731",
+    "file": "python/extract_paper.py",
+    "category": "correctness",
+    "title": "_merge_flow_rows 把右缘编号拆出后，仍把包含右栏片段的 rest 交给 pp.merge_row_lines 合并，跨栏片段没有与左栏文本分离，",
+    "startLine": 2596,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "1deccd0ceb1341b8392aa56636624a6ee3dc0159",
+    "file": "python/extract_paper.py",
+    "category": "contract",
+    "title": "同为 kind=\"equation\" 的 block，crop 字段结构在两个产出点不一致：emit_equation 只写 {kind, rect}，rebu",
+    "startLine": 2803,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "24e783cc7931c31912c3e92653ad908a01189caa",
+    "file": "python/extract_paper.py",
+    "category": "correctness",
+    "title": "没有显式 \"Abstract\" 标题时，handle_first_page 提前 return，完全跳过 _split_author_region，不生成 au",
+    "startLine": 3031,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "14daa41ccd643e4fe02d8d24eed080903f81ebe5",
+    "file": "python/pages_to_png.py",
+    "category": "intent",
+    "title": "--pages 为空串/纯空白时被当作 \"all\" 渲染全部页面，与文件头声明的“deliberately strict”以及同函数中 \"no pages se",
+    "startLine": 44,
+    "disposition": "accepted",
+    "reason": "batch-3 实现与自述契约不一致，成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "7190dc63d0732d948c931fb39c8877e856b08ed4",
+    "file": "python/pages_to_png.py",
+    "category": "security",
+    "title": "默认 `--pages all` 把不可信 PDF 的 page_count 全量展开并逐页落盘，没有页数或输出总字节配额。",
+    "startLine": 44,
+    "disposition": "accepted",
+    "reason": "batch-3 安全边界问题成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "65bf5226a6ebdcda553d63f077aa4a266c3ddf43",
+    "file": "python/pages_to_png.py",
+    "category": "correctness",
+    "title": "NAME_RE 以 `$` 结尾，Python 的 `$` 允许在末尾换行前匹配，导致含换行的 --prefix 通过校验并生成含换行的文件名。",
+    "startLine": 102,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "230c4b53d875d3107b6147eeb04fdebbb5f85916",
+    "file": "python/pages_to_png.py",
+    "category": "correctness",
+    "title": "渲染尺寸只受 --dpi 上限约束，从未对 PDF 页面几何（MediaBox/Rect，属于不可信输入）设上限，单页像素数可以放大到数十 GB。",
+    "startLine": 132,
+    "disposition": "accepted",
+    "reason": "batch-3（lib/pipeline.js）人工复核后确认成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "54d249dbb0a87f56d8f9bc3968c77dd22a1421be",
+    "file": "python/pages_to_png.py",
+    "category": "errors",
+    "title": "多文件写入循环中途失败即直接 return：已成功写出的 PNG 不清理、也不在任何机器可读输出中记录；save 半途失败还会在最终路径留下截断的 PNG。",
+    "startLine": 144,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "3ff099a50622042879ffe8e803a28277248b8d5e",
+    "file": "python/pages_to_png.py",
+    "category": "contract",
+    "title": "文档承诺“任何失败都以 exit 2 + 明确 stderr 退出，永不 traceback-only”，但 render() 的外层 try（第 111 行）",
+    "startLine": 155,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "fc65cae21352fc419fb8a08644cd12894831ca03",
+    "file": "python/pages_to_png.py",
+    "category": "errors",
+    "title": "循环中的 `os.path.getsize(target)`（第156行）和 `doc[page_number - 1]`（第130行）位于所有 try 之外，",
+    "startLine": 156,
+    "disposition": "accepted",
+    "reason": "batch-3 错误处理/可观测性缺口成立，保留为 accepted 基线。"
+  },
+  {
+    "fingerprint": "d04a980754b9e64547ba57309493738078a18a7e",
+    "file": "python/pages_to_png.py",
+    "category": "contract",
+    "title": "`--quiet` 的 help 承诺 \"only print errors\"，但 `--quiet --json` 仍会打印完整 JSON 摘要；同一函数内三",
+    "startLine": 167,
+    "disposition": "accepted",
+    "reason": "batch-3 接口契约缺口成立，保留为 accepted 基线。"
   }
 ]

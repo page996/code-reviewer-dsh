@@ -77,6 +77,8 @@
 | E-358…E-387 | batch-26 的 30 条 graph.js 缺陷（3 major + 27 minor，accepted） | 仍被报出；batch-26 run 的 eval：matched 30 / missed 0 | `findings.json` |
 | E-388…E-406 | batch-27 的 19 条 katex-verify.js 缺陷（1 major + 18 minor，accepted） | 仍被报出；batch-27 run 的 eval：matched 19 / missed 0 | `findings.json` |
 | E-407…E-421 | batch-2b 的 15 条 gateway.js 复评 findings（5 条新增并入基线） | 仍被报出；重启后 eval matched 28/28（含旧 13 accepted + 新增 5 + 其他批次 notEvaluated） | `findings.json` |
+| E-422…E-451 | batch-28 的 30 条 extract_paper.py 缺陷（accepted） | 仍被报出；batch-28 run 的 eval：matched 30 / missed 0 / new 0 | `findings.json` |
+| E-452…E-459 | batch-29 的 8 条 pages_to_png.py 缺陷（accepted） | 仍被报出；batch-29 run 的 eval：matched 8 / missed 0 | `findings.json` |
 
 回归命令：
 
@@ -118,6 +120,8 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 | batch-26 | 30 条（3 major） | accepted | 快照写失败仍成功、GC 先删快照后写主文件无补偿、fs/JSON 错误文本持久化进 warnings、隔离 rename 失败仍写成功、节点上限检查在插入后且含墓碑、无环校验超深当不存在、跨视角重复合并后 votes 并集使 major 达标 | R-24 单文件切分 + 聚合 votes 语义 | eval 已 pass（30/30）；无传输失败 |
 | batch-27 | 19 条（1 major） | accepted | 上标分支写成行首锚点、loadKatex 缓存命中忽略 assetUrl、环境失败与解析失败合并、fs 错误文本进 catch、白名单未排除、编号提取超出文档来源、括号平衡只统计圆括号等 | R-26 已补「失败域混同」 | eval 已 pass（19/19） |
 | batch-2b | 15 条（5 条新增） | accepted | 重启后新 lib 复评 gateway：旧 13 条全部命中、无 tests 噪声、采样稳定；新增 5 条并入基线 | R-25 验证记录 | eval 已 pass（28/28） |
+| batch-28 | 30 条 | accepted | 不可信页面宽度当计数桶/循环次数（无界内存与 CPU）、栏缝扫描未钳制索引、docstring 与人名形态矛盾、`detect_style_columns` 契约不一致等 | R-14/R-19 覆盖部分 | eval 已 pass（30/30） |
+| batch-29 | 8 条 | accepted | 空 `--pages` 当 all、默认全量渲染无页数/字节配额、`NAME_RE` 尾 `$` 放行换行、渲染尺寸未限制页面几何、多文件写失败不清理/不记录、失败退出契约与实现不符 | R-14/R-19 覆盖 | eval 已 pass（8/8） |
 
 ## 5. eval 机制自身的三次修正（meta lesson）
 
@@ -135,10 +139,10 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 
 ## 7. 结论摘要
 
-- 真实缺陷：batch-1…26 累计 383 + batch-27 19 + batch-2b 新增 5 = 417 条 accepted（含 1 blocker + 11 major）。
+- 真实缺陷：batch-1…27 累计 417 + batch-28 30 + batch-29 8 = 455 条 accepted（含 1 blocker + 11 major）。
 - 误报：batch-2 4 条 unit-scope 测试噪声（rejected）。
 - 新增规则：19 条（R-1…R-23 除 R-4 外均已落 + R-26 失败域混同）。
-- 编排/机制修复：R-8 传输重试、R-9 temperature=0、R-13 scan preexisting/门禁语义、R-15 跨视角同类合并 + `review aggregate`、R-24 单文件切分；R-25 重启后复验通过。
+- 编排/机制修复：R-8 传输重试、R-9 temperature=0、R-13 scan preexisting/门禁语义、R-15 跨视角同类合并 + `review aggregate`、R-24 单文件切分、eval 排除 dropped；R-25 重启后复验通过。
 - prompt 调整：4 处（P-1/P-2/P-4 已落，P-3 待批次契约）。
-- 回归用例：417 accepted + 4 rejected；batch-3…27 与 batch-2b 的 eval 均全绿（missed 0 / noise 0）。
+- 回归用例：455 accepted + 4 rejected；batch-3…29 与 batch-2b 的 eval 均全绿（missed 0 / noise 0）。
 - 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则、重试、温度）。
