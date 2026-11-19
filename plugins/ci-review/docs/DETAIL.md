@@ -38,7 +38,7 @@ projects:
     root: 'C:/work/my-service'
 ```
 
-## Current status (v0.2.0)
+## Current status (v0.3.0)
 
 - Read-only snapshot: project/git state, PR state, review decision, mergeability,
   unresolved threads, checks with per-check links, recent Actions runs, local
@@ -51,9 +51,28 @@ projects:
   Each button is disabled with the concrete reason when it cannot run
   (not a draft, no failed checks, conflicts, checks not green, no `gh`, …), so the
   panel always explains "what can I do now".
+- **Local annotations**: add `file:line` annotations in the panel, mark them
+  addressed/reopened, or delete them. They persist in
+  `<project>/.review/ci-review/annotations.json`.
+- **Background agent handoff**: any annotation can be sent to a background,
+  independent-context subagent with an editable instruction. The task card shows
+  running/completed/failed/cancelled state, the child session id, the agent's
+  structured report (summary, changes with locations and risk, possible
+  consequences, planned/executed/not-run tests, unresolved items, next steps),
+  and offers cancellation. Tasks persist in
+  `<project>/.review/ci-review/tasks/<id>.json`. The agent never commits, pushes,
+  merges or approves.
 - Data source is reported in the panel: `forge` when the official forge provider
   works, otherwise `REST` for reads plus the authenticated `gh` CLI for actions.
 - Polling every 15 s while the panel is open; manual refresh forces a rebuild.
+
+### Client-plugin note
+
+A dynamic client half in this installation cannot `require('styles')` or
+`require('console')`; those names are not part of the plain-JavaScript module
+table. Render component styles as a `<style>` React element instead. Load failures
+of a client half are silent in the page, so verify registration through
+`cordis_inspect_query` (`Slots.listSubTree`) after loading a new bundle.
 
 ### Windows note: forge-github provider
 

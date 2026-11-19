@@ -938,6 +938,309 @@ export function apply(ctx, config = {}) {
       .slice(0, 8);
   }
 
+  /* --------------------------------------------------- annotations & jobs */
+
+  function ciStateDir(root) {
+    return path.join(root, '.review', 'ci-review');
+  }
+
+  function annotationsPath(root) {
+    return path.join(ciStateDir(root), 'annotations.json');
+  }
+
+  function readAnnotations(root) {
+    const data = safeReadJson(annotationsPath(root));
+    if (!Array.isArray(data?.annotations)) return [];
+    return data.annotations.filter((item) => item && typeof item.file === 'string' && typeof item.body === 'string');
+  }
+
+  function writeAnnotations(root, annotations) {
+    const dir = ciStateDir(root);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = annotationsPath(root);
+    const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
+    fs.writeFileSync(temp, `${JSON.stringify({ version: 1, annotations }, null, 2)}\n`, 'utf8');
+    fs.renameSync(temp, file);
+    return annotations;
+  }
+
+  function taskDir(root) {
+    return path.join(ciStateDir(root), 'tasks');
+  }
+
+  function readTasks(root) {
+    const dir = taskDir(root);
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith('.json'));
+    } catch {
+      return [];
+    }
+    const tasks = [];
+    for (const entry of entries) {
+      const task = safeReadJson(path.join(dir, entry.name));
+      if (task && typeof task.id === 'string') tasks.push(task);
+    }
+    return tasks.sort((a, b) => String(b.startedAt ?? '').localeCompare(String(a.startedAt ?? ''))).slice(0, 20);
+  }
+
+  function writeTask(root, task) {
+    const dir = taskDir(root);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `${task.id}.json`);
+    const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
+    fs.writeFileSync(temp, `${JSON.stringify(task, null, 2)}\n`, 'utf8');
+    fs.renameSync(temp, file);
+  }
+
+  const activations = new Map();
+
+  function resolveInsideRoot(root, relative) {
+    if (typeof relative !== 'string' || !relative.trim()) return null;
+    const normalized = relative.replace(/\\/g, '/');
+    if (normalized.startsWith('/') || normalized.includes('..')) return null;
+    const resolved = path.resolve(root, normalized);
+    const prefix = normalizePath(root);
+    return normalizePath(resolved).startsWith(prefix) ? normalized : null;
+  }
+
+  function buildAgentPrompt({ project, brief, annotation }) {
+    const target = annotation
+      ? `${annotation.file}:${annotation.startLine ?? 1}${annotation.endLine ? `-${annotation.endLine}` : ''}`
+      : brief.location
+        ? `${brief.location.file}:${brief.location.startLine ?? 1}-${brief.location.endLine ?? brief.location.startLine ?? 1}`
+        : '(not specified)';
+    return [
+      'You are a background revision subagent started by the DSH CI review workbench.',
+      'Work independently in the given repository. Read the relevant files and context before editing.',
+      '',
+      'Task brief (JSON):',
+      JSON.stringify(
+        {
+          project: project.name,
+          repository: project.repo ?? null,
+          branch: project.branch ?? null,
+          target,
+          instruction: brief.instruction,
+          constraints: brief.constraints ?? 'Keep the API/format unchanged; make the smallest correct change.',
+          allowedScope: brief.allowedScope ?? 'The files needed for this fix; stop and report if the change would exceed that.',
+          acceptance: brief.acceptance ?? 'Run the project tests or the configured gate command when available.',
+          riskBudget: brief.riskBudget ?? 'low',
+        },
+        null,
+        2,
+      ),
+      '',
+      'Rules:',
+      '- Do not commit, push, merge, approve PRs, or resolve review threads.',
+      '- Do not touch secrets, credentials, or files outside the repository.',
+      '- If the request is ambiguous or would require a destructive/large change, stop and report status "blocked" with the exact question.',
+      '',
+      'When finished, reply with ONE JSON object and nothing else (no markdown fences around it), with this shape:',
+      '{"status":"completed|blocked|failed","summary":"...","changes":[{"file":"...","locations":["L1-L2"],"summary":"...","rationale":"...","risk":{"level":"low|medium|high","notes":"..."}}],"consequences":{"behavior":"...","compatibility":"...","performance":"...","security":"...","userVisible":"..."},"tests":{"planned":["..."],"executed":[{"command":"...","exitCode":0,"summary":"..."}],"notRun":[{"command":"...","reason":"..."}]},"unresolved":["..."],"nextSteps":["..."],"confidence":"low|medium|high"}',
+      '',
+      'Report what actually happened. Never claim a test ran unless it ran.',
+    ].join('\n');
+  }
+
+  function parseAgentReport(result) {
+    if (result && typeof result.structured === 'object' && result.structured) return result.structured;
+    const text = (result?.output ?? [])
+      .map((block) => (block && block.type === 'text' ? block.text : ''))
+      .join('\n')
+      .trim();
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const candidate = fenced ? fenced[1] : text;
+    const start = candidate.indexOf('{');
+    const end = candidate.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(candidate.slice(start, end + 1));
+      } catch {
+        /* fall back to the raw text */
+      }
+    }
+    return { status: 'completed', summary: text || '(no report text)', changes: [], consequences: {}, tests: { planned: [], executed: [], notRun: [] } };
+  }
+
+  async function handleAnnotationAction(req, res, url) {
+    const project = findProject(url.searchParams.get('projectId') ?? '');
+    if (!project) return sendError(res, 404, 'unknown project');
+    const body = await readJsonBody(req);
+    if (!body || typeof body !== 'object') return sendError(res, 400, 'invalid JSON body');
+    const action = String(body.action ?? 'create');
+    const annotations = readAnnotations(project.root);
+    if (action === 'create') {
+      const file = resolveInsideRoot(project.root, String(body.file ?? ''));
+      if (!file) return sendJson(res, 200, { ok: false, message: '文件路径必须位于项目根目录内' });
+      const annotation = {
+        id: randomBytes(8).toString('hex'),
+        file,
+        startLine: Number.isFinite(Number(body.startLine)) ? Math.max(1, Number(body.startLine)) : 1,
+        endLine: Number.isFinite(Number(body.endLine)) ? Math.max(1, Number(body.endLine)) : null,
+        body: String(body.body ?? '').slice(0, 8000),
+        severity: ['info', 'warning', 'critical'].includes(body.severity) ? body.severity : 'warning',
+        status: 'open',
+        author: 'user',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      if (!annotation.body.trim()) return sendJson(res, 200, { ok: false, message: '批注内容不能为空' });
+      writeAnnotations(project.root, [annotation, ...annotations]);
+      return sendJson(res, 200, { ok: true, annotation });
+    }
+    const id = String(body.id ?? '');
+    const index = annotations.findIndex((item) => item.id === id);
+    if (index < 0) return sendJson(res, 200, { ok: false, message: '找不到该批注' });
+    if (action === 'update') {
+      const next = { ...annotations[index], updatedAt: new Date().toISOString() };
+      if (['open', 'addressed', 'wontfix'].includes(body.status)) next.status = body.status;
+      if (typeof body.body === 'string' && body.body.trim()) next.body = body.body.slice(0, 8000);
+      if (['info', 'warning', 'critical'].includes(body.severity)) next.severity = body.severity;
+      annotations[index] = next;
+      writeAnnotations(project.root, annotations);
+      return sendJson(res, 200, { ok: true, annotation: next });
+    }
+    if (action === 'delete') {
+      annotations.splice(index, 1);
+      writeAnnotations(project.root, annotations);
+      return sendJson(res, 200, { ok: true });
+    }
+    return sendError(res, 400, 'unknown annotation action');
+  }
+
+  async function handleAgentTask(req, res, url) {
+    const project = findProject(url.searchParams.get('projectId') ?? '');
+    if (!project) return sendError(res, 404, 'unknown project');
+    const body = await readJsonBody(req);
+    if (!body || typeof body !== 'object') return sendError(res, 400, 'invalid JSON body');
+    const instruction = String(body.instruction ?? '').trim();
+    if (!instruction) return sendJson(res, 200, { ok: false, message: '请填写 Agent 指令' });
+    const agentsSvc = (() => {
+      try {
+        return ctx.get('agents') ?? null;
+      } catch {
+        return null;
+      }
+    })();
+    const subagents = (() => {
+      try {
+        return ctx.get('subagents') ?? null;
+      } catch {
+        return null;
+      }
+    })();
+    if (!agentsSvc?.list || !subagents?.startActivation) {
+      return sendJson(res, 200, { ok: false, message: '当前 profile 未提供 agent/subagent 服务' });
+    }
+    if (!subagents.getProvider?.('spawn')) {
+      return sendJson(res, 200, { ok: false, message: '未找到 spawn subagent provider' });
+    }
+    const liveAgents = agentsSvc.list();
+    let parent = null;
+    const projectPrefix = normalizePath(project.root);
+    for (const agent of liveAgents) {
+      try {
+        const candidateRoot = subagents.rootOf ? subagents.rootOf(agent) : agent;
+        if (!candidateRoot?.id) continue;
+        let cwd = '';
+        try {
+          const query = ctx.get('sessionQuery');
+          const session = await query.readSession(candidateRoot.id);
+          cwd = String(session?.header?.cwd ?? '');
+        } catch {
+          cwd = '';
+        }
+        parent = candidateRoot;
+        if (cwd && normalizePath(cwd).startsWith(projectPrefix)) break;
+      } catch {
+        /* try the next live agent */
+      }
+    }
+    if (!parent) return sendJson(res, 200, { ok: false, message: '没有可用的在线父会话，无法启动后台子代理' });
+    const summary = projectSummary(project);
+    const annotations = readAnnotations(project.root);
+    const annotation = body.annotationId ? annotations.find((item) => item.id === body.annotationId) ?? null : null;
+    const taskId = `agent-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomBytes(3).toString('hex')}`;
+    const task = {
+      id: taskId,
+      projectId: project.id,
+      projectName: project.name,
+      root: project.root,
+      instruction,
+      annotationId: annotation?.id ?? null,
+      target: annotation
+        ? { file: annotation.file, startLine: annotation.startLine, endLine: annotation.endLine }
+        : body.location ?? null,
+      riskBudget: ['low', 'medium', 'high'].includes(body.riskBudget) ? body.riskBudget : 'low',
+      status: 'running',
+      childId: null,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      report: null,
+      error: null,
+    };
+    writeTask(project.root, task);
+    try {
+      const promptText = buildAgentPrompt({
+        project: summary,
+        brief: {
+          instruction,
+          constraints: body.constraints,
+          allowedScope: body.allowedScope,
+          acceptance: body.acceptance,
+          riskBudget: task.riskBudget,
+          location: task.target,
+        },
+        annotation,
+      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(new Error('agent task timeout')), 40 * 60 * 1000);
+      const activation = await subagents.startActivation({
+        provider: 'spawn',
+        label: `ci-review ${taskId}`,
+        name: `ci-review-${taskId.slice(-6)}`,
+        prompt: [{ type: 'text', text: promptText }],
+        parent,
+        cwd: project.root,
+        signal: controller.signal,
+        delivery: 'caller',
+      });
+      activations.set(taskId, { activation, controller, timer });
+      task.childId = activation.childId;
+      task.status = 'running';
+      writeTask(project.root, task);
+      activation.result
+        .then((result) => {
+          task.status = result?.stopReason && result.stopReason !== 'completed' ? 'failed' : 'completed';
+          task.report = parseAgentReport(result);
+          task.stopReason = result?.stopReason ?? null;
+          task.finishedAt = new Date().toISOString();
+          writeTask(project.root, task);
+        })
+        .catch((error) => {
+          task.status = 'failed';
+          task.error = String(error?.message ?? error);
+          task.finishedAt = new Date().toISOString();
+          writeTask(project.root, task);
+        })
+        .finally(() => {
+          const entry = activations.get(taskId);
+          if (entry?.timer) clearTimeout(entry.timer);
+          activations.delete(taskId);
+          snapshotCache.delete(project.id);
+        });
+      snapshotCache.delete(project.id);
+      return sendJson(res, 200, { ok: true, task });
+    } catch (error) {
+      task.status = 'failed';
+      task.error = String(error?.message ?? error);
+      task.finishedAt = new Date().toISOString();
+      writeTask(project.root, task);
+      return sendJson(res, 200, { ok: false, message: task.error, task });
+    }
+  }
+
   /* -------------------------------------------------------------- snapshot */
 
   async function buildSnapshot(project) {
@@ -955,6 +1258,8 @@ export function apply(ctx, config = {}) {
       github,
       localReviews,
       sessions,
+      annotations: summary.exists ? readAnnotations(project.root) : [],
+      agentTasks: summary.exists ? readTasks(project.root) : [],
       capabilities: {
         openRepoUrl: repoUrl,
         openPrUrl: github.available && github.pr?.htmlUrl ? github.pr.htmlUrl : null,
@@ -1210,6 +1515,69 @@ export function apply(ctx, config = {}) {
       } catch (error) {
         return sendError(res, 502, `读取运行详情失败：${String(error?.message ?? error).slice(0, 200)}`);
       }
+    }
+    if (req.method === 'GET' && url.pathname === `${ROUTE}/api/debug-graph`) {
+      let registry = null;
+      try {
+        registry = ctx.get('clientModules') ?? null;
+      } catch {
+        registry = null;
+      }
+      const id = '@local/dsh-ci-review';
+      const graph = registry && typeof registry.graph === 'function' ? registry.graph() : null;
+      return sendJson(res, 200, {
+        ok: true,
+        hasRegistry: Boolean(registry),
+        clientPath: registry && typeof registry.clientPath === 'function' ? registry.clientPath(id) ?? null : null,
+        entry: graph && Array.isArray(graph.entries) ? graph.entries.find((row) => row.id === id) ?? null : null,
+        entries: graph && Array.isArray(graph.entries) ? graph.entries.map((row) => row.id) : [],
+      });
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/debug-reload-client`) {
+      let registry = null;
+      try {
+        registry = ctx.get('clientModules') ?? null;
+      } catch {
+        registry = null;
+      }
+      const id = '@local/dsh-ci-review';
+      let rev = null;
+      try {
+        rev = registry && typeof registry.rebuilt === 'function' ? registry.rebuilt(id) ?? null : null;
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, error: String(error?.message ?? error) });
+      }
+      return sendJson(res, 200, { ok: Boolean(rev), id, rev });
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/annotations`) {
+      return await handleAnnotationAction(req, res, url);
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/agent-task`) {
+      return await handleAgentTask(req, res, url);
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/agent-task/cancel`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const taskId = String(body?.taskId ?? '');
+      const entry = activations.get(taskId);
+      const tasks = readTasks(project.root);
+      const task = tasks.find((item) => item.id === taskId);
+      if (!task) return sendJson(res, 200, { ok: false, message: '找不到该任务' });
+      if (entry) {
+        try {
+          await entry.activation.dispose();
+        } catch (error) {
+          return sendJson(res, 200, { ok: false, message: String(error?.message ?? error) });
+        }
+        if (entry.timer) clearTimeout(entry.timer);
+        activations.delete(taskId);
+      }
+      task.status = 'cancelled';
+      task.finishedAt = new Date().toISOString();
+      writeTask(project.root, task);
+      snapshotCache.delete(project.id);
+      return sendJson(res, 200, { ok: true, task });
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }

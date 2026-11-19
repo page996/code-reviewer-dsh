@@ -11,7 +11,6 @@ window.__ModuleLoader__.load({
   id: '@local/dsh-ci-review',
   factory(require) {
     const React = require('react');
-    const styles = require('styles');
     const h = React.createElement;
 
     const DICT = {
@@ -119,6 +118,52 @@ window.__ModuleLoader__.load({
         jobRunning: '运行中',
         jobQueued: '排队',
         branchUpdated: '分支更新方式',
+        annotations: '本地批注',
+        annotationsNone: '还没有批注。',
+        annotationFile: '文件（相对项目根）',
+        annotationLine: '起始行',
+        annotationEndLine: '结束行（可选）',
+        annotationBody: '批注内容',
+        annotationAdd: '添加批注',
+        annotationSaved: '批注已保存',
+        annotationOpen: '待处理',
+        annotationAddressed: '已处理',
+        annotationWontfix: '不处理',
+        annotationMarkAddressed: '标记已处理',
+        annotationMarkOpen: '重新打开',
+        annotationDelete: '删除',
+        annotationAskAgent: '让 Agent 修订',
+        severityInfo: '提示',
+        severityWarning: '警告',
+        severityCritical: '严重',
+        agentTasks: '后台 Agent 任务',
+        agentTasksNone: '还没有后台任务。可以在批注上点「让 Agent 修订」开始。',
+        agentInstruction: '给 Agent 的指令',
+        agentStart: '启动后台 Agent',
+        agentStarting: '正在启动…',
+        agentCancel: '取消任务',
+        agentStatusRunning: '运行中',
+        agentStatusCompleted: '已完成',
+        agentStatusFailed: '失败',
+        agentStatusBlocked: '需要你决策',
+        agentStatusCancelled: '已取消',
+        agentSummary: '结论',
+        agentChanges: '改动',
+        agentConsequences: '可能后果',
+        agentTests: '测试',
+        agentUnresolved: '未解决',
+        agentNextSteps: '下一步',
+        agentTestsPlanned: '计划',
+        agentTestsExecuted: '已执行',
+        agentTestsNotRun: '未执行',
+        agentRiskLevel: '风险',
+        agentTarget: '目标',
+        agentDraftTitle: '准备交给后台 Agent',
+        agentDraftHint: '指令已根据批注预填，可以继续补充。Agent 在独立上下文运行，不会自动 commit/push/merge。',
+        agentStarted: '后台 Agent 已启动',
+        agentStartFailed: '启动失败',
+        agentChildSession: '子会话',
+        agentNoInstruction: '请先填写指令',
       },
       en: {
         panelLabel: 'CI review',
@@ -224,6 +269,52 @@ window.__ModuleLoader__.load({
         jobRunning: 'running',
         jobQueued: 'queued',
         branchUpdated: 'Branch updates',
+        annotations: 'Local annotations',
+        annotationsNone: 'No annotations yet.',
+        annotationFile: 'File (relative to project root)',
+        annotationLine: 'Start line',
+        annotationEndLine: 'End line (optional)',
+        annotationBody: 'Annotation',
+        annotationAdd: 'Add annotation',
+        annotationSaved: 'Annotation saved',
+        annotationOpen: 'open',
+        annotationAddressed: 'addressed',
+        annotationWontfix: 'wontfix',
+        annotationMarkAddressed: 'Mark addressed',
+        annotationMarkOpen: 'Reopen',
+        annotationDelete: 'Delete',
+        annotationAskAgent: 'Ask agent to fix',
+        severityInfo: 'info',
+        severityWarning: 'warning',
+        severityCritical: 'critical',
+        agentTasks: 'Background agent tasks',
+        agentTasksNone: 'No background task yet. Use "Ask agent to fix" on an annotation.',
+        agentInstruction: 'Instruction for the agent',
+        agentStart: 'Start background agent',
+        agentStarting: 'Starting…',
+        agentCancel: 'Cancel task',
+        agentStatusRunning: 'running',
+        agentStatusCompleted: 'completed',
+        agentStatusFailed: 'failed',
+        agentStatusBlocked: 'needs your decision',
+        agentStatusCancelled: 'cancelled',
+        agentSummary: 'Summary',
+        agentChanges: 'Changes',
+        agentConsequences: 'Possible consequences',
+        agentTests: 'Tests',
+        agentUnresolved: 'Unresolved',
+        agentNextSteps: 'Next steps',
+        agentTestsPlanned: 'planned',
+        agentTestsExecuted: 'executed',
+        agentTestsNotRun: 'not run',
+        agentRiskLevel: 'risk',
+        agentTarget: 'target',
+        agentDraftTitle: 'Prepare a background agent task',
+        agentDraftHint: 'The instruction is prefilled from the annotation; add details. The agent runs in an independent context and never commits, pushes or merges.',
+        agentStarted: 'Background agent started',
+        agentStartFailed: 'Failed to start',
+        agentChildSession: 'child session',
+        agentNoInstruction: 'Instruction is required',
       },
     };
 
@@ -262,6 +353,9 @@ window.__ModuleLoader__.load({
 .dr-row:first-of-type{border-top:none}
 .dr-row-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dr-row-state{color:var(--dsw-alias-label-secondary,#6b7280);font-size:11px;white-space:nowrap}
+.dr-input{border:1px solid var(--dsw-alias-border-l2,#d1d5db);border-radius:6px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);padding:4px 7px;font:inherit;font-size:12px}
+.dr-textarea{resize:vertical;min-height:56px}
+.dr-input:focus{outline:2px solid var(--dsw-alias-brand-primary,#2563eb);outline-offset:-1px}
 .dr-link{color:var(--dsw-alias-brand-primary,#2563eb);text-decoration:none}
 .dr-link:hover{text-decoration:underline}
 .dr-actions{display:flex;flex-wrap:wrap;gap:8px}
@@ -805,6 +899,212 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function statusTone(status) {
+      if (status === 'completed' || status === 'addressed') return 'ok';
+      if (status === 'failed' || status === 'critical') return 'bad';
+      if (status === 'running') return 'run';
+      if (status === 'blocked' || status === 'warning') return 'warn';
+      return 'idle';
+    }
+
+    function AnnotationsCard({ snapshot, t, projectId, onRefresh, onAskAgent }) {
+      const annotations = snapshot.annotations || [];
+      const [form, setForm] = React.useState({ file: '', startLine: '', endLine: '', body: '', severity: 'warning' });
+      const [busy, setBusy] = React.useState(false);
+      const [message, setMessage] = React.useState(null);
+      const change = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+      const post = async (payload) => {
+        setBusy(true);
+        setMessage(null);
+        try {
+          const result = await request(`api/annotations?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          if (!result.ok) {
+            setMessage({ tone: 'bad', text: result.message || 'failed' });
+          } else {
+            setMessage({ tone: 'ok', text: t('annotationSaved') });
+            if (payload.action === 'create') setForm({ file: '', startLine: '', endLine: '', body: '', severity: 'warning' });
+            onRefresh();
+          }
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setBusy(false);
+        }
+      };
+      return h(
+        Card,
+        null,
+        h('div', { className: 'dr-card-head' }, h('h3', { className: 'dr-card-title' }, t('annotations')), h('span', { className: 'dr-spacer' }),
+          h('span', { className: 'dr-card-title-sub' }, `${annotations.length}`)),
+        annotations.length
+          ? h(
+              'div',
+              null,
+              ...annotations.map((annotation) =>
+                h(
+                  'div',
+                  { className: 'dr-row', key: annotation.id, style: { alignItems: 'flex-start', flexDirection: 'column', gap: '3px' } },
+                  h(
+                    'div',
+                    { style: { display: 'flex', gap: '8px', alignItems: 'center', width: '100%' } },
+                    h('span', { className: `dr-dot ${statusTone(annotation.severity)}` }),
+                    h('span', { className: 'dr-code' }, `${annotation.file}:${annotation.startLine}${annotation.endLine ? `-${annotation.endLine}` : ''}`),
+                    h('span', { className: 'dr-row-state' }, annotation.status === 'open' ? t('annotationOpen') : annotation.status === 'addressed' ? t('annotationAddressed') : t('annotationWontfix')),
+                    h('span', { className: 'dr-spacer' }),
+                    h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => onAskAgent(annotation) }, t('annotationAskAgent')),
+                    h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => post({ action: 'update', id: annotation.id, status: annotation.status === 'open' ? 'addressed' : 'open' }) }, annotation.status === 'open' ? t('annotationMarkAddressed') : t('annotationMarkOpen')),
+                    h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => post({ action: 'delete', id: annotation.id }) }, t('annotationDelete')),
+                  ),
+                  h('div', { className: 'dr-muted', style: { whiteSpace: 'pre-wrap' } }, annotation.body),
+                ),
+              ),
+            )
+          : h('p', { className: 'dr-muted' }, t('annotationsNone')),
+        h(
+          'div',
+          { style: { borderTop: '1px dashed var(--dsw-alias-border-l1,#e5e7eb)', paddingTop: '10px', marginTop: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+          h('input', { className: 'dr-input', placeholder: t('annotationFile'), value: form.file, onChange: change('file'), style: { minWidth: '180px', flex: 1 } }),
+          h('input', { className: 'dr-input', placeholder: t('annotationLine'), value: form.startLine, onChange: change('startLine'), style: { width: '72px' } }),
+          h('input', { className: 'dr-input', placeholder: t('annotationEndLine'), value: form.endLine, onChange: change('endLine'), style: { width: '92px' } }),
+          h('select', { className: 'dr-input', value: form.severity, onChange: change('severity') },
+            h('option', { value: 'info' }, t('severityInfo')),
+            h('option', { value: 'warning' }, t('severityWarning')),
+            h('option', { value: 'critical' }, t('severityCritical')),
+          ),
+          h('input', { className: 'dr-input', placeholder: t('annotationBody'), value: form.body, onChange: change('body'), style: { minWidth: '260px', flex: 2 } }),
+          h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: () => post({ action: 'create', ...form }) }, t('annotationAdd')),
+        ),
+        message ? h('div', { className: `dr-notice ${message.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '8px 0 0' } }, message.text) : null,
+      );
+    }
+
+    function reportLines(report, t) {
+      const changes = Array.isArray(report?.changes) ? report.changes : [];
+      const consequences = report?.consequences && typeof report.consequences === 'object' ? report.consequences : {};
+      const tests = report?.tests && typeof report.tests === 'object' ? report.tests : {};
+      return h(
+        'div',
+        { style: { display: 'flex', flexDirection: 'column', gap: '4px' } },
+        report?.summary ? h('div', { style: { whiteSpace: 'pre-wrap' } }, report.summary) : null,
+        changes.length
+          ? h('div', null, h('div', { className: 'dr-muted' }, t('agentChanges')), ...changes.map((change, index) =>
+              h('div', { key: index, className: 'dr-muted', style: { paddingLeft: '10px' } },
+                `${change.file ?? '?'} ${Array.isArray(change.locations) ? change.locations.join(', ') : ''} · ${change.risk?.level ?? ''}`,
+                change.summary ? ` — ${change.summary}` : '',
+              )))
+          : null,
+        Object.keys(consequences).length
+          ? h('div', null, h('div', { className: 'dr-muted' }, t('agentConsequences')), ...Object.entries(consequences).map(([key, value]) =>
+              value ? h('div', { key, className: 'dr-muted', style: { paddingLeft: '10px' } }, `${key}: ${value}`) : null))
+          : null,
+        h('div', { className: 'dr-muted' },
+          `${t('agentTests')} · ${t('agentTestsPlanned')}: ${Array.isArray(tests.planned) ? tests.planned.length : 0} · ${t('agentTestsExecuted')}: ${Array.isArray(tests.executed) ? tests.executed.length : 0} · ${t('agentTestsNotRun')}: ${Array.isArray(tests.notRun) ? tests.notRun.length : 0}`),
+        Array.isArray(tests.executed) && tests.executed.length
+          ? h('div', null, ...tests.executed.map((item, index) => h('div', { key: index, className: 'dr-muted', style: { paddingLeft: '10px' } }, `${item.command ?? ''} → exit ${item.exitCode ?? '?'}`)))
+          : null,
+        Array.isArray(report?.unresolved) && report.unresolved.length
+          ? h('div', null, h('div', { className: 'dr-muted' }, t('agentUnresolved')), ...report.unresolved.map((item, index) => h('div', { key: index, className: 'dr-muted', style: { paddingLeft: '10px' } }, String(item))))
+          : null,
+        Array.isArray(report?.nextSteps) && report.nextSteps.length
+          ? h('div', null, h('div', { className: 'dr-muted' }, t('agentNextSteps')), ...report.nextSteps.map((item, index) => h('div', { key: index, className: 'dr-muted', style: { paddingLeft: '10px' } }, String(item))))
+          : null,
+      );
+    }
+
+    function AgentTasksCard({ snapshot, t, projectId, draft, onClearDraft, onRefresh }) {
+      const tasks = snapshot.agentTasks || [];
+      const [instruction, setInstruction] = React.useState('');
+      const [busy, setBusy] = React.useState(false);
+      const [message, setMessage] = React.useState(null);
+      React.useEffect(() => {
+        if (draft) setInstruction(draft.instruction || '');
+      }, [draft]);
+      const start = async () => {
+        if (!instruction.trim()) {
+          setMessage({ tone: 'bad', text: t('agentNoInstruction') });
+          return;
+        }
+        setBusy(true);
+        setMessage(null);
+        try {
+          const result = await request(`api/agent-task?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ instruction, annotationId: draft?.annotationId ?? null, riskBudget: draft?.riskBudget ?? 'low' }),
+          });
+          if (result.ok) {
+            setMessage({ tone: 'ok', text: `${t('agentStarted')} · ${result.task.childId ?? ''}` });
+            setInstruction('');
+            onClearDraft();
+            onRefresh();
+          } else {
+            setMessage({ tone: 'bad', text: `${t('agentStartFailed')}：${result.message || ''}` });
+          }
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: `${t('agentStartFailed')}：${String(cause?.message || cause)}` });
+        } finally {
+          setBusy(false);
+        }
+      };
+      const cancel = async (taskId) => {
+        setBusy(true);
+        try {
+          await request(`api/agent-task/cancel?projectId=${encodeURIComponent(projectId)}`, { method: 'POST', body: JSON.stringify({ taskId }) });
+          onRefresh();
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setBusy(false);
+        }
+      };
+      return h(
+        Card,
+        null,
+        h('div', { className: 'dr-card-head' }, h('h3', { className: 'dr-card-title' }, t('agentTasks')), h('span', { className: 'dr-spacer' }),
+          h('span', { className: 'dr-card-title-sub' }, `${tasks.length}`)),
+        draft
+          ? h(
+              'div',
+              { style: { marginBottom: '10px' } },
+              h('p', { className: 'dr-muted' }, `${t('agentDraftTitle')} · ${t('agentTarget')}: ${draft.target || ''}`),
+              h('p', { className: 'dr-muted' }, t('agentDraftHint')),
+              h('textarea', { className: 'dr-input dr-textarea', value: instruction, onChange: (event) => setInstruction(event.target.value), placeholder: t('agentInstruction'), rows: 3, style: { width: '100%', boxSizing: 'border-box' } }),
+              h('div', { className: 'dr-actions', style: { marginTop: '6px' } },
+                h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: start }, busy ? t('agentStarting') : t('agentStart')),
+                h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: onClearDraft }, t('agentCancel')),
+              ),
+            )
+          : null,
+        message ? h('div', { className: `dr-notice ${message.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '0 0 8px' } }, message.text) : null,
+        tasks.length
+          ? h(
+              'div',
+              null,
+              ...tasks.map((task) =>
+                h(
+                  'div',
+                  { key: task.id, style: { borderTop: '1px dashed var(--dsw-alias-border-l1,#e5e7eb)', paddingTop: '8px', marginTop: '8px' } },
+                  h(
+                    'div',
+                    { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+                    h(Badge, { tone: statusTone(task.status) }, task.status === 'running' ? t('agentStatusRunning') : task.status === 'completed' ? t('agentStatusCompleted') : task.status === 'blocked' ? t('agentStatusBlocked') : task.status === 'cancelled' ? t('agentStatusCancelled') : t('agentStatusFailed')),
+                    h('span', { className: 'dr-code' }, task.id),
+                    task.childId ? h('span', { className: 'dr-row-state' }, `${t('agentChildSession')}: ${task.childId}`) : null,
+                    h('span', { className: 'dr-spacer' }),
+                    task.status === 'running' ? h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => cancel(task.id) }, t('agentCancel')) : null,
+                  ),
+                  h('div', { className: 'dr-muted', style: { whiteSpace: 'pre-wrap', margin: '4px 0' } }, task.instruction),
+                  task.error ? h('div', { className: 'dr-notice dr-error', style: { margin: '4px 0' } }, task.error) : null,
+                  task.report ? reportLines(task.report, t) : null,
+                ),
+              ),
+            )
+          : h('p', { className: 'dr-muted' }, t('agentTasksNone')),
+      );
+    }
+
     function ProjectList({ projects, selectedId, onSelect, t }) {
       return h(
         'div',
@@ -837,9 +1137,11 @@ window.__ModuleLoader__.load({
       const t = locale || ((key) => key);
       const model = useWorkbench(t);
       const snapshot = model.snapshot;
+      const [agentDraft, setAgentDraft] = React.useState(null);
       return h(
         'div',
         { className: 'dr-root' },
+        h('style', { key: 'ci-review-css' }, CSS),
         h(
           'header',
           { className: 'dr-header' },
@@ -880,6 +1182,26 @@ window.__ModuleLoader__.load({
                       h(RunsCard, { snapshot, t, projectId: snapshot.project.id }),
                       h(LocalReviewsCard, { snapshot, t }),
                       h(SessionsCard, { snapshot, t }),
+                      h(AnnotationsCard, {
+                        snapshot,
+                        t,
+                        projectId: snapshot.project.id,
+                        onRefresh: model.refresh,
+                        onAskAgent: (annotation) => setAgentDraft({
+                          annotationId: annotation.id,
+                          target: `${annotation.file}:${annotation.startLine}${annotation.endLine ? `-${annotation.endLine}` : ''}`,
+                          instruction: `修复这条批注指出的问题：${annotation.body}\n\n范围：${annotation.file}:${annotation.startLine}${annotation.endLine ? `-${annotation.endLine}` : ''}`,
+                          riskBudget: annotation.severity === 'critical' ? 'medium' : 'low',
+                        }),
+                      }),
+                      h(AgentTasksCard, {
+                        snapshot,
+                        t,
+                        projectId: snapshot.project.id,
+                        draft: agentDraft,
+                        onClearDraft: () => setAgentDraft(null),
+                        onRefresh: model.refresh,
+                      }),
                       h(ActionsCard, { snapshot, t, onRefresh: model.refresh, refreshing: model.refreshing, projectId: snapshot.project.id }),
                       h(
                         'div',
@@ -931,7 +1253,6 @@ window.__ModuleLoader__.load({
           const dict = /^zh/i.test(localeId) ? DICT.zh : DICT.en;
           t = (key, params) => interpolate(dict[key] ?? key, params);
         }
-        ctx.effect(() => styles.insert(CSS), 'ci-review styles');
 
         ctx.slots.inject('sidebar.panellist', () =>
           ctx.slots.register(
