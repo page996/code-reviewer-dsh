@@ -2270,6 +2270,7 @@ export function apply(ctx, config = {}) {
       if (body.type === 'buffer' && typeof body.file === 'string') {
         vscodeBridge.buffers[body.file] = {
           file: body.file,
+          absPath: typeof body.absPath === 'string' ? body.absPath : '',
           languageId: body.languageId ?? '',
           version: Number(body.version) || 0,
           dirty: Boolean(body.dirty),

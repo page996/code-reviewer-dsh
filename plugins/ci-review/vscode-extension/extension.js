@@ -1,18 +1,43 @@
 const vscode = require('vscode');
+const http = require('node:http');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
+const LOG = path.join(os.tmpdir(), 'ci-review-bridge.log');
 let target = null;
 
-async function push(payload) {
-  if (!target) return;
+function log(message) {
   try {
-    await fetch(`${target.url}?token=${encodeURIComponent(target.token)}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    fs.appendFileSync(LOG, `${new Date().toISOString()} ${message}\n`);
   } catch {
-    /* DSH 未运行或端口变化时静默忽略；下次编辑会重试 */
+    /* ignore */
   }
+}
+
+function post(bodyJson) {
+  return new Promise((resolve) => {
+    if (!target) return resolve(false);
+    const data = Buffer.from(bodyJson, 'utf8');
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port: target.port,
+        path: `/dsh-ci-review/api/vscode/push?token=${encodeURIComponent(target.token)}`,
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': data.length, 'x-dsh-ci-review-token': target.token },
+        timeout: 5000,
+      },
+      (res) => {
+        res.resume();
+        res.on('end', () => resolve(res.statusCode >= 200 && res.statusCode < 300));
+      },
+    );
+    req.on('error', (error) => { log(`push error: ${error.message}`); resolve(false); });
+    req.on('timeout', () => { req.destroy(); log('push timeout'); resolve(false); });
+    req.write(data);
+    req.end();
+  });
 }
 
 function snapshot(document) {
@@ -25,13 +50,9 @@ function snapshot(document) {
     source: item.source || '',
   }));
   return {
-    type: 'buffer',
-    file,
-    languageId: document.languageId,
-    version: document.version,
-    dirty: document.isDirty,
-    lines: document.getText().split('\n'),
-    diagnostics,
+    type: 'buffer', file, absPath: document.uri.fsPath.replace(/\\/g, '/'),
+    languageId: document.languageId, version: document.version,
+    dirty: document.isDirty, lines: document.getText().split('\n'), diagnostics,
   };
 }
 
@@ -39,46 +60,49 @@ function connect(overrides = {}) {
   const config = vscode.workspace.getConfiguration('ciReviewBridge');
   const port = overrides.port || config.get('port', 64972);
   const token = overrides.token || config.get('token', '');
+  log(`connect port=${port} tokenLen=${token.length} workspace=${vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || ''}`);
   if (!token) {
-    vscode.window.showWarningMessage('CI Review Bridge: 缺少 token（在 DSH 面板点「复制桥接参数」后填入设置，或使用 vscode:// 连接链接）');
+    vscode.window.showWarningMessage('CI Review Bridge: token 未配置（DSH 面板 → 复制桥接参数 → 填入设置）');
     return;
   }
-  target = { url: `http://127.0.0.1:${port}/dsh-ci-review/api/vscode/push`, token };
+  target = { port, token };
   const root = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
-  push({ type: 'hello', workspaceRoot: root.replace(/\\/g, '/'), vscodeVersion: vscode.version, extensionVersion: '0.1.1' });
+  post(JSON.stringify({ type: 'hello', workspaceRoot: root.replace(/\\/g, '/'), vscodeVersion: vscode.version, extensionVersion: '0.1.2' }))
+    .then((ok) => log(`hello accepted=${ok}`));
   const editor = vscode.window.activeTextEditor;
-  if (editor) push(snapshot(editor.document));
-  vscode.window.showInformationMessage(`CI Review Bridge: connected to 127.0.0.1:${port}`);
+  if (editor) post(JSON.stringify(snapshot(editor.document))).then((ok) => log(`buffer accepted=${ok}`));
+  vscode.window.showInformationMessage(`CI Review Bridge: connecting to 127.0.0.1:${port}`);
 }
 
 function activate(context) {
+  log('activate');
   context.subscriptions.push(vscode.commands.registerCommand('ciReviewBridge.connect', () => connect()));
   context.subscriptions.push(vscode.window.registerUriHandler({
     handleUri(uri) {
       if (uri.path !== '/connect') return;
       const params = new URLSearchParams(uri.query);
-      const port = Number(params.get('port')) || undefined;
-      const token = params.get('token') || '';
-      connect({ port, token });
+      connect({ port: Number(params.get('port')) || undefined, token: params.get('token') || '' });
     },
   }));
   context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((event) => {
-    if (vscode.window.activeTextEditor?.document === event.document) push(snapshot(event.document));
+    if (vscode.window.activeTextEditor?.document === event.document) post(JSON.stringify(snapshot(event.document)));
   }));
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor((editor) => {
-    if (editor) push(snapshot(editor.document));
+    if (target && editor) post(JSON.stringify(snapshot(editor.document)));
   }));
   context.subscriptions.push(vscode.languages.onDidChangeDiagnostics(() => {
     const editor = vscode.window.activeTextEditor;
-    if (editor) push(snapshot(editor.document));
+    if (target && editor) post(JSON.stringify(snapshot(editor.document)));
   }));
-  // Auto-connect when the bridge settings are already filled in.
-  const config = vscode.workspace.getConfiguration('ciReviewBridge');
-  if (config.get('token', '')) connect();
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration('ciReviewBridge')) connect();
+  }));
+  connect();
 }
 
 function deactivate() {
   target = null;
+  log('deactivate');
 }
 
 module.exports = { activate, deactivate };

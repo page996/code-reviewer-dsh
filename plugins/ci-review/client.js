@@ -1047,9 +1047,16 @@ window.__ModuleLoader__.load({
       try {
         const bridge = snapshot?.vscode;
         if (!bridge || !bridge.connected) return null;
-        const buffer = bridge.buffers?.[file];
-        if (!buffer || !Array.isArray(buffer.lines)) return null;
-        return buffer;
+        const direct = bridge.buffers?.[file];
+        if (direct && Array.isArray(direct.lines)) return direct;
+        const normalized = String(file ?? '').replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+        if (!normalized) return null;
+        for (const buffer of Object.values(bridge.buffers ?? {})) {
+          if (!buffer || !Array.isArray(buffer.lines)) continue;
+          const abs = String(buffer.absPath ?? buffer.file ?? '').replace(/\\/g, '/').toLowerCase();
+          if (abs.endsWith(`/${normalized}`) || abs === normalized) return buffer;
+        }
+        return null;
       } catch {
         return null;
       }
