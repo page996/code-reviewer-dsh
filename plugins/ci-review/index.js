@@ -462,20 +462,375 @@ export function apply(ctx, config = {}) {
     return { decision, latest: latestRows };
   }
 
+  /* ----------------------------------------------------------- forge data */
+
+  const forge = (() => {
+    try {
+      return ctx.get('forge') ?? null;
+    } catch {
+      return null;
+    }
+  })();
+  const forgeWatches = new Map();
+
+  function forgeRepositoryFor(remote) {
+    if (!forge || typeof forge.repositoryFromRemote !== 'function' || !remote) return null;
+    try {
+      return forge.repositoryFromRemote(remote) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function forgeReadiness(repository) {
+    if (!forge || typeof forge.readiness !== 'function') return { state: 'unavailable', message: 'forge service not mounted' };
+    try {
+      return await forge.readiness(repository, AbortSignal.timeout(HTTP_TIMEOUT_MS));
+    } catch (error) {
+      return { state: 'unavailable', message: String(error?.message ?? error) };
+    }
+  }
+
+  function forgeWatchKey(ref) {
+    return `${ref.repository.host}/${ref.repository.owner}/${ref.repository.name}#${ref.number}`;
+  }
+
+  /** Keep one shared poll per change request and resolve with its latest snapshot. */
+  function forgeUpdateFor(ref, timeoutMs = 25000) {
+    if (!forge || typeof forge.watch !== 'function') return Promise.reject(new Error('forge-unavailable'));
+    const key = forgeWatchKey(ref);
+    let entry = forgeWatches.get(key);
+    if (!entry) {
+      entry = { ref, snapshot: null, failure: null, accessedAt: Date.now(), dispose: null };
+      entry.dispose = forge.watch(ref, (update) => {
+        entry.accessedAt = Date.now();
+        if (update && update.snapshot) {
+          entry.snapshot = update.snapshot;
+          entry.failure = null;
+        } else if (update && update.failure) {
+          entry.failure = update.failure;
+        }
+      });
+      forgeWatches.set(key, entry);
+    }
+    entry.accessedAt = Date.now();
+    if (entry.snapshot) return Promise.resolve(entry);
+    if (entry.failure) return Promise.reject(new Error(entry.failure.message || entry.failure.code));
+    return new Promise((resolve, reject) => {
+      const started = Date.now();
+      const timer = setInterval(() => {
+        if (entry.snapshot) {
+          clearInterval(timer);
+          resolve(entry);
+          return;
+        }
+        if (entry.failure) {
+          clearInterval(timer);
+          reject(new Error(entry.failure.message || entry.failure.code));
+          return;
+        }
+        if (Date.now() - started > timeoutMs) {
+          clearInterval(timer);
+          reject(new Error('forge-poll-timeout'));
+        }
+      }, 300);
+    });
+  }
+
+  function forgeChecks(snapshot) {
+    const items = (Array.isArray(snapshot.checks) ? snapshot.checks : []).map((check) => ({
+      kind: 'forge-check',
+      name: check.name ?? '',
+      workflow: check.workflow ?? '',
+      status: check.state === 'pending' ? 'in_progress' : 'completed',
+      conclusion: check.state === 'pending' ? null : check.state,
+      startedAt: check.startedAt ?? null,
+      completedAt: check.completedAt ?? null,
+      url: check.url ?? null,
+      rerun: Boolean(check.rerun),
+    }));
+    const counts = { passed: 0, failed: 0, running: 0, skipped: 0, neutral: 0 };
+    for (const item of items) {
+      if (item.status !== 'completed') counts.running += 1;
+      else if (item.conclusion === 'success') counts.passed += 1;
+      else if (item.conclusion === 'failure' || item.conclusion === 'cancelled') counts.failed += 1;
+      else if (['skipped', 'neutral'].includes(item.conclusion)) counts.skipped += 1;
+      else counts.neutral += 1;
+    }
+    return {
+      items,
+      counts,
+      rollup: snapshot.checksRollup ?? 'none',
+      truncated: Boolean(snapshot.checksTruncated),
+    };
+  }
+
+  function forgeActions(snapshot, checks) {
+    const failed = checks.counts.failed;
+    const mergeMethods = Array.isArray(snapshot.mergeMethods) ? snapshot.mergeMethods : [];
+    const branchUpdates = Array.isArray(snapshot.branchUpdates) ? snapshot.branchUpdates : [];
+    return {
+      dataSource: 'forge',
+      rerun: {
+        enabled: Boolean(snapshot.canRerunChecks) && failed > 0,
+        reason: !snapshot.canRerunChecks ? '当前仓库或权限不允许重跑检查'
+          : failed === 0 ? '没有失败的检查' : null,
+      },
+      markReady: {
+        enabled: Boolean(snapshot.draft),
+        reason: snapshot.draft ? null : 'PR 不是草稿',
+      },
+      updateBranch: {
+        enabled: branchUpdates.length > 0,
+        methods: branchUpdates,
+        reason: branchUpdates.length === 0 ? 'provider 不支持更新分支' : null,
+      },
+      merge: {
+        enabled: Boolean(snapshot.mergeReady) && snapshot.mergeability === 'mergeable' && mergeMethods.length > 0,
+        methods: mergeMethods,
+        reason: !snapshot.mergeReady ? 'PR 还不满足合并条件'
+          : snapshot.mergeability !== 'mergeable' ? '存在冲突或可合并性未知'
+            : mergeMethods.length === 0 ? '仓库未开放合并方式' : null,
+      },
+    };
+  }
+
+  function normalizeForgePr(snapshot) {
+    const checks = forgeChecks(snapshot);
+    const reviewers = Array.isArray(snapshot.reviewers) ? snapshot.reviewers : [];
+    return {
+      number: snapshot.ref.number,
+      title: snapshot.title ?? '',
+      state: snapshot.state ?? 'open',
+      draft: Boolean(snapshot.draft),
+      merged: snapshot.state === 'merged',
+      htmlUrl: snapshot.url ?? null,
+      headRef: snapshot.headBranch ?? '',
+      headSha: snapshot.headSha ?? '',
+      baseRef: snapshot.baseBranch ?? '',
+      mergeable: snapshot.mergeability === 'mergeable' ? true : snapshot.mergeability === 'conflicting' ? false : null,
+      mergeableState: snapshot.mergeability ?? null,
+      mergeReady: Boolean(snapshot.mergeReady),
+      mergeMethods: Array.isArray(snapshot.mergeMethods) ? snapshot.mergeMethods : [],
+      branchUpdates: Array.isArray(snapshot.branchUpdates) ? snapshot.branchUpdates : [],
+      reviewDecision: snapshot.reviewDecision ?? 'none',
+      reviewers: reviewers.map((reviewer) => ({
+        kind: reviewer.kind,
+        login: reviewer.login,
+        requested: Boolean(reviewer.requested),
+        verdict: reviewer.verdict ?? null,
+      })),
+      unresolvedThreads: Number(snapshot.unresolvedThreads) || 0,
+      author: snapshot.author ?? '',
+      createdAt: null,
+      updatedAt: snapshot.updatedAt ?? null,
+      changedFiles: null,
+      additions: snapshot.additions ?? null,
+      deletions: snapshot.deletions ?? null,
+      checks,
+      reviews: {
+        decision: snapshot.reviewDecision ?? 'none',
+        latest: reviewers
+          .filter((reviewer) => reviewer.verdict)
+          .map((reviewer) => ({ login: reviewer.login, state: reviewer.verdict, at: null })),
+      },
+      runs: [],
+      forge: {
+        mergeability: snapshot.mergeability ?? 'unknown',
+        checksTruncated: Boolean(snapshot.checksTruncated),
+        threadsTruncated: Boolean(snapshot.threadsTruncated),
+      },
+    };
+  }
+
+  /* --------------------------------------------------------------- gh CLI */
+
+  // Windows/Node 24 workaround: the installed forge-github provider passes a
+  // multi-line GraphQL query as a single spawn argument, which Node rejects on
+  // Windows ("cannot contain a line break ... without a shell"). The panel
+  // therefore performs write actions through the authenticated `gh` CLI, whose
+  // arguments are single-line. Reads keep using the REST fallback.
+  let ghExecutable;
+  function resolveGh() {
+    if (ghExecutable !== undefined) return ghExecutable;
+    const candidates = [
+      typeof config.ghCommand === 'string' && config.ghCommand ? config.ghCommand : '',
+      'gh',
+      'C:/Program Files/GitHub CLI/gh.exe',
+    ].filter(Boolean);
+    for (const candidate of candidates) {
+      try {
+        execFileSync(candidate, ['--version'], { encoding: 'utf8', timeout: 10000, windowsHide: true });
+        ghExecutable = candidate;
+        return ghExecutable;
+      } catch {
+        /* try the next candidate */
+      }
+    }
+    ghExecutable = null;
+    return ghExecutable;
+  }
+
+  function ghReady() {
+    return Boolean(resolveGh());
+  }
+
+  function runGh(args, timeoutMs = 30000) {
+    const executable = resolveGh();
+    if (!executable) throw new Error('gh-not-found');
+    return execFileSync(executable, args, {
+      encoding: 'utf8',
+      timeout: timeoutMs,
+      windowsHide: true,
+      env: { ...process.env, GH_PAGER: 'cat', NO_COLOR: '1' },
+    }).trim();
+  }
+
+  function restActions(pr, runs) {
+    const ghOk = ghReady();
+    const failed = pr?.checks?.counts?.failed ?? 0;
+    const failedRun = (Array.isArray(runs) ? runs : []).find((run) =>
+      run.conclusion && ['failure', 'timed_out', 'startup_failure'].includes(run.conclusion));
+    const mergeState = pr?.mergeableState;
+    const checksRollup = pr?.checks?.rollup;
+    const noGh = '未找到或未登录 gh CLI';
+    return {
+      dataSource: 'gh-cli',
+      ghAvailable: ghOk,
+      rerun: {
+        enabled: ghOk && failed > 0 && Boolean(failedRun),
+        runId: failedRun?.id ?? null,
+        reason: !ghOk ? noGh : failed === 0 ? '没有失败的检查' : !failedRun ? '没有找到失败的 Actions 运行' : null,
+      },
+      markReady: {
+        enabled: ghOk && Boolean(pr?.draft),
+        reason: !ghOk ? noGh : !pr ? '当前分支没有打开的 PR' : !pr.draft ? 'PR 不是草稿' : null,
+      },
+      updateBranch: {
+        enabled: ghOk && Boolean(pr),
+        methods: ['merge'],
+        hint: '分支未落后时 GitHub 会拒绝该操作',
+        reason: !ghOk ? noGh : !pr ? '当前分支没有打开的 PR' : null,
+      },
+      merge: {
+        enabled: ghOk && Boolean(pr) && mergeState === 'clean' && checksRollup === 'success' && !pr?.draft,
+        methods: ['squash', 'merge', 'rebase'],
+        reason: !ghOk ? noGh
+          : !pr ? '当前分支没有打开的 PR'
+            : mergeState !== 'clean' ? (mergeState === 'dirty' ? '与基线冲突' : '分支未更新或合并状态未知')
+              : checksRollup !== 'success' ? '检查未全部通过'
+                : null,
+      },
+    };
+  }
+
+  async function runGhAction({ action, method, project, summary, pr, runs }) {
+    if (!ghReady()) return { ok: false, code: 'unsupported', message: '未找到或未登录 gh CLI' };
+    const full = summary.repo;
+    if (!full) return { ok: false, code: 'unsupported', message: '项目没有 GitHub 仓库' };
+    try {
+      if (action === 'rerun') {
+        const failedRun = (Array.isArray(runs) ? runs : []).find((run) =>
+          run.conclusion && ['failure', 'timed_out', 'startup_failure'].includes(run.conclusion));
+        if (!failedRun) return { ok: false, code: 'failed', message: '没有失败的 Actions 运行可重跑' };
+        runGh(['run', 'rerun', String(failedRun.id), '--failed', '-R', full], 60000);
+        return { ok: true, action, message: `已请求重跑运行 #${failedRun.id} 的失败任务` };
+      }
+      if (action === 'mark-ready') {
+        runGh(['pr', 'ready', String(pr.number), '-R', full], 60000);
+        return { ok: true, action, message: '已把 PR 标记为可审阅' };
+      }
+      if (action === 'update-branch') {
+        const updateMethod = method === 'rebase' ? 'rebase' : 'merge';
+        runGh(
+          ['api', '-X', 'PUT', `repos/${full}/pulls/${pr.number}/update-branch`, '-f', `update_method=${updateMethod}`],
+          60000,
+        );
+        return { ok: true, action, message: `已请求用 ${updateMethod} 更新 PR 分支` };
+      }
+      if (action === 'merge') {
+        const mergeMethod = ['merge', 'squash', 'rebase'].includes(method) ? method : 'squash';
+        const flag = mergeMethod === 'merge' ? '--merge' : mergeMethod === 'rebase' ? '--rebase' : '--squash';
+        runGh(['pr', 'merge', String(pr.number), '-R', full, flag], 90000);
+        return { ok: true, action, message: `已用 ${mergeMethod} 合并 PR #${pr.number}` };
+      }
+      return { ok: false, code: 'bad-request', message: '未知操作' };
+    } catch (error) {
+      const detail = String(error?.stderr ?? error?.message ?? error).trim().split(/\r?\n/)[0] ?? '';
+      return { ok: false, code: 'failed', message: detail.slice(0, 300) || 'gh 执行失败' };
+    }
+  }
+
   async function buildGithubSnapshot(projectSummaryData) {
     const repo = projectSummaryData.repo ? { owner: projectSummaryData.repo.split('/')[0], name: projectSummaryData.repo.split('/')[1] } : null;
     if (!projectSummaryData.git) return { available: false, status: 'not-git', repo: null };
     if (!repo) return { available: false, status: 'missing-remote', repo: null };
     const active = currentCredential();
-    if (!active.value) {
+    const branch = projectSummaryData.branch;
+    const forgeRepo = forgeRepositoryFor(projectSummaryData.remote);
+    const readiness = forgeRepo ? await forgeReadiness(forgeRepo) : null;
+    const forgeReady = readiness?.state === 'ready';
+    if (!active.value && !forgeReady) {
       return { available: false, status: 'missing-token', repo: `${repo.owner}/${repo.name}`, source: 'none' };
     }
+    let prs = [];
+    let restError = null;
+    if (active.value) {
+      try {
+        const openPrs = await githubRequest(`/repos/${repo.owner}/${repo.name}/pulls?state=open&per_page=20&sort=updated&direction=desc`);
+        prs = Array.isArray(openPrs) ? openPrs : [];
+      } catch (error) {
+        restError = String(error?.message ?? error);
+      }
+    }
+    if (prs.length === 0 && forgeReady && forgeRepo && branch) {
+      try {
+        const refs = await forge.findByHead(forgeRepo, branch, AbortSignal.timeout(HTTP_TIMEOUT_MS));
+        prs = Array.isArray(refs)
+          ? refs.map((ref) => ({ number: ref.number, title: '', head: { ref: branch }, html_url: forge.changeRequestUrl(ref) }))
+          : [];
+      } catch (error) {
+        log(`forge findByHead failed: ${error?.message ?? error}`);
+      }
+    }
+    const pr = prs.find((item) => item.head?.ref === branch) ?? null;
+    const openPullRequests = prs.map((item) => ({
+      number: item.number,
+      title: item.title ?? '',
+      headRef: item.head?.ref ?? '',
+      htmlUrl: item.html_url ?? null,
+      draft: Boolean(item.draft),
+    }));
+
+    // Preferred path: the official forge provider gives richer state and the
+    // write actions (rerun / mark ready / update branch / merge).
+    let forgeError = null;
+    if (pr && forgeReady && forgeRepo) {
+      try {
+        const ref = { repository: forgeRepo, number: pr.number };
+        const entry = await forgeUpdateFor(ref);
+        const normalized = normalizeForgePr(entry.snapshot);
+        normalized.runs = active.value ? await readRuns(repo, branch).catch(() => []) : [];
+        return {
+          available: true,
+          status: 'ok',
+          repo: `${repo.owner}/${repo.name}`,
+          source: 'forge',
+          branch,
+          forge: { state: 'ready', message: readiness?.message ?? null },
+          pr: normalized,
+          openPullRequests,
+          actions: forgeActions(entry.snapshot, normalized.checks),
+        };
+      } catch (error) {
+        forgeError = String(error?.message ?? error);
+        log(`forge snapshot failed, falling back to REST: ${forgeError}`);
+      }
+    }
+
+    // REST fallback (no gh login / forge unavailable).
     try {
       const base = `/repos/${repo.owner}/${repo.name}`;
-      const openPrs = await githubRequest(`${base}/pulls?state=open&per_page=20&sort=updated&direction=desc`);
-      const branch = projectSummaryData.branch;
-      const prs = Array.isArray(openPrs) ? openPrs : [];
-      const pr = prs.find((item) => item.head?.ref === branch) ?? null;
       let checks = { rollup: 'none', counts: { passed: 0, failed: 0, running: 0, skipped: 0, neutral: 0 }, items: [] };
       let runs = [];
       let reviews = { decision: 'none', latest: [] };
@@ -489,12 +844,24 @@ export function apply(ctx, config = {}) {
           githubRequest(`${base}/pulls/${pr.number}/reviews?per_page=100`).then(reviewDecisionFromReviews).catch(() => reviews),
         ]);
       }
+      const actions = restActions(
+        pr
+          ? {
+              number: pr.number,
+              draft: Boolean(detail?.draft ?? pr.draft),
+              mergeableState: detail?.mergeable_state ?? null,
+              checks,
+            }
+          : null,
+        runs,
+      );
       return {
         available: true,
         status: 'ok',
         repo: `${repo.owner}/${repo.name}`,
-        source: active.source,
+        source: 'rest',
         branch,
+        forge: { state: readiness?.state ?? 'unavailable', message: forgeError || readiness?.message || null },
         pr: pr
           ? {
               number: pr.number,
@@ -504,10 +871,16 @@ export function apply(ctx, config = {}) {
               merged: Boolean(detail?.merged ?? pr.merged),
               htmlUrl: detail?.html_url ?? pr.html_url ?? null,
               headRef: detail?.head?.ref ?? pr.head?.ref ?? branch,
-              headSha: (detail?.head?.sha ?? pr.head?.sha ?? '').slice(0, 12),
+              headSha: (detail?.head?.sha ?? pr.head?.sha ?? ''),
               baseRef: detail?.base?.ref ?? pr.base?.ref ?? '',
               mergeable: detail?.mergeable ?? null,
               mergeableState: detail?.mergeable_state ?? null,
+              mergeReady: actions.merge.enabled,
+              mergeMethods: actions.merge.methods,
+              branchUpdates: actions.updateBranch.methods,
+              reviewDecision: reviews.decision ?? 'none',
+              reviewers: [],
+              unresolvedThreads: null,
               author: detail?.user?.login ?? pr.user?.login ?? '',
               createdAt: pr.created_at ?? null,
               updatedAt: detail?.updated_at ?? pr.updated_at ?? null,
@@ -519,16 +892,11 @@ export function apply(ctx, config = {}) {
               runs,
             }
           : null,
-        openPullRequests: prs.map((item) => ({
-          number: item.number,
-          title: item.title ?? '',
-          headRef: item.head?.ref ?? '',
-          htmlUrl: item.html_url ?? null,
-          draft: Boolean(item.draft),
-        })),
+        openPullRequests,
+        actions,
       };
     } catch (error) {
-      const message = String(error?.message ?? error);
+      const message = String(error?.message ?? restError ?? error);
       return {
         available: false,
         status: 'request-failed',
@@ -595,6 +963,11 @@ export function apply(ctx, config = {}) {
           : null,
         actionsUrl: summary.repo ? `${repoUrl}/actions` : null,
         canReadGithub: github.available,
+        dataSource: github.source ?? 'none',
+        forgeState: github.forge?.state ?? 'unavailable',
+        prNumber: github.pr?.number ?? null,
+        headSha: github.pr?.headSha ?? null,
+        actions: github.actions ?? null,
       },
       links: { base: ROUTE },
     };
@@ -659,6 +1032,123 @@ export function apply(ctx, config = {}) {
     return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '[::1]' || hostname === '::1';
   }
 
+  function readJsonBody(req, limit = 65536) {
+    return new Promise((resolve) => {
+      let size = 0;
+      const chunks = [];
+      req.on('data', (chunk) => {
+        size += chunk.length;
+        if (size > limit) {
+          req.destroy();
+          resolve(null);
+          return;
+        }
+        chunks.push(chunk);
+      });
+      req.on('end', () => {
+        try {
+          const text = chunks.length ? Buffer.concat(chunks).toString('utf8') : '';
+          resolve(text ? JSON.parse(text) : null);
+        } catch {
+          resolve(null);
+        }
+      });
+      req.on('error', () => resolve(null));
+    });
+  }
+
+  function repoParts(repo) {
+    if (!repo || typeof repo !== 'string' || !repo.includes('/')) return null;
+    const [owner, name] = repo.split('/');
+    return owner && name ? { owner, name } : null;
+  }
+
+  async function readRunDetail(repo, runId) {
+    const ownerRepo = repoParts(repo);
+    if (!ownerRepo) throw new Error('unknown repository');
+    const data = await githubRequest(
+      `/repos/${ownerRepo.owner}/${ownerRepo.name}/actions/runs/${encodeURIComponent(runId)}/jobs?per_page=50`,
+    );
+    return (Array.isArray(data.jobs) ? data.jobs : []).map((job) => ({
+      id: job.id,
+      name: job.name ?? '',
+      status: job.status ?? 'unknown',
+      conclusion: job.conclusion ?? null,
+      startedAt: job.started_at ?? null,
+      completedAt: job.completed_at ?? null,
+      htmlUrl: job.html_url ?? null,
+      steps: (Array.isArray(job.steps) ? job.steps : []).map((step) => ({
+        number: step.number,
+        name: step.name ?? '',
+        status: step.status ?? 'unknown',
+        conclusion: step.conclusion ?? null,
+        startedAt: step.started_at ?? null,
+        completedAt: step.completed_at ?? null,
+      })),
+    }));
+  }
+
+  async function handleAction(req, res, url) {
+    const project = findProject(url.searchParams.get('projectId') ?? '');
+    if (!project) return sendError(res, 404, 'unknown project');
+    const body = await readJsonBody(req);
+    if (!body || typeof body !== 'object') return sendError(res, 400, 'invalid JSON body');
+    const action = String(body.action ?? '');
+    const headSha = String(body.headSha ?? '');
+    if (!headSha) return sendJson(res, 200, { ok: false, code: 'bad-request', message: '缺少 headSha，请刷新后重试' });
+    const summary = projectSummary(project);
+    let snapshot = snapshotCache.get(project.id)?.snapshot;
+    if (!snapshot?.github?.pr) {
+      snapshot = await buildSnapshot(project);
+      snapshotCache.set(project.id, { at: Date.now(), snapshot });
+    }
+    const pr = snapshot.github?.pr;
+    if (!pr) return sendJson(res, 200, { ok: false, code: 'no-pr', message: '当前分支没有打开的 PR' });
+    if (pr.headSha !== headSha) {
+      return sendJson(res, 200, { ok: false, code: 'stale', message: 'PR 的 head 已变化，请刷新后再操作' });
+    }
+    const forgeRepo = forgeRepositoryFor(summary.remote);
+    let forgeReady = false;
+    if (forgeRepo && forge && typeof forge.rerunChecks === 'function') {
+      const readiness = await forgeReadiness(forgeRepo);
+      forgeReady = readiness?.state === 'ready';
+    }
+    if (forgeReady) {
+      const ref = { repository: forgeRepo, number: pr.number };
+      const signal = AbortSignal.timeout(30000);
+      try {
+        let failure;
+        if (action === 'rerun') {
+          failure = await forge.rerunChecks(ref, { headSha }, signal);
+        } else if (action === 'mark-ready') {
+          failure = await forge.markReady(ref, signal);
+        } else if (action === 'update-branch') {
+          const method = body.method === 'rebase' ? 'rebase' : 'merge';
+          failure = await forge.updateBranch(ref, { method, headSha }, signal);
+        } else if (action === 'merge') {
+          const method = ['merge', 'squash', 'rebase'].includes(body.method) ? body.method : 'squash';
+          failure = await forge.merge(ref, { method, headSha }, signal);
+        } else {
+          return sendError(res, 400, 'unknown action');
+        }
+        if (failure) return sendJson(res, 200, { ok: false, code: failure.code, message: failure.message });
+        try {
+          forge.refresh(ref);
+        } catch {
+          /* next poll will still run */
+        }
+        snapshotCache.delete(project.id);
+        return sendJson(res, 200, { ok: true, action, message: '已提交给 GitHub，稍后刷新查看结果' });
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, code: 'unknown', message: String(error?.message ?? error) });
+      }
+    }
+    // gh CLI fallback (Windows: the forge provider's GraphQL spawn is blocked by Node).
+    const result = await runGhAction({ action, method: body.method, project, summary, pr, runs: pr.runs });
+    snapshotCache.delete(project.id);
+    return sendJson(res, 200, result);
+  }
+
   async function handleApi(req, res, url) {
     if (req.method === 'GET' && url.pathname === `${ROUTE}/api/health`) {
       return sendJson(res, 200, { ok: true, plugin: name, refreshSeconds, tokenConfigured: Boolean(token) });
@@ -697,6 +1187,30 @@ export function apply(ctx, config = {}) {
       const snapshot = await snapshotFor(project, { force: true });
       return sendJson(res, 200, snapshot);
     }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/action`) {
+      return await handleAction(req, res, url);
+    }
+    if (req.method === 'GET' && url.pathname === `${ROUTE}/api/run`) {
+      const projectIdParam = url.searchParams.get('projectId') ?? '';
+      const runId = url.searchParams.get('runId') ?? '';
+      const project = findProject(projectIdParam);
+      if (!project) return sendError(res, 404, 'unknown project');
+      if (!/^\d+$/.test(runId)) return sendError(res, 400, 'invalid runId');
+      const summary = projectSummary(project);
+      if (!summary.repo) return sendError(res, 400, 'project has no GitHub repository');
+      if (!currentCredential().value) return sendError(res, 400, 'no GitHub credential');
+      try {
+        const jobs = await readRunDetail(summary.repo, runId);
+        return sendJson(res, 200, {
+          ok: true,
+          runId: Number(runId),
+          htmlUrl: `https://github.com/${summary.repo}/actions/runs/${runId}`,
+          jobs,
+        });
+      } catch (error) {
+        return sendError(res, 502, `读取运行详情失败：${String(error?.message ?? error).slice(0, 200)}`);
+      }
+    }
     return sendError(res, 404, 'unknown ci-review API route');
   }
 
@@ -730,6 +1244,20 @@ export function apply(ctx, config = {}) {
       return html.includes('</head>') ? html.replace('</head>', `${script}</head>`) : `${script}${html}`;
     }),
     'ci-review page token',
+  );
+
+  ctx.effect(
+    () => () => {
+      for (const entry of forgeWatches.values()) {
+        try {
+          entry.dispose?.();
+        } catch {
+          /* watcher already disposed */
+        }
+      }
+      forgeWatches.clear();
+    },
+    'ci-review forge watches',
   );
 
   log(`mounted at ${ROUTE} (workspaces: ${registryProjects().length}, configured: ${configuredProjects().length})`);

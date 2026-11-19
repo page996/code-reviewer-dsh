@@ -38,22 +38,42 @@ projects:
     root: 'C:/work/my-service'
 ```
 
-## Current status (v0.1.0, read-only)
+## Current status (v0.2.0)
 
-- Read-only snapshot: project/git state, PR, checks, recent Actions runs, local
+- Read-only snapshot: project/git state, PR state, review decision, mergeability,
+  unresolved threads, checks with per-check links, recent Actions runs, local
   review runs, sessions.
+- **CI process detail**: click a run to expand its jobs and every job's steps
+  (status, conclusion, per-job link). Job/step data comes from the GitHub Actions
+  REST API; the page shows exactly where a run is stuck or failed.
+- **Actions with explained availability**: rerun failed checks, mark ready for
+  review, update the branch, merge (squash/merge/rebase, with a confirmation).
+  Each button is disabled with the concrete reason when it cannot run
+  (not a draft, no failed checks, conflicts, checks not green, no `gh`, …), so the
+  panel always explains "what can I do now".
+- Data source is reported in the panel: `forge` when the official forge provider
+  works, otherwise `REST` for reads plus the authenticated `gh` CLI for actions.
 - Polling every 15 s while the panel is open; manual refresh forces a rebuild.
-- No GitHub write actions yet (rerun failed checks, submit review, merge) and no
-  annotations/agent handoff yet: those are the next phases and will reuse the
-  same snapshot + action contract so that every button is backed by one Host
-  method an agent tool can call too.
 
-## Limitations
+### Windows note: forge-github provider
 
-- GitHub Enterprise hosts and non-GitHub forges are not mapped yet (GitHub.com
-  only).
-- Check logs / job-step detail are not fetched; each check links to its GitHub
-  page.
-- Step-level progress and rerun need write permissions; the panel shows the
-  reason when the token or repository permission is missing.
-- The panel caches snapshots for `refreshSeconds` (default 20 s).
+On Windows with Node 24 the installed `@deepseek-ai/dsh-experimental-forge-github`
+provider currently fails every read with:
+
+```text
+The command and its arguments cannot contain a line break on Windows without a
+shell. ... Invalid value: "query=query { ... }"
+```
+
+The provider passes its multi-line GraphQL query as one `gh` spawn argument, and
+Node rejects newlines in Windows spawn arguments. This affects DSH's own forge
+panel as well. The workbench detects the failure, falls back to the REST reader
+for PR/checks/review data, and performs write actions through the authenticated
+`gh` CLI (`gh run rerun --failed`, `gh pr ready`, `gh api …/update-branch`,
+`gh pr merge`), whose arguments are single-line. Once the provider is fixed, the
+panel automatically switches back to `source: forge` and uses its richer state.
+
+`gh` must be reachable from the DSH Host process: either on `PATH` or through the
+bundle config `ghCommand` (absolute path to `gh.exe`).
+
+## Configure extra projects

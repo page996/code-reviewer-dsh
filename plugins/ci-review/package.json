@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-ci-review",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "CI and code-review workbench: one DSH panel that shows what is happening across selected projects (PR, checks, Actions runs, local review runs, sessions) and what the user can do next.",
   "type": "module",

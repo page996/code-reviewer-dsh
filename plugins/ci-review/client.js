@@ -92,6 +92,33 @@ window.__ModuleLoader__.load({
         generatedAt: '面板数据生成于 {time}',
         tokenHint: '注意：GitHub 数据只读且未配置凭据，PR/检查信息不可用。',
         authFailed: '认证失败，请刷新页面重试。',
+        dataSourceForge: '数据源：forge（gh 已登录）',
+        dataSourceRest: '数据源：REST（gh 未就绪）',
+        reviewDecision: '审阅结论',
+        reviewApproved: '已批准',
+        reviewChanges: '要求修改',
+        reviewRequired: '等待审阅',
+        reviewNone: '无审阅',
+        unresolvedThreads: '{count} 条未解决评论',
+        failedChecks: '{count} 个检查失败',
+        rerunFailed: '重跑失败检查',
+        markReady: '标记为可审阅',
+        updateBranch: '更新分支',
+        mergePr: '合并 PR',
+        mergeConfirm: '合并会改变远端仓库状态，确定继续？',
+        actionRunning: '提交中…',
+        actionDone: '操作已提交',
+        actionFailed: '操作失败',
+        runDetailLoading: '读取运行详情…',
+        runDetailFailed: '读取运行详情失败',
+        jobs: '任务',
+        steps: '步骤',
+        noSteps: '没有步骤信息',
+        jobFailed: '失败',
+        jobSuccess: '通过',
+        jobRunning: '运行中',
+        jobQueued: '排队',
+        branchUpdated: '分支更新方式',
       },
       en: {
         panelLabel: 'CI review',
@@ -170,6 +197,33 @@ window.__ModuleLoader__.load({
         generatedAt: 'Snapshot generated {time}',
         tokenHint: 'GitHub data is unavailable because no credential is configured.',
         authFailed: 'Authentication failed; refresh the page and retry.',
+        dataSourceForge: 'Source: forge (gh signed in)',
+        dataSourceRest: 'Source: REST (gh not ready)',
+        reviewDecision: 'Review',
+        reviewApproved: 'approved',
+        reviewChanges: 'changes requested',
+        reviewRequired: 'review required',
+        reviewNone: 'no review',
+        unresolvedThreads: '{count} unresolved thread(s)',
+        failedChecks: '{count} check(s) failed',
+        rerunFailed: 'Rerun failed checks',
+        markReady: 'Mark ready for review',
+        updateBranch: 'Update branch',
+        mergePr: 'Merge PR',
+        mergeConfirm: 'Merging changes the remote repository. Continue?',
+        actionRunning: 'Submitting…',
+        actionDone: 'Submitted',
+        actionFailed: 'Action failed',
+        runDetailLoading: 'Loading run detail…',
+        runDetailFailed: 'Failed to load run detail',
+        jobs: 'Jobs',
+        steps: 'Steps',
+        noSteps: 'No step information',
+        jobFailed: 'failed',
+        jobSuccess: 'passed',
+        jobRunning: 'running',
+        jobQueued: 'queued',
+        branchUpdated: 'Branch updates',
       },
     };
 
@@ -434,7 +488,9 @@ window.__ModuleLoader__.load({
           h(Badge, { tone: project.git ? 'ok' : 'warn' }, project.branch || t('notGit')),
           project.dirty > 0 ? h(Badge, { tone: 'warn' }, interpolate(t('dirty'), { count: project.dirty })) : null,
           pr ? h(Badge, { tone: pr.checks?.rollup === 'failure' ? 'bad' : pr.checks?.rollup === 'pending' ? 'run' : pr.checks?.rollup === 'success' ? 'ok' : 'idle' }, t('checks')) : null,
-          pr?.mergeableState ? h(Badge, { tone: pr.mergeableState === 'dirty' ? 'bad' : 'ok' }, pr.mergeableState === 'dirty' ? t('conflicting') : t('mergeable')) : null,
+          pr?.mergeableState ? h(Badge, { tone: pr.mergeableState === 'conflicting' || pr.mergeableState === 'dirty' ? 'bad' : 'ok' }, pr.mergeableState === 'conflicting' || pr.mergeableState === 'dirty' ? t('conflicting') : pr.mergeableState === 'unknown' ? t('mergeUnknown') : t('mergeable')) : null,
+          pr?.reviewDecision ? h(Badge, { tone: pr.reviewDecision === 'changes_requested' ? 'bad' : pr.reviewDecision === 'approved' ? 'ok' : 'warn' }, pr.reviewDecision === 'approved' ? t('reviewApproved') : pr.reviewDecision === 'changes_requested' ? t('reviewChanges') : t('reviewRequired')) : null,
+          pr?.unresolvedThreads > 0 ? h(Badge, { tone: 'warn' }, interpolate(t('unresolvedThreads'), { count: pr.unresolvedThreads })) : null,
           snapshot.github?.available ? h(Badge, { tone: 'ok' }, t('githubReady')) : h(Badge, { tone: 'warn' }, t('githubMissing')),
         ),
       );
@@ -483,6 +539,15 @@ window.__ModuleLoader__.load({
         ),
         h('p', { className: 'dr-summary', style: { marginBottom: '6px' } }, pr.title || ''),
         h(
+          'div',
+          { className: 'dr-badges', style: { marginBottom: '8px' } },
+          h(Badge, { tone: pr.reviewDecision === 'approved' ? 'ok' : pr.reviewDecision === 'changes_requested' ? 'bad' : 'warn' },
+            `${t('reviewDecision')}: ${pr.reviewDecision === 'approved' ? t('reviewApproved') : pr.reviewDecision === 'changes_requested' ? t('reviewChanges') : t('reviewRequired')}`),
+          pr.unresolvedThreads > 0 ? h(Badge, { tone: 'warn' }, interpolate(t('unresolvedThreads'), { count: pr.unresolvedThreads })) : null,
+          pr.checks?.counts?.failed > 0 ? h(Badge, { tone: 'bad' }, interpolate(t('failedChecks'), { count: pr.checks.counts.failed })) : null,
+          pr.headSha ? h('span', { className: 'dr-muted' }, pr.headSha.slice(0, 12)) : null,
+        ),
+        h(
           'p',
           { className: 'dr-muted', style: { marginBottom: '10px' } },
           checks.length
@@ -508,10 +573,44 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function RunsCard({ snapshot, t }) {
+    function RunsCard({ snapshot, t, projectId }) {
       const github = snapshot.github;
       const runs = github?.pr?.runs ?? [];
+      const [openRunId, setOpenRunId] = React.useState(0);
+      const [detail, setDetail] = React.useState(null);
+      const [detailLoading, setDetailLoading] = React.useState(false);
+      const [detailError, setDetailError] = React.useState('');
       if (!github?.available) return null;
+      const toggle = async (runId) => {
+        if (openRunId === runId) {
+          setOpenRunId(0);
+          return;
+        }
+        setOpenRunId(runId);
+        setDetail(null);
+        setDetailError('');
+        setDetailLoading(true);
+        try {
+          const data = await request(`api/run?projectId=${encodeURIComponent(projectId)}&runId=${runId}`);
+          setDetail(data);
+        } catch (cause) {
+          setDetailError(String(cause?.message || cause));
+        } finally {
+          setDetailLoading(false);
+        }
+      };
+      const jobTone = (job) => {
+        if (job.status && job.status !== 'completed') return job.status === 'queued' ? 'warn' : 'run';
+        if (job.conclusion === 'success') return 'ok';
+        if (['failure', 'timed_out', 'cancelled', 'startup_failure'].includes(job.conclusion)) return 'bad';
+        return 'idle';
+      };
+      const stepTone = (step) => {
+        if (step.status !== 'completed') return step.status === 'queued' ? 'warn' : 'run';
+        if (step.conclusion === 'success') return 'ok';
+        if (step.conclusion === 'failure') return 'bad';
+        return 'idle';
+      };
       return h(
         Card,
         null,
@@ -520,12 +619,59 @@ window.__ModuleLoader__.load({
         runs.length
           ? runs.map((run) =>
               h(
-                'div',
-                { className: 'dr-row', key: String(run.id) },
-                h('span', { className: `dr-dot ${runTone(run)}` }),
-                h('span', { className: 'dr-row-name', title: run.displayTitle || run.name }, run.name || `#${run.id}`),
-                h('span', { className: 'dr-row-state' }, run.conclusion || run.status),
-                run.htmlUrl ? h('a', { className: 'dr-link', href: run.htmlUrl, target: '_blank', rel: 'noreferrer' }, '↗') : null,
+                React.Fragment,
+                { key: String(run.id) },
+                h(
+                  'div',
+                  { className: 'dr-row' },
+                  h('span', { className: `dr-dot ${runTone(run)}` }),
+                  h('button', { className: 'dr-link', type: 'button', style: { background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }, onClick: () => toggle(run.id) }, run.name || `#${run.id}`),
+                  h('span', { className: 'dr-row-state' }, `${run.conclusion || run.status} · ${relativeTime(run.createdAt, t)}`),
+                  run.htmlUrl ? h('a', { className: 'dr-link', href: run.htmlUrl, target: '_blank', rel: 'noreferrer' }, '↗') : null,
+                ),
+                openRunId === run.id
+                  ? h(
+                      'div',
+                      { style: { padding: '4px 0 8px 18px' }, key: `${run.id}-detail` },
+                      detailLoading ? h('p', { className: 'dr-muted' }, t('runDetailLoading')) : null,
+                      detailError ? h('p', { className: 'dr-muted' }, `${t('runDetailFailed')}: ${detailError}`) : null,
+                      detail
+                        ? h(
+                            'div',
+                            null,
+                            ...(detail.jobs || []).map((job) =>
+                              h(
+                                'div',
+                                { key: String(job.id), style: { margin: '4px 0 6px' } },
+                                h(
+                                  'div',
+                                  { className: 'dr-row', style: { borderTop: 'none', padding: '2px 0' } },
+                                  h('span', { className: `dr-dot ${jobTone(job)}` }),
+                                  h('span', { className: 'dr-row-name', title: job.name }, job.name),
+                                  h('span', { className: 'dr-row-state' }, job.conclusion || job.status),
+                                  job.htmlUrl ? h('a', { className: 'dr-link', href: job.htmlUrl, target: '_blank', rel: 'noreferrer' }, '↗') : null,
+                                ),
+                                (job.steps && job.steps.length)
+                                  ? h(
+                                      'div',
+                                      { style: { paddingLeft: '14px' } },
+                                      ...job.steps.map((step) =>
+                                        h(
+                                          'div',
+                                          { className: 'dr-row', key: `${job.id}-${step.number}`, style: { borderTop: 'none', padding: '1px 0' } },
+                                          h('span', { className: `dr-dot ${stepTone(step)}` }),
+                                          h('span', { className: 'dr-row-name', title: step.name }, step.name),
+                                          h('span', { className: 'dr-row-state' }, step.conclusion || step.status),
+                                        ),
+                                      ),
+                                    )
+                                  : h('p', { className: 'dr-muted', style: { paddingLeft: '14px' } }, t('noSteps')),
+                              ),
+                            ),
+                          )
+                        : null,
+                    )
+                  : null,
               ),
             )
           : h('p', { className: 'dr-muted' }, t('runsNone')),
@@ -572,10 +718,14 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function ActionsCard({ snapshot, t, onRefresh, refreshing }) {
+    function ActionsCard({ snapshot, t, onRefresh, refreshing, projectId }) {
       const links = snapshot.capabilities || {};
+      const remote = links.actions || {};
       const project = snapshot.project;
       const [copied, setCopied] = React.useState(false);
+      const [pending, setPending] = React.useState('');
+      const [toast, setToast] = React.useState(null);
+      const headSha = links.headSha || snapshot.github?.pr?.headSha || '';
       const copyBranch = async () => {
         try {
           await navigator.clipboard.writeText(project.branch || '');
@@ -585,20 +735,73 @@ window.__ModuleLoader__.load({
           /* clipboard may be unavailable */
         }
       };
+      const act = async (name, extra) => {
+        if (!headSha) {
+          setToast({ tone: 'bad', text: `${t('actionFailed')}：${t('noPullRequest')}` });
+          return;
+        }
+        if (name === 'merge' && !window.confirm(t('mergeConfirm'))) return;
+        setPending(name);
+        setToast(null);
+        try {
+          const result = await request(`api/action?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ action: name, headSha, ...(extra || {}) }),
+          });
+          if (result.ok) {
+            setToast({ tone: 'ok', text: result.message || t('actionDone') });
+            onRefresh();
+          } else {
+            setToast({ tone: 'bad', text: `${t('actionFailed')}：${result.message || result.code}` });
+          }
+        } catch (cause) {
+          setToast({ tone: 'bad', text: `${t('actionFailed')}：${String(cause?.message || cause)}` });
+        } finally {
+          setPending('');
+        }
+      };
+      const remoteButton = (name, label, config) =>
+        h(
+          'button',
+          {
+            className: 'dr-btn',
+            type: 'button',
+            disabled: !config?.enabled || Boolean(pending),
+            title: config?.reason || '',
+            onClick: () => act(name, name === 'update-branch' ? { method: (config?.methods || ['merge'])[0] } : {}),
+          },
+          pending === name ? t('actionRunning') : label,
+        );
+      const blocked = ['rerun', 'markReady', 'updateBranch', 'merge']
+        .map((key) => ({ key, config: remote[key] }))
+        .filter((entry) => entry.config && !entry.config.enabled && entry.config.reason);
       return h(
         Card,
         null,
-        h('div', { className: 'dr-card-head' }, h('h3', { className: 'dr-card-title' }, t('next'))),
+        h('div', { className: 'dr-card-head' }, h('h3', { className: 'dr-card-title' }, t('next')), h('span', { className: 'dr-spacer' }),
+          h('span', { className: 'dr-card-title-sub' }, links.dataSource === 'forge' ? t('dataSourceForge') : t('dataSourceRest'))),
         h(
           'div',
           { className: 'dr-actions' },
           h('button', { className: 'dr-btn primary', type: 'button', onClick: onRefresh, disabled: refreshing }, refreshing ? h('span', { className: 'dr-spin' }) : null, refreshing ? t('refreshing') : t('refresh')),
+          remoteButton('rerun', t('rerunFailed'), remote.rerun),
+          remoteButton('mark-ready', t('markReady'), remote.markReady),
+          remoteButton('update-branch', t('updateBranch'), remote.updateBranch),
+          remoteButton('merge', t('mergePr'), remote.merge),
           links.openPrUrl ? h('a', { className: 'dr-btn', href: links.openPrUrl, target: '_blank', rel: 'noreferrer' }, t('openPullRequest')) : null,
           !links.openPrUrl && links.createPrUrl ? h('a', { className: 'dr-btn', href: links.createPrUrl, target: '_blank', rel: 'noreferrer' }, t('createPullRequest')) : null,
           links.actionsUrl ? h('a', { className: 'dr-btn', href: links.actionsUrl, target: '_blank', rel: 'noreferrer' }, t('openActions')) : null,
           links.openRepoUrl ? h('a', { className: 'dr-btn', href: links.openRepoUrl, target: '_blank', rel: 'noreferrer' }, t('openRepo')) : null,
           project.branch ? h('button', { className: 'dr-btn', type: 'button', onClick: copyBranch }, copied ? t('copied') : t('copyBranch')) : null,
         ),
+        toast ? h('div', { className: `dr-notice ${toast.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '8px 0 0' } }, toast.text) : null,
+        blocked.length
+          ? h(
+              'div',
+              { style: { marginTop: '8px' }, key: 'blocked' },
+              ...blocked.map((entry) => h('p', { className: 'dr-muted', key: entry.key, style: { margin: '1px 0' } }, `· ${entry.config.reason}`)),
+            )
+          : null,
       );
     }
 
@@ -644,7 +847,7 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'dr-header-right' },
-            h(Badge, { tone: snapshot?.github?.available ? 'ok' : 'warn' }, snapshot?.github?.available ? t('githubReady') : t('githubMissing')),
+            h(Badge, { tone: snapshot?.github?.available ? 'ok' : 'warn' }, snapshot?.capabilities?.dataSource === 'forge' ? t('dataSourceForge') : snapshot?.github?.available ? t('dataSourceRest') : t('githubMissing')),
             model.updatedAt ? h('span', { className: 'dr-row-state' }, interpolate(t('updated'), { time: new Date(model.updatedAt).toLocaleTimeString() })) : null,
             h('button', { className: 'dr-btn', type: 'button', onClick: model.refresh, disabled: model.refreshing || !model.selectedId }, model.refreshing ? t('refreshing') : t('refresh')),
           ),
@@ -674,10 +877,10 @@ window.__ModuleLoader__.load({
                       h(SummaryCard, { snapshot, t }),
                       h(GitHubNotice, { snapshot, t }),
                       h(PrCard, { snapshot, t }),
-                      h(RunsCard, { snapshot, t }),
+                      h(RunsCard, { snapshot, t, projectId: snapshot.project.id }),
                       h(LocalReviewsCard, { snapshot, t }),
                       h(SessionsCard, { snapshot, t }),
-                      h(ActionsCard, { snapshot, t, onRefresh: model.refresh, refreshing: model.refreshing }),
+                      h(ActionsCard, { snapshot, t, onRefresh: model.refresh, refreshing: model.refreshing, projectId: snapshot.project.id }),
                       h(
                         'div',
                         { className: 'dr-footer' },
