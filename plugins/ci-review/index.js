@@ -1266,7 +1266,10 @@ export function apply(ctx, config = {}) {
         parent,
         cwd: project.root,
         signal: controller.signal,
-        delivery: 'caller',
+        // Parent delivery keeps the child a durable DSH session (persisted,
+        // openable from the panel) at the cost of one completion notice in the
+        // parent conversation.
+        delivery: 'parent',
       });
       activations.set(taskId, { activation, controller, timer });
       task.childId = activation.childId;
@@ -1858,22 +1861,87 @@ export function apply(ctx, config = {}) {
       }
       try {
         const session = await query.readSession(task.childId);
-        const messages = typeof session?.deriveMessages === 'function' ? session.deriveMessages() : [];
-        const textOf = (message) => {
-          const blocks = Array.isArray(message?.content) ? message.content : [];
-          return blocks
+        const events = typeof session?.snapshotEvents === 'function' ? session.snapshotEvents() : [];
+        const types = {};
+        const rows = [];
+        for (const event of events) {
+          const type = event?.type;
+          if (typeof type === 'string') types[type] = (types[type] ?? 0) + 1;
+          if (type !== 'user/message' && type !== 'assistant/message') continue;
+          const data = event?.data ?? {};
+          const message = type === 'assistant/message' ? (data.message ?? {}) : (data.message ?? data);
+          const blocks = Array.isArray(message?.content)
+            ? message.content
+            : Array.isArray(data?.content)
+              ? data.content
+              : [];
+          const text = blocks
             .filter((block) => block && block.type === 'text' && typeof block.text === 'string')
             .map((block) => block.text)
             .join('\n')
             .trim();
-        };
-        const rows = messages
-          .map((message) => ({ role: message?.role ?? 'unknown', text: textOf(message) }))
-          .filter((row) => row.text.length > 0)
-          .slice(-30);
-        return sendJson(res, 200, { ok: true, messages: rows, running: task.status === 'running' });
+          if (text) rows.push({ role: type === 'user/message' ? 'user' : 'assistant', text, time: event.time ?? null });
+        }
+        return sendJson(res, 200, {
+          ok: true,
+          messages: rows.slice(-30),
+          events: events.length,
+          types,
+          running: task.status === 'running',
+        });
       } catch (error) {
         return sendJson(res, 200, { ok: false, message: `读取子会话失败：${String(error?.message ?? error).slice(0, 200)}` });
+      }
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/agent-task/message`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const taskId = String(body?.taskId ?? '');
+      const text = String(body?.message ?? '').trim();
+      if (!text) return sendJson(res, 200, { ok: false, message: '消息不能为空' });
+      const task = readTasks(project.root).find((item) => item.id === taskId);
+      if (!task || !task.childId) return sendJson(res, 200, { ok: false, message: '该任务还没有子会话' });
+      const agentsSvc = (() => {
+        try {
+          return ctx.get('agents') ?? null;
+        } catch {
+          return null;
+        }
+      })();
+      const subagents = (() => {
+        try {
+          return ctx.get('subagents') ?? null;
+        } catch {
+          return null;
+        }
+      })();
+      if (!agentsSvc?.list || !subagents?.sendMessage || !subagents?.rootOf) {
+        return sendJson(res, 200, { ok: false, message: '当前 profile 不支持给子会话发消息' });
+      }
+      let root = null;
+      for (const agent of agentsSvc.list()) {
+        try {
+          const candidate = subagents.rootOf(agent);
+          if (candidate?.id) {
+            root = candidate;
+            break;
+          }
+        } catch {
+          /* try the next agent */
+        }
+      }
+      if (!root) return sendJson(res, 200, { ok: false, message: '没有可用在线根会话，请先打开一个 DSH 会话' });
+      try {
+        await subagents.sendMessage({
+          sender: root,
+          targetId: task.childId,
+          content: [{ type: 'text', text }],
+          options: { signal: AbortSignal.timeout(30000) },
+        });
+        return sendJson(res, 200, { ok: true, message: '消息已发送给子会话，稍后刷新对话即可看到进度' });
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: `发送失败：${String(error?.message ?? error).slice(0, 200)}` });
       }
     }
     return sendError(res, 404, 'unknown ci-review API route');

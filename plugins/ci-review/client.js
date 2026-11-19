@@ -174,6 +174,10 @@ window.__ModuleLoader__.load({
         agentShowMessages: '查看对话',
         agentHideMessages: '收起对话',
         agentMessagesEmpty: '子会话还没有可展示的消息。',
+        agentFollowUp: '继续对话 / 追问这个子会话',
+        agentFollowUpPlaceholder: '输入要发给子会话的消息，例如：只读检查 lib/llm.js:100 附近的问题，不要改文件',
+        agentSend: '发送到子会话',
+        agentSent: '已发送',
         addProject: '添加项目',
         projectPathPlaceholder: '项目根目录，如 C:\\work\\my-repo',
         fileReview: '文件与问题',
@@ -349,6 +353,10 @@ window.__ModuleLoader__.load({
         agentShowMessages: 'Show conversation',
         agentHideMessages: 'Hide conversation',
         agentMessagesEmpty: 'The child session has no messages to show yet.',
+        agentFollowUp: 'Continue the conversation with this child session',
+        agentFollowUpPlaceholder: 'Message to the child session, e.g. inspect lib/llm.js:100 read-only, do not edit files',
+        agentSend: 'Send to child session',
+        agentSent: 'Sent',
         addProject: 'Add project',
         projectPathPlaceholder: 'Project root, e.g. C:\\work\\my-repo',
         fileReview: 'Files & findings',
@@ -1356,8 +1364,9 @@ window.__ModuleLoader__.load({
         }
       };
       const [chat, setChat] = React.useState({ taskId: '', messages: [], error: '', loading: false });
-      const toggleMessages = async (taskId) => {
-        if (chat.taskId === taskId) {
+      const [followUp, setFollowUp] = React.useState('');
+      const [sending, setSending] = React.useState('');
+      const toggleMessages = async (taskId) => {        if (chat.taskId === taskId) {
           setChat({ taskId: '', messages: [], error: '', loading: false });
           return;
         }
@@ -1368,6 +1377,29 @@ window.__ModuleLoader__.load({
           else setChat({ taskId, messages: data.messages || [], error: '', loading: false });
         } catch (cause) {
           setChat({ taskId, messages: [], error: String(cause?.message || cause), loading: false });
+        }
+      };
+      const sendFollowUp = async (taskId) => {
+        const text = followUp.trim();
+        if (!text) return;
+        setSending(taskId);
+        setMessage(null);
+        try {
+          const result = await request(`api/agent-task/message?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ taskId, message: text }),
+          });
+          if (result.ok) {
+            setMessage({ tone: 'ok', text: t('agentSent') });
+            setFollowUp('');
+            onRefresh();
+          } else {
+            setMessage({ tone: 'bad', text: result.message || t('agentStartFailed') });
+          }
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setSending('');
         }
       };
       return h(
@@ -1466,6 +1498,20 @@ window.__ModuleLoader__.load({
                                     h('div', { style: { whiteSpace: 'pre-wrap', color: '#e6edf3', fontSize: '12px' } }, row.text),
                                   ),
                                 ),
+                      )
+                    : null,
+                  task.childId
+                    ? h(
+                        'div',
+                        { style: { display: 'flex', gap: '6px', margin: '4px 0 2px', flexWrap: 'wrap' } },
+                        h('input', {
+                          className: 'dr-input',
+                          placeholder: t('agentFollowUpPlaceholder'),
+                          value: followUp,
+                          onChange: (event) => setFollowUp(event.target.value),
+                          style: { flex: 1, minWidth: '220px' },
+                        }),
+                        h('button', { className: 'dr-btn', type: 'button', disabled: sending === task.id || !followUp.trim(), onClick: () => sendFollowUp(task.id) }, sending === task.id ? '…' : t('agentSend')),
                       )
                     : null,
                   task.error ? h('div', { className: 'dr-notice dr-error', style: { margin: '4px 0' } }, task.error) : null,
