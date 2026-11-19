@@ -1487,6 +1487,27 @@ window.__ModuleLoader__.load({
       const [editing, setEditing] = React.useState(false);
       const [draft, setDraft] = React.useState('');
       const [editMessage, setEditMessage] = React.useState(null);
+      const [reviewJobBusy, setReviewJobBusy] = React.useState(false);
+      const selectedJobs = (snapshot.reviewJobs || []).filter((job) => job.file === selected);
+      const startReviewJob = async () => {
+        if (!selected) return;
+        setReviewJobBusy(true);
+        setEditMessage(null);
+        try {
+          const result = await request(`api/review-job/start?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ file: selected, lenses: ['correctness', 'errors', 'security'] }),
+          });
+          setEditMessage(result.ok
+            ? { tone: 'ok', text: `已启动多视角独立评审（${(result.job.lenses || []).join(', ')}），完成后自动出现在审阅卡` }
+            : { tone: 'bad', text: result.message || 'review job failed' });
+          if (result.ok) onRefresh();
+        } catch (cause) {
+          setEditMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setReviewJobBusy(false);
+        }
+      };
       const startEdit = () => {
         if (vsBuffer?.dirty) {
           setEditMessage({ tone: 'bad', text: t('vscodeDirtyBlock') });
@@ -1594,6 +1615,9 @@ window.__ModuleLoader__.load({
           editing
             ? null
             : h('button', { className: 'dr-btn', type: 'button', disabled: !selected, onClick: startEdit }, t('editFile')),
+          editing
+            ? null
+            : h('button', { className: 'dr-btn', type: 'button', disabled: reviewJobBusy || !selected, onClick: startReviewJob }, reviewJobBusy ? '评审中…' : '多视角独立评审此文件'),
           h('button', { className: `dr-btn ${mode === 'priority' ? 'primary' : ''}`, type: 'button', onClick: () => switchMode('priority') }, t('filesPriority')),
           h('button', { className: `dr-btn ${mode === 'all' ? 'primary' : ''}`, type: 'button', onClick: () => switchMode('all') }, t('filesAll')),
         ),
@@ -1670,6 +1694,15 @@ window.__ModuleLoader__.load({
                 )
               : null,
             editMessage ? h('div', { className: `dr-notice ${editMessage.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '0 0 6px' } }, editMessage.text) : null,
+            selectedJobs.length
+              ? h('div', { className: 'dr-muted', style: { marginBottom: '4px', fontSize: '11px' } },
+                  selectedJobs.map((job) => {
+                    const done = Object.values(job.results || {}).filter((result) => result?.status === 'completed').length;
+                    const total = Object.keys(job.results || {}).length;
+                    const count = Object.values(job.results || {}).reduce((sum, result) => sum + (Array.isArray(result?.findings) ? result.findings.length : 0), 0);
+                    return `多视角评审 ${job.id}: ${job.status}（${done}/${total} 视角完成，${count} 条 finding）`;
+                  }).join(' · '))
+              : null,
             editing
               ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
                   h('textarea', {

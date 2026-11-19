@@ -2038,6 +2038,132 @@ export function apply(ctx, config = {}) {
     return { agentsSvc, subagents, parent };
   }
 
+  /* ------------------------------------------------ multi-lens review jobs */
+
+  function reviewJobsDir(root) {
+    return path.join(root, '.review', 'ci-review', 'review-jobs');
+  }
+
+  function readReviewJobs(root) {
+    const dir = reviewJobsDir(root);
+    let files = [];
+    try {
+      files = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort().reverse().slice(0, 8);
+    } catch {
+      return [];
+    }
+    return files.map((name) => safeReadJson(path.join(dir, name))).filter((job) => job && job.id);
+  }
+
+  function writeReviewJob(root, job) {
+    const dir = reviewJobsDir(root);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${job.id}.json`), `${JSON.stringify(job, null, 2)}\n`, 'utf8');
+    return job;
+  }
+
+  function agentJobFindings(root) {
+    const jobs = readReviewJobs(root);
+    const seen = new Set();
+    const out = [];
+    for (const job of jobs) {
+      if (!job || job.status !== 'completed' || !job.results) continue;
+      for (const [lens, result] of Object.entries(job.results)) {
+        for (const finding of Array.isArray(result?.findings) ? result.findings : []) {
+          if (!finding || !finding.file) continue;
+          const key = `${finding.file}#${finding.startLine}#${finding.category || lens}#${finding.title || ''}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push({
+            file: String(finding.file),
+            startLine: Number(finding.startLine) || 1,
+            endLine: Number(finding.endLine) || Number(finding.startLine) || 1,
+            severity: ['blocker', 'major', 'minor'].includes(finding.severity) ? finding.severity : 'minor',
+            category: String(finding.category || lens),
+            title: String(finding.title ?? '').slice(0, 200),
+            problem: String(finding.problem ?? '').slice(0, 1200),
+            evidence: String(finding.evidence ?? '').slice(0, 1200),
+            impact: String(finding.impact ?? '').slice(0, 800),
+            suggestion: String(finding.suggestion ?? '').slice(0, 800),
+            status: 'real',
+            source: 'agent',
+            lens,
+            runId: `agent-job:${job.id}`,
+          });
+        }
+      }
+    }
+    return out.slice(0, 300);
+  }
+
+  function reviewLensPrompt(file, lens) {
+    return [
+      `你是独立 ${lens} 视角的代码评审者（独立上下文，与其他评审者互相不可见）。`,
+      `只读评审仓库文件 \`${file}\`（以及你需要的调用方/测试），不要修改任何文件。`,
+      '',
+      '输出要求：只输出一个 JSON 对象，不要 markdown 围栏：',
+      '{"findings":[{"file":"...","startLine":1,"endLine":2,"severity":"blocker|major|minor","category":"correctness|errors|security|concurrency|data|contract|intent|tests|style","title":"...","problem":"...","evidence":"...","impact":"...","suggestion":"...","confidence":"low|medium|high"}]}',
+      '最多 5 条，只报告你能用代码/调用方证明的真实问题；没有问题就返回 {"findings":[]}。',
+      '不要报纯风格/测试增强建议；要给出具体行号与证据。',
+    ].join('\n');
+  }
+
+  async function startReviewJob({ project, file, lenses, parent, subagents }) {
+    const jobId = `job-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomBytes(3).toString('hex')}`;
+    const job = {
+      id: jobId,
+      file,
+      lenses,
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      results: Object.fromEntries(lenses.map((lens) => [lens, { status: 'running', findings: [] }])),
+    };
+    writeReviewJob(project.root, job);
+    const update = (mutate) => {
+      const current = safeReadJson(path.join(reviewJobsDir(project.root), `${jobId}.json`)) ?? job;
+      mutate(current);
+      const pending = Object.values(current.results ?? {}).some((result) => result?.status === 'running');
+      current.status = pending ? 'running' : 'completed';
+      if (!pending) current.finishedAt = new Date().toISOString();
+      writeReviewJob(project.root, current);
+      snapshotCache.delete(project.id);
+    };
+    for (const lens of lenses) {
+      try {
+        const activation = await subagents.startActivation({
+          provider: 'spawn',
+          label: `review-${lens} ${file}`,
+          name: `rev-${jobId.slice(-6)}-${lens.slice(0, 6)}`,
+          prompt: [{ type: 'text', text: reviewLensPrompt(file, lens) }],
+          parent,
+          cwd: project.root,
+          signal: AbortSignal.timeout(20 * 60 * 1000),
+          delivery: 'caller',
+        });
+        activation.result
+          .then((result) => {
+            const report = parseAgentReport(result);
+            const findings = Array.isArray(report?.findings) ? report.findings : [];
+            update((current) => {
+              current.results[lens] = { status: 'completed', findings };
+            });
+          })
+          .catch((error) => {
+            update((current) => {
+              current.results[lens] = { status: 'failed', error: String(error?.message ?? error), findings: [] };
+            });
+          });
+      } catch (error) {
+        update((current) => {
+          current.results[lens] = { status: 'failed', error: String(error?.message ?? error), findings: [] };
+        });
+      }
+    }
+    snapshotCache.delete(project.id);
+    return job;
+  }
+
   /* -------------------------------------------------------------- snapshot */
 
   async function buildSnapshot(project) {
@@ -2048,7 +2174,9 @@ export function apply(ctx, config = {}) {
     ]);
     const localReviews = summary.exists ? readLocalReviewRuns(project.root) : [];
     const annotations = summary.exists ? readAnnotations(project.root) : [];
-    const findings = summary.exists ? readFindings(project.root) : [];
+    const jobFindings = summary.exists ? agentJobFindings(project.root) : [];
+    const findings = summary.exists ? [...jobFindings, ...readFindings(project.root)] : [];
+    const reviewJobs = summary.exists ? readReviewJobs(project.root) : [];
     const changedPaths = Array.isArray(github.pr?.files) ? github.pr.files : [];
     const files = summary.exists ? priorityFiles(project.root, findings, annotations, changedPaths) : [];
     const repoUrl = summary.repo ? `https://github.com/${summary.repo}` : null;
@@ -2063,6 +2191,7 @@ export function apply(ctx, config = {}) {
       findings,
       files,
       fixQueue: summary.exists ? readFixQueue(project.root) : [],
+      reviewJobs,
       reviewBatches: summary.exists ? buildReviewProblems(project.root, findings) : [],
       annotations,
       agentTasks: summary.exists ? readTasks(project.root) : [],
@@ -2921,6 +3050,25 @@ export function apply(ctx, config = {}) {
       if (!parent || !subagents) return sendJson(res, 200, { ok: false, message: '没有可用在线会话，无法启动验证子代理' });
       const result = await startVerification({ project, problem, parent, subagents });
       return sendJson(res, 200, result);
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/review-job/start`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const file = resolveInsideRoot(project.root, String(body?.file ?? ''));
+      if (!file) return sendJson(res, 200, { ok: false, message: '文件必须在项目根目录内' });
+      const allowed = ['intent', 'correctness', 'errors', 'security', 'concurrency', 'data', 'contract', 'tests'];
+      const lenses = (Array.isArray(body?.lenses) ? body.lenses : ['correctness', 'errors', 'security'])
+        .filter((lens) => allowed.includes(lens));
+      if (lenses.length === 0) return sendJson(res, 200, { ok: false, message: '至少选择一个视角' });
+      const { parent, subagents } = await resolveVerificationParent(project);
+      if (!parent || !subagents) return sendJson(res, 200, { ok: false, message: '没有可用在线会话，无法启动评审子代理' });
+      try {
+        const job = await startReviewJob({ project, file, lenses, parent, subagents });
+        return sendJson(res, 200, { ok: true, job });
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: String(error?.message ?? error) });
+      }
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }
