@@ -1100,7 +1100,20 @@ window.__ModuleLoader__.load({
     function ReviewCardsCard({ snapshot, t, projectId, onRefresh, onAskAgentAt }) {
       const batches = snapshot.reviewBatches || [];
       const [showLow, setShowLow] = React.useState(false);
-      const [index, setIndex] = React.useState(0);
+      const [index, setIndex] = React.useState(() => {
+        try {
+          return Number(localStorage.getItem(`ciReview:batch:${projectId}`)) || 0;
+        } catch {
+          return 0;
+        }
+      });
+      React.useEffect(() => {
+        try {
+          localStorage.setItem(`ciReview:batch:${projectId}`, String(index));
+        } catch {
+          /* storage may be unavailable */
+        }
+      }, [projectId, index]);
       const [busy, setBusy] = React.useState(false);
       const [message, setMessage] = React.useState(null);
       const visible = batches.filter((batch) => showLow || !batch.collapsed);
@@ -1209,9 +1222,35 @@ window.__ModuleLoader__.load({
 
     function FileReviewCard({ snapshot, t, projectId, onAskAgentAt, onAnnotateAt, onRefresh }) {
       const allFindings = snapshot.findings || [];
-      const [mode, setMode] = React.useState('priority');
+      const [mode, setMode] = React.useState(() => {
+        try {
+          return localStorage.getItem('ciReview:fileMode') || 'priority';
+        } catch {
+          return 'priority';
+        }
+      });
       const [files, setFiles] = React.useState(snapshot.files || []);
-      const [selected, setSelected] = React.useState('');
+      const [selected, setSelected] = React.useState(() => {
+        try {
+          return localStorage.getItem(`ciReview:file:${projectId}`) || '';
+        } catch {
+          return '';
+        }
+      });
+      React.useEffect(() => {
+        try {
+          localStorage.setItem('ciReview:fileMode', mode);
+        } catch {
+          /* storage may be unavailable */
+        }
+      }, [mode]);
+      React.useEffect(() => {
+        try {
+          if (selected) localStorage.setItem(`ciReview:file:${projectId}`, selected);
+        } catch {
+          /* storage may be unavailable */
+        }
+      }, [projectId, selected]);
       const [file, setFile] = React.useState(null);
       const [line, setLine] = React.useState(0);
       const [error, setError] = React.useState('');
@@ -1220,7 +1259,8 @@ window.__ModuleLoader__.load({
         if (mode === 'priority') setFiles(snapshot.files || []);
       }, [snapshot.files, mode]);
       React.useEffect(() => {
-        if (!selected && files.length) setSelected(files[0].path);
+        if (files.length === 0) return;
+        if (!files.some((entry) => entry.path === selected)) setSelected(files[0].path);
       }, [files, selected]);
       React.useEffect(() => {
         if (!selected) return undefined;

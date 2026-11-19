@@ -115,6 +115,17 @@ function activate(context) {
   log(`discovery ${discovery ? `port=${discovery.port}` : 'missing'}`);
   if (discovery) connect({ port: discovery.port, token: discovery.token });
   else connect();
+  // DSH restarts rotate the token and may change the port; poll the discovery
+  // file so a running VS Code reconnects without any user interaction.
+  const watcher = setInterval(() => {
+    const next = readDiscovery();
+    if (!next) return;
+    if (!target || next.port !== target.port || next.token !== target.token) {
+      log(`discovery changed -> reconnect port=${next.port}`);
+      connect({ port: next.port, token: next.token });
+    }
+  }, 5000);
+  context.subscriptions.push({ dispose() { clearInterval(watcher); } });
 }
 
 function deactivate() {
