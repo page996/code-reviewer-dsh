@@ -1,0 +1,53 @@
+# ci-review VS Code bridge (L3) — protocol draft
+
+Goal: let the DSH ci-review panel show the **real, unsaved VS Code buffer** (and
+LSP diagnostics) for the file a review card points at, without turning the panel
+into an IDE. The extension is a thin bridge: VS Code owns editing, LSP and
+diagnostics; the panel renders a read-only projection.
+
+## Transport
+
+- Host: DSH plugin serves `POST /api/vscode/register` (per-process token, same
+  origin policy as the other routes). Extension registers itself with
+  `{port, token, workspaceRoot}` obtained from a one-time pairing command.
+- Session: extension opens a WebSocket `ws://127.0.0.1:<port>/dsh-ci-review/vscode`
+  and sends pushes; host rebroadcasts the latest snapshot to the panel via SSE
+  or the existing 15 s snapshot poll (extension snapshot cached in memory).
+- Fallback: if the extension is absent, the panel keeps L1 (rendered from disk)
+  and L2 (`vscode://file/...` deep link).
+
+## Messages (extension → host)
+
+```json
+{ "type": "buffer", "file": "plugins/ci-review/client.js", "languageId": "javascript",
+  "version": 42, "dirty": true, "lines": ["..."], "cursor": {"line": 12, "column": 3},
+  "selection": {"startLine": 10, "endLine": 18} }
+{ "type": "diagnostics", "file": "...", "items": [
+  { "severity": "error|warning|info", "line": 12, "column": 3, "message": "...", "source": "eslint" } ] }
+{ "type": "hello", "workspaceRoot": "E:/proj", "vscodeVersion": "1.x", "extensionVersion": "0.1.0" }
+```
+
+## Host → panel shape
+
+`snapshot.vscode = { connected, workspaceRoot, files: { [file]: { version, dirty, lines, cursor, selection, diagnostics } } }`
+The panel uses `files[card.file].lines` when present and marks `dirty: true` so
+the user knows the projection differs from disk.
+
+## Compatibility rules
+
+- Paths are workspace-relative POSIX strings; the host maps to the card's file.
+- If the workspace root differs from the registered project root, the panel shows
+  "VS Code 打开的是另一个工作区" and falls back to L1.
+- Large files are sliced around the card lines (max 2,000 lines) before push.
+- Extension absence is never an error: panel states which layers are active.
+
+## Files to create (next round)
+
+```
+vscode-extension/
+  package.json        # name, main, activationEvents: onStartupFinished, contributes.commands (pair)
+  extension.js        # workspace.onDidChangeTextDocument + languages diagnostics watch → ws push
+  README.md           # install: vsce package → code --install-extension ci-review-bridge-0.1.0.vsix
+```
+
+Install is **manual by the user** (`code --install-extension ...`), never silent.
