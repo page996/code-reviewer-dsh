@@ -389,7 +389,39 @@ window.__ModuleLoader__.load({
 .dr-footer{padding:8px 2px 0;display:flex;flex-wrap:wrap;gap:12px;color:var(--dsw-alias-label-secondary,#6b7280);font-size:11px}
 .dr-spin{display:inline-block;width:10px;height:10px;border-radius:999px;border:2px solid var(--dsw-alias-border-l2,#d1d5db);border-top-color:var(--dsw-alias-brand-primary,#2563eb);animation:dr-spin .8s linear infinite}
 @keyframes dr-spin{to{transform:rotate(360deg)}}
-@media (max-width:760px){.dr-body{grid-template-columns:1fr}.dr-list{border-right:none;border-bottom:1px solid var(--dsw-alias-border-l1,#e5e7eb);max-height:180px}}
+@media (max-width:760px){.dr-body{grid-template-columns:1fr}.dr-list{border-right:none;border-bottom:1px solid #23262d;max-height:180px}}
+/* Dark unified surface: every box is near-black with white text. */
+.dr-root{background:#08090c;color:#f5f7fa}
+.dr-header{border-bottom:1px solid #23262d}
+.dr-subtitle{color:#9aa3b2}
+.dr-badge{background:#111318;border-color:#2a2e37;color:#c8d0dc}
+.dr-badge strong{color:#f5f7fa}
+.dr-list{border-right-color:#23262d}
+.dr-list-head{color:#9aa3b2}
+.dr-project:hover{background:#14171d}
+.dr-project[data-active="true"]{background:#1b1f27;border-color:#343a46}
+.dr-project-meta{color:#9aa3b2}
+.dr-card{background:#0f1116;border-color:#23262d}
+.dr-card-title{color:#f5f7fa}
+.dr-card-title-sub{color:#9aa3b2}
+.dr-muted{color:#9aa3b2}
+.dr-row{border-top-color:#1f232b}
+.dr-row-state{color:#9aa3b2}
+.dr-input{background:#050608;color:#f5f7fa;border-color:#343a46}
+.dr-input::placeholder{color:#6f7987}
+.dr-input:focus{outline-color:#2f81f7}
+.dr-link,.dr-btn.dr-link{color:#6cb6ff}
+.dr-btn{background:#1b2029;color:#f5f7fa;border-color:#3a4150}
+.dr-btn:hover:not(:disabled){background:#242b37;border-color:#48505f}
+.dr-btn:disabled{background:#12151b;color:#66707e;border-color:#282e38}
+.dr-btn.primary{background:#2f81f7;border-color:#2f81f7;color:#ffffff}
+.dr-btn.primary:hover:not(:disabled){background:#1f6feb;border-color:#1f6feb}
+.dr-notice{background:#141821;border-color:#2a303a;border-left-color:#d29922;color:#e8edf4}
+.dr-error{border-left-color:#f85149}
+.dr-empty{color:#9aa3b2}
+.dr-code{background:#161a21;border-color:#2a303a;color:#e6edf3}
+.dr-path,.dr-footer{color:#9aa3b2}
+.dr-spin{border-color:#3a4150;border-top-color:#2f81f7}
 `;
 
     function interpolate(template, params) {
