@@ -38,7 +38,44 @@ projects:
     root: 'C:/work/my-service'
 ```
 
-## Current status (v0.3.0)
+## Current status (v0.4, review-cards v2 MVP)
+
+- **Review cards**: problems clustered from local review runs + multi-lens agent
+  review jobs; batches are logical problem stages (agent/related findings decide
+  the grouping), each with modules, coverage, structured explanation and
+  decision surface; low-priority batches are collapsed; per-card and per-batch
+  decisions; independent verification subagent can confirm/reject each problem
+  with evidence (rejected problems collapse).
+- **Multi-lens independent review**: one independent subagent per lens reviews a
+  selected file and returns structured findings; findings merge into problem
+  batches automatically.
+- **Fix queue**: approving a problem enqueues it (`.review/ci-review/fix-queue.json`);
+  the queue card can start an agent fix, mark fixed or remove.
+- **Agent handoff**: background subagent per task (independent context, durable
+  session), follow-up messages, child-session conversation view, multi-file
+  unified diff, gate runner, worktree annotation creation.
+- **Projection reading**: L1 in-panel renderer with selection annotations and
+  unsaved-line markers; L2 VS Code deep link; L3 VS Code extension streaming the
+  live unsaved buffer + diagnostics, auto-discovery/auto-reconnect
+  (`~/.dsh/ci-review-bridge.json`); LSP diagnostics markers.
+- **PR**: checks, rerun, inline comments (read/write), review (approve/request
+  changes/comment), merge with confirmation; PR files feed the priority file list.
+- **Gate / editing**: gate commands from `.review/config.json` (endpoint also
+  accepts a temporary override); manual edit with sha256 guard, per-edit backup,
+  atomic write and automatic gate after save.
+- **Persistence**: panel selection/language/batch/file are remembered; snapshots
+  are cached on disk for instant re-entry.
+
+### Remaining gaps (explicit)
+
+- Voting-stage automatic fixing of minor findings is not automated yet (verified
+  minor problems still require an explicit agent task).
+- LSP *semantic* hover/definition/reference projection is not implemented; only
+  diagnostics are displayed.
+- Multi-lens review is triggered per file, not yet auto-expanded to the whole
+  project; pre-push completeness audit is a coverage check, not an independent
+  agent reverse-audit.
+
 
 - Read-only snapshot: project/git state, PR state, review decision, mergeability,
   unresolved threads, checks with per-check links, recent Actions runs, local
