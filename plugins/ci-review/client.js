@@ -182,6 +182,7 @@ window.__ModuleLoader__.load({
         reviewCardsHideLow: '收起低优先级批次',
         reviewCardsExcerpt: '源码片段',
         reviewCardsUncertainty: '不确定点',
+        openInVscode: '在 VS Code 打开',
         agentOpenSession: '打开子会话',
         agentSessionHint: '子会话是 DSH 中真实的后台会话，可打开后继续聊天/追问。',
         agentShowMessages: '查看对话',
@@ -375,6 +376,7 @@ window.__ModuleLoader__.load({
         reviewCardsHideLow: 'Hide low-priority batches',
         reviewCardsExcerpt: 'Source excerpt',
         reviewCardsUncertainty: 'Uncertainty',
+        openInVscode: 'Open in VS Code',
         agentOpenSession: 'Open child session',
         agentSessionHint: 'The child session is a real DSH session; open it to keep chatting or asking follow-ups.',
         agentShowMessages: 'Show conversation',
@@ -1096,6 +1098,7 @@ window.__ModuleLoader__.load({
                           cardItem.excerpt.lines.map((line) => `${String(line.n).padStart(4)}  ${line.text}`).join('\n'))
                       : null,
                     h('div', { className: 'dr-actions', style: { marginTop: '4px' } },
+                      h('button', { className: 'dr-btn', type: 'button', onClick: () => { try { const root = String(snapshot.project.root || '').replace(/\\/g, '/').replace(/\/$/, ''); window.open(`vscode://file/${root}/${cardItem.file}:${cardItem.startLine}:1`); } catch (cause) { setMessage({ tone: 'bad', text: String(cause?.message || cause) }); } } }, t('openInVscode')),
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'approved') }, t('reviewCardsApprove')),
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'needs-revision') }, t('reviewCardsRevision')),
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'ignored') }, t('reviewCardsIgnore')),
