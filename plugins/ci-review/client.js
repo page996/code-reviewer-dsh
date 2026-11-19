@@ -1131,8 +1131,8 @@ window.__ModuleLoader__.load({
         h('p', { className: 'dr-muted', style: { marginBottom: '8px' } }, t('agentTasksFlow')),
         h(
           'div',
-          { style: { marginBottom: '10px', border: '1px solid #d5dbe3', borderRadius: '8px', padding: '10px', background: '#f8fafc' } },
-          h('p', { className: 'dr-muted', style: { margin: '0 0 4px', color: '#1f2328', fontWeight: '600' } }, draft ? `${t('agentDraftTitle')} · ${t('agentTarget')}: ${draft.target || ''}` : t('agentDraftTitle')),
+          { style: { marginBottom: '10px', border: '1px solid #2a303a', borderRadius: '8px', padding: '10px', background: '#141821' } },
+          h('p', { className: 'dr-muted', style: { margin: '0 0 4px', color: '#f5f7fa', fontWeight: '600' } }, draft ? `${t('agentDraftTitle')} · ${t('agentTarget')}: ${draft.target || ''}` : t('agentDraftTitle')),
           h('p', { className: 'dr-muted', style: { margin: '0 0 8px' } }, t('agentDraftHint')),
           h(
             'div',
