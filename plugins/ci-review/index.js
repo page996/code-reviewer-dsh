@@ -1436,6 +1436,81 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  function readCardDecisions(root) {
+    return safeReadJson(path.join(root, '.review', 'ci-review', 'cards.json'))?.decisions ?? {};
+  }
+
+  function writeCardDecisions(root, decisions) {
+    const dir = path.join(root, '.review', 'ci-review');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'cards.json'), `${JSON.stringify({ version: 1, decisions }, null, 2)}\n`, 'utf8');
+  }
+
+  function sourceExcerpt(root, file, startLine, pad = 6) {
+    const data = readProjectFile(root, file);
+    if (!data || data.tooLarge || typeof data.content !== 'string') return null;
+    const lines = data.content.split('\n');
+    const from = Math.max(1, (startLine || 1) - pad);
+    const to = Math.min(lines.length, (startLine || 1) + pad);
+    return { from, to, total: lines.length, lines: lines.slice(from - 1, to).map((text, index) => ({ n: from + index, text })) };
+  }
+
+  function buildReviewBatches(root, findings) {
+    const decisions = readCardDecisions(root);
+    const rank = { blocker: 0, major: 1, minor: 2 };
+    const sorted = [...findings].sort((a, b) =>
+      (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2) || a.file.localeCompare(b.file) || (a.startLine || 1) - (b.startLine || 1));
+    const size = 5;
+    const batches = [];
+    for (let start = 0; start < sorted.length; start += size) {
+      const cards = sorted.slice(start, start + size).map((finding) => {
+        const id = `${finding.file}#${finding.startLine}#${finding.category}`;
+        return {
+          id,
+          file: finding.file,
+          startLine: finding.startLine,
+          endLine: finding.endLine,
+          severity: finding.severity,
+          category: finding.category,
+          title: finding.title,
+          problem: finding.problem,
+          evidence: finding.evidence,
+          impact: finding.impact,
+          suggestion: finding.suggestion,
+          runId: finding.runId,
+          excerpt: sourceExcerpt(root, finding.file, finding.startLine),
+          decision: decisions[id]?.status === 'approved' ? 'approved'
+            : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
+              : decisions[id]?.status === 'ignored' ? 'ignored' : 'pending',
+          decisionSurface: {
+            risk: finding.severity,
+            blastRadius: 'single file (verify callers before changing signatures)',
+            compatibility: finding.category === 'contract' ? 'public interface/format may change' : 'keep API/format stable',
+            tests: finding.category === 'tests' ? 'add/adjust regression coverage' : 'run project gate after the fix',
+            rollback: 'git diff / revert task files before commit',
+          },
+        };
+      });
+      const files = [...new Set(cards.map((card) => card.file))];
+      batches.push({
+        id: `batch-${batches.length + 1}`,
+        index: batches.length + 1,
+        cards,
+        coverage: {
+          files,
+          count: cards.length,
+          severities: cards.reduce((acc, card) => ({ ...acc, [card.severity]: (acc[card.severity] ?? 0) + 1 }), {}),
+          categories: [...new Set(cards.map((card) => card.category))],
+        },
+        progress: {
+          approved: cards.filter((card) => card.decision === 'approved').length,
+          pending: cards.filter((card) => card.decision === 'pending').length,
+        },
+      });
+    }
+    return batches;
+  }
+
   /* -------------------------------------------------------------- snapshot */
 
   async function buildSnapshot(project) {
@@ -1459,6 +1534,7 @@ export function apply(ctx, config = {}) {
       sessions,
       findings,
       files,
+      reviewBatches: summary.exists ? buildReviewBatches(project.root, findings) : [],
       annotations,
       agentTasks: summary.exists ? readTasks(project.root) : [],
       capabilities: {
@@ -1981,6 +2057,21 @@ export function apply(ctx, config = {}) {
       } catch (error) {
         return sendJson(res, 200, { ok: false, message: `发送失败：${String(error?.message ?? error).slice(0, 200)}` });
       }
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/review-cards/decide`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const status = ['approved', 'needs-revision', 'ignored', 'pending'].includes(body?.status) ? body.status : 'pending';
+      const decisions = readCardDecisions(project.root);
+      const ids = Array.isArray(body?.cardIds) ? body.cardIds.map(String) : [String(body?.cardId ?? '')];
+      for (const id of ids.filter(Boolean)) {
+        if (status === 'pending') delete decisions[id];
+        else decisions[id] = { status, at: new Date().toISOString() };
+      }
+      writeCardDecisions(project.root, decisions);
+      snapshotCache.delete(project.id);
+      return sendJson(res, 200, { ok: true, updated: ids.length, status });
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }
