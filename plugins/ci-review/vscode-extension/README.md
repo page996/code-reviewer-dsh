@@ -7,14 +7,14 @@ diagnostics; the panel renders a read-only projection.
 
 ## Transport
 
-- Host: DSH plugin serves `POST /api/vscode/register` (per-process token, same
-  origin policy as the other routes). Extension registers itself with
-  `{port, token, workspaceRoot}` obtained from a one-time pairing command.
-- Session: extension opens a WebSocket `ws://127.0.0.1:<port>/dsh-ci-review/vscode`
-  and sends pushes; host rebroadcasts the latest snapshot to the panel via SSE
-  or the existing 15 s snapshot poll (extension snapshot cached in memory).
-- Fallback: if the extension is absent, the panel keeps L1 (rendered from disk)
-  and L2 (`vscode://file/...` deep link).
+- Host: DSH plugin serves `POST /api/vscode/push` (per-process token, same
+  origin policy as the other routes). The extension POSTs JSON snapshots with
+  `?token=<panel token>`; the Host caches them in `snapshot.vscode.buffers` and
+  the panel renders the projection. WebSocket streaming is optional future work;
+  the current implemented transport is this HTTP push (simpler, Windows/VS Code
+  friendly, no extra dependency).
+- The extension reads `ciReviewBridge.port` / `ciReviewBridge.token` settings and
+  runs `CI Review: Connect to DSH panel`.
 
 ## Messages (extension → host)
 
