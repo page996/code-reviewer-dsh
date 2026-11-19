@@ -379,22 +379,27 @@ export function apply(ctx, config = {}) {
 
   /* ---------------------------------------------------------------- github */
 
-  async function githubRequest(apiPath) {
+  async function githubRequest(apiPath, options = {}) {
     const active = currentCredential();
     if (!active.value) throw new Error('missing-token');
+    const headers = {
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'dsh-ci-review',
+      Authorization: `Bearer ${active.value}`,
+    };
+    if (options.body !== undefined) headers['Content-Type'] = 'application/json';
     const response = await fetch(`${GITHUB_API}${apiPath}`, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'dsh-ci-review',
-        Authorization: `Bearer ${active.value}`,
-      },
+      method: options.method ?? 'GET',
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
       throw new Error(`GitHub ${response.status} ${response.statusText} ${text.slice(0, 160)}`.trim());
     }
+    if (response.status === 204) return null;
     return response.json();
   }
 
@@ -490,6 +495,20 @@ export function apply(ctx, config = {}) {
     return (Array.isArray(data) ? data : [])
       .map((file) => file?.filename)
       .filter((file) => typeof file === 'string');
+  }
+
+  async function readPrComments(repo, number) {
+    const data = await githubRequest(`/repos/${repo.owner}/${repo.name}/pulls/${number}/comments?per_page=100`).catch(() => []);
+    return (Array.isArray(data) ? data : []).map((comment) => ({
+      id: comment.id,
+      path: comment.path,
+      line: Number(comment.line ?? comment.original_line) || 1,
+      side: comment.side ?? 'RIGHT',
+      body: String(comment.body ?? '').slice(0, 4000),
+      user: comment.user?.login ?? '',
+      createdAt: comment.created_at ?? null,
+      url: comment.html_url ?? null,
+    }));
   }
 
   function reviewDecisionFromReviews(reviews) {
@@ -860,6 +879,7 @@ export function apply(ctx, config = {}) {
         const normalized = normalizeForgePr(entry.snapshot);
         normalized.runs = active.value ? await readRuns(repo, branch).catch(() => []) : [];
         normalized.files = active.value ? await readPrFiles(repo, pr.number) : [];
+        normalized.reviewComments = active.value ? await readPrComments(repo, pr.number).catch(() => []) : [];
         return {
           available: true,
           status: 'ok',
@@ -885,6 +905,7 @@ export function apply(ctx, config = {}) {
       let reviews = { decision: 'none', latest: [] };
       let detail = null;
       let prFiles = [];
+      let prComments = [];
       if (pr) {
         detail = await githubRequest(`${base}/pulls/${pr.number}`).catch(() => pr);
         const headSha = detail?.head?.sha ?? pr.head?.sha;
@@ -894,6 +915,7 @@ export function apply(ctx, config = {}) {
           githubRequest(`${base}/pulls/${pr.number}/reviews?per_page=100`).then(reviewDecisionFromReviews).catch(() => reviews),
           readPrFiles(repo, pr.number),
         ]);
+        prComments = await readPrComments(repo, pr.number).catch(() => []);
       }
       const actions = restActions(
         pr
@@ -942,6 +964,7 @@ export function apply(ctx, config = {}) {
               reviews,
               runs,
               files: prFiles,
+              reviewComments: prComments,
             }
           : null,
         openPullRequests,
@@ -2245,6 +2268,36 @@ export function apply(ctx, config = {}) {
         };
       }
       return sendJson(res, 200, { ok: true });
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/pr/comment`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const file = String(body?.file ?? '').replace(/\\/g, '/');
+      const line = Number(body?.line);
+      const text = String(body?.body ?? '').trim();
+      if (!file || !Number.isFinite(line) || line < 1 || !text) return sendJson(res, 200, { ok: false, message: 'file/line/body 必填' });
+      let snapshot = snapshotCache.get(project.id)?.snapshot;
+      if (!snapshot?.github?.pr) {
+        snapshot = await buildSnapshot(project);
+        snapshotCache.set(project.id, { at: Date.now(), snapshot });
+      }
+      const pr = snapshot.github?.pr;
+      if (!pr) return sendJson(res, 200, { ok: false, message: '当前分支没有打开的 PR' });
+      if (!pr.headSha) return sendJson(res, 200, { ok: false, message: '缺少 PR headSha' });
+      const summary = projectSummary(project);
+      const repo = repoParts(summary.repo);
+      if (!repo) return sendJson(res, 200, { ok: false, message: '项目没有 GitHub 仓库' });
+      try {
+        const comment = await githubRequest(`/repos/${repo.owner}/${repo.name}/pulls/${pr.number}/comments`, {
+          method: 'POST',
+          body: { body: text, commit_id: pr.headSha, path: file, line, side: body?.side === 'LEFT' ? 'LEFT' : 'RIGHT' },
+        });
+        snapshotCache.delete(project.id);
+        return sendJson(res, 200, { ok: true, url: comment?.html_url ?? null, id: comment?.id ?? null });
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 240) });
+      }
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }

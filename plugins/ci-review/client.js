@@ -186,6 +186,10 @@ window.__ModuleLoader__.load({
         vscodeLive: 'VS Code 实时缓冲区',
         vscodeLiveDirty: 'VS Code 实时缓冲区（未保存）',
         diskSource: '磁盘内容（L1）',
+        copyBridge: '复制桥接参数',
+        bridgeCopied: '已复制',
+        prCommentHere: 'PR 行内评论',
+        prComments: 'PR 行内评论',
         openInVscode: '在 VS Code 打开',
         agentOpenSession: '打开子会话',
         agentSessionHint: '子会话是 DSH 中真实的后台会话，可打开后继续聊天/追问。',
@@ -384,6 +388,10 @@ window.__ModuleLoader__.load({
         vscodeLive: 'VS Code live buffer',
         vscodeLiveDirty: 'VS Code live buffer (unsaved)',
         diskSource: 'Disk content (L1)',
+        copyBridge: 'Copy bridge settings',
+        bridgeCopied: 'Copied',
+        prCommentHere: 'PR inline comment',
+        prComments: 'PR inline comments',
         openInVscode: 'Open in VS Code',
         agentOpenSession: 'Open child session',
         agentSessionHint: 'The child session is a real DSH session; open it to keep chatting or asking follow-ups.',
@@ -1173,6 +1181,7 @@ window.__ModuleLoader__.load({
       const [file, setFile] = React.useState(null);
       const [line, setLine] = React.useState(0);
       const [error, setError] = React.useState('');
+      const [prMessage, setPrMessage] = React.useState(null);
       React.useEffect(() => {
         if (mode === 'priority') setFiles(snapshot.files || []);
       }, [snapshot.files, mode]);
@@ -1214,6 +1223,8 @@ window.__ModuleLoader__.load({
           ? file.content.split('\n')
           : [];
       const diagnosticLines = new Map((vsBuffer?.diagnostics || []).map((item) => [item.line, item.message]));
+      const prComments = (snapshot.github?.pr?.reviewComments || []).filter((comment) => comment.path === selected);
+      const commentLines = new Map(prComments.map((comment) => [comment.line, comment]));
       const selectedFinding = fileFindings.find((finding) => (finding.startLine || 1) <= line && line <= (finding.endLine || finding.startLine || 1)) ?? null;
       const askHere = () => {
         if (!selected || !line) return;
@@ -1281,6 +1292,24 @@ window.__ModuleLoader__.load({
                   h('span', { className: 'dr-code' }, `L${line}`),
                   h('button', { className: 'dr-btn primary', type: 'button', onClick: askHere }, t('askAgentHere')),
                   h('button', { className: 'dr-btn', type: 'button', onClick: () => onAnnotateAt(selected, line) }, t('annotateHere')),
+                  h('button', {
+                    className: 'dr-btn',
+                    type: 'button',
+                    onClick: async () => {
+                      const text = window.prompt(t('prCommentHere'));
+                      if (!text || !text.trim()) return;
+                      try {
+                        const result = await request(`api/pr/comment?projectId=${encodeURIComponent(projectId)}`, {
+                          method: 'POST',
+                          body: JSON.stringify({ file: selected, line, body: text.trim() }),
+                        });
+                        setPrMessage(result.ok ? { tone: 'ok', text: '已发布 PR 行内评论' } : { tone: 'bad', text: result.message || 'failed' });
+                        if (result.ok) onRefresh();
+                      } catch (cause) {
+                        setPrMessage({ tone: 'bad', text: String(cause?.message || cause) });
+                      }
+                    },
+                  }, t('prCommentHere')),
                   h('button', { className: 'dr-btn', type: 'button', onClick: () => { try { navigator.clipboard.writeText(`${selected}:${line}`); } catch { /* ignore */ } } }, t('copyPosition')),
                   selectedFinding ? h('span', { className: 'dr-muted' }, `${selectedFinding.severity} · ${selectedFinding.title}`) : null,
                 )
@@ -1313,6 +1342,9 @@ window.__ModuleLoader__.load({
                         diagnosticLines.has(number)
                           ? h('span', { title: diagnosticLines.get(number), style: { color: '#f0b429', flex: 'none' } }, '⚠')
                           : null,
+                        commentLines.has(number)
+                          ? h('span', { title: commentLines.get(number).body, style: { color: '#6cb6ff', flex: 'none' } }, '💬')
+                          : null,
                         h('span', { style: { whiteSpace: 'pre', color: severity ? '#ffdcd7' : '#e6edf3' } }, text || ' '),
                       );
                     }),
@@ -1336,6 +1368,14 @@ window.__ModuleLoader__.load({
               : null,
             fileAnnotations.length
               ? h('div', { className: 'dr-muted', style: { marginTop: '6px' } }, `${t('annotations')}: ${fileAnnotations.map((a) => `L${a.startLine}`).join(', ')}`)
+              : null,
+            prMessage ? h('div', { className: `dr-notice ${prMessage.tone === 'bad' ? 'dr-error' : ''}`, style: { marginTop: '6px' } }, prMessage.text) : null,
+            prComments.length
+              ? h('div', { style: { marginTop: '8px' } },
+                  h('div', { className: 'dr-muted', style: { marginBottom: '4px' } }, `${t('prComments')} (${prComments.length})`),
+                  ...prComments.map((comment) => h('div', { key: comment.id, className: 'dr-row', style: { alignItems: 'flex-start', flexDirection: 'column', gap: '2px' } },
+                    h('div', { className: 'dr-muted', style: { fontSize: '11px' } }, `L${comment.line} · ${comment.user || 'unknown'} · ${comment.createdAt ? new Date(comment.createdAt).toLocaleString() : ''}`),
+                    h('div', { style: { whiteSpace: 'pre-wrap' } }, comment.body))))
               : null,
           ),
         ),
@@ -1759,6 +1799,7 @@ window.__ModuleLoader__.load({
       const snapshot = model.snapshot;
       const [agentDraft, setAgentDraft] = React.useState(null);
       const [annotationDraft, setAnnotationDraft] = React.useState(null);
+      const [bridgeCopied, setBridgeCopied] = React.useState(false);
       return h(
         'div',
         { className: 'dr-root' },
@@ -1779,6 +1820,20 @@ window.__ModuleLoader__.load({
             h(Badge, { tone: snapshot?.github?.available ? 'ok' : 'warn' }, snapshot?.capabilities?.dataSource === 'forge' ? t('dataSourceForge') : snapshot?.github?.available ? t('dataSourceRest') : t('githubMissing')),
             snapshot?.vscode?.connected ? h(Badge, { tone: 'ok' }, t('vscodeLive')) : null,
             h('button', { className: 'dr-btn', type: 'button', onClick: () => setLang(lang === 'zh' ? 'en' : 'zh'), title: 'Language / 语言' }, lang === 'zh' ? 'EN' : '中文'),
+            h('button', {
+              className: 'dr-btn',
+              type: 'button',
+              onClick: async () => {
+                try {
+                  const payload = JSON.stringify({ port: window.location.port || '', token: apiToken() });
+                  await navigator.clipboard.writeText(payload);
+                  setBridgeCopied(true);
+                  setTimeout(() => setBridgeCopied(false), 1500);
+                } catch {
+                  /* clipboard unavailable */
+                }
+              },
+            }, bridgeCopied ? t('bridgeCopied') : t('copyBridge')),
             model.updatedAt ? h('span', { className: 'dr-row-state' }, interpolate(t('updated'), { time: new Date(model.updatedAt).toLocaleTimeString() })) : null,
             h('button', { className: 'dr-btn', type: 'button', onClick: model.refresh, disabled: model.refreshing || !model.selectedId }, model.refreshing ? t('refreshing') : t('refresh')),
           ),
