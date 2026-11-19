@@ -1695,6 +1695,142 @@ export function apply(ctx, config = {}) {
 
   const vscodeBridge = { connected: false, workspaceRoot: '', updatedAt: null, buffers: {} };
 
+  /* ------------------------------------------------ review annotation worktrees */
+
+  function reviewWorktreeRoot() {
+    const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
+    return path.join(home, 'ci-review-worktrees');
+  }
+
+  function safeSlug(value) {
+    return String(value ?? '').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'review';
+  }
+
+  function commentPrefixFor(file) {
+    const ext = path.extname(file).toLowerCase();
+    if (['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.cs', '.java', '.go', '.rs', '.c', '.h', '.cpp', '.hpp', '.swift', '.kt', '.scala'].includes(ext)) return '//';
+    if (['.py', '.sh', '.bash', '.zsh', '.rb', '.yaml', '.yml', '.toml', '.ps1', '.r', '.pl'].includes(ext)) return '#';
+    if (['.css', '.scss', '.less'].includes(ext)) return '/*';
+    if (['.html', '.htm', '.xml', '.svg', '.md'].includes(ext)) return '<!--';
+    return null;
+  }
+
+  function annotateText(text, file, cards) {
+    const prefix = commentPrefixFor(file);
+    if (!prefix) return { text, inserted: 0, unsupported: true };
+    const lines = text.split('\n');
+    let inserted = 0;
+    const ordered = [...cards].filter((card) => card && Number.isFinite(Number(card.startLine)))
+      .sort((a, b) => Number(b.startLine) - Number(a.startLine));
+    for (const card of ordered) {
+      const index = Math.max(0, Math.min(lines.length, Number(card.startLine) - 1));
+      const indent = (lines[index] ?? '').match(/^\s*/)?.[0] ?? '';
+      const marker = String(card.id ?? '');
+      if (lines.some((line) => line.includes(`[ci-review:${marker}]`))) continue;
+      const title = String(card.title ?? '问题位置').replace(/\r?\n/g, ' ').slice(0, 160);
+      const reason = String(card.reason ?? '').replace(/\r?\n/g, ' ').slice(0, 200);
+      const note = reason ? `${title} — ${reason}` : title;
+      const comment = prefix === '<!--'
+        ? `${indent}<!-- [ci-review:${marker}] ${note} -->`
+        : prefix === '/*'
+          ? `${indent}/* [ci-review:${marker}] ${note} */`
+          : `${indent}${prefix} [ci-review:${marker}] ${note}`;
+      lines.splice(index, 0, comment);
+      inserted += 1;
+    }
+    return { text: lines.join('\n'), inserted, unsupported: false };
+  }
+
+  function reviewWorktreePath(project, name) {
+    const base = safeSlug(project.name || path.basename(project.root));
+    return path.join(reviewWorktreeRoot(), base, safeSlug(name));
+  }
+
+  async function createReviewWorktree({ project, name, cards }) {
+    const dest = reviewWorktreePath(project, name);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    if (fs.existsSync(dest)) {
+      const existing = annotateWorktree({ dest, cards });
+      return { ok: true, path: dest, reused: true, ...existing };
+    }
+    execFileSync('git', ['-C', project.root, 'worktree', 'add', '--detach', dest, 'HEAD'], {
+      encoding: 'utf8', timeout: 30000, windowsHide: true,
+    });
+    const result = annotateWorktree({ dest, cards });
+    return { ok: true, path: dest, reused: false, ...result };
+  }
+
+  function annotateWorktree({ dest, cards }) {
+    const byFile = new Map();
+    for (const card of Array.isArray(cards) ? cards : []) {
+      const file = String(card?.file ?? '').replace(/\\/g, '/');
+      if (!file) continue;
+      if (!byFile.has(file)) byFile.set(file, []);
+      byFile.get(file).push(card);
+    }
+    const files = [];
+    let inserted = 0;
+    for (const [file, fileCards] of byFile) {
+      const absolute = path.resolve(dest, file);
+      if (!normalizePath(absolute).startsWith(normalizePath(dest))) continue;
+      let text;
+      try {
+        text = fs.readFileSync(absolute, 'utf8');
+      } catch {
+        files.push({ file, error: 'not found in worktree' });
+        continue;
+      }
+      const result = annotateText(text, file, fileCards);
+      if (result.unsupported) {
+        files.push({ file, unsupported: true });
+        continue;
+      }
+      if (result.inserted > 0) fs.writeFileSync(absolute, result.text, 'utf8');
+      files.push({ file, inserted: result.inserted });
+      inserted += result.inserted;
+    }
+    let diffStat = '';
+    try {
+      diffStat = execFileSync('git', ['-C', dest, 'diff', '--stat'], { encoding: 'utf8', timeout: 20000, windowsHide: true }).trim();
+    } catch {
+      diffStat = '';
+    }
+    return { files, inserted, diffStat };
+  }
+
+  function listReviewWorktrees(project) {
+    const base = path.join(reviewWorktreeRoot(), safeSlug(project.name || path.basename(project.root)));
+    let entries = [];
+    try {
+      entries = fs.readdirSync(base, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    } catch {
+      return [];
+    }
+    return entries.map((name) => {
+      const dir = path.join(base, name);
+      let diffStat = '';
+      try {
+        diffStat = execFileSync('git', ['-C', dir, 'diff', '--stat'], { encoding: 'utf8', timeout: 20000, windowsHide: true }).trim();
+      } catch {
+        diffStat = '';
+      }
+      return { name, path: dir, diffStat };
+    });
+  }
+
+  function removeReviewWorktree({ project, name }) {
+    const dir = reviewWorktreePath(project, name);
+    if (!fs.existsSync(dir)) return { ok: true, removed: false };
+    try {
+      execFileSync('git', ['-C', project.root, 'worktree', 'remove', '--force', dir], {
+        encoding: 'utf8', timeout: 30000, windowsHide: true,
+      });
+    } catch {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+    return { ok: true, removed: true };
+  }
+
   /* -------------------------------------------------------------- snapshot */
 
   async function buildSnapshot(project) {
@@ -2458,6 +2594,34 @@ export function apply(ctx, config = {}) {
         return sendJson(res, 200, { ok: true, launched: true, discovery: writeBridgeDiscovery() });
       } catch (error) {
         return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 200) });
+      }
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/review-worktree/create`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const name = safeSlug(body?.name || 'review');
+      const cards = Array.isArray(body?.cards) ? body.cards : [];
+      try {
+        const result = await createReviewWorktree({ project, name, cards });
+        return sendJson(res, 200, result);
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 300) });
+      }
+    }
+    if (req.method === 'GET' && url.pathname === `${ROUTE}/api/review-worktree/list`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      return sendJson(res, 200, { ok: true, worktrees: listReviewWorktrees(project) });
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/review-worktree/remove`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      try {
+        return sendJson(res, 200, removeReviewWorktree({ project, name: String(body?.name ?? '') }));
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 300) });
       }
     }
     return sendError(res, 404, 'unknown ci-review API route');

@@ -1192,6 +1192,54 @@ window.__ModuleLoader__.load({
           setBusy(false);
         }
       };
+      const [worktree, setWorktree] = React.useState(null);
+      const [wtBusy, setWtBusy] = React.useState(false);
+      const createWorktree = async () => {
+        if (!current) return;
+        setWtBusy(true);
+        setMessage(null);
+        try {
+          const cards = (current.cards || []).map((cardItem) => ({
+            id: cardItem.id, file: cardItem.file, startLine: cardItem.startLine,
+            title: cardItem.title, reason: cardItem.problem,
+          }));
+          const result = await request(`api/review-worktree/create?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ name: current.problemId || current.id, cards }),
+          });
+          if (result.ok) {
+            setWorktree(result);
+            setMessage({ tone: 'ok', text: `审阅 worktree 已就绪：${result.path}` });
+          } else {
+            setMessage({ tone: 'bad', text: result.message || 'worktree failed' });
+          }
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setWtBusy(false);
+        }
+      };
+      const removeWorktree = async () => {
+        if (!worktree?.path) return;
+        setWtBusy(true);
+        try {
+          const name = String(worktree.path).split(/[\\/]/).pop();
+          const result = await request(`api/review-worktree/remove?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ name }),
+          });
+          if (result.ok) {
+            setWorktree(null);
+            setMessage({ tone: 'ok', text: '审阅 worktree 已清理' });
+          } else {
+            setMessage({ tone: 'bad', text: result.message || 'cleanup failed' });
+          }
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setWtBusy(false);
+        }
+      };
       return h(
         Card,
         null,
@@ -1271,9 +1319,17 @@ window.__ModuleLoader__.load({
                       } finally { setBusy(false); }
                     },
                   }, '运行 gate'),
+                  h('button', { className: 'dr-btn', type: 'button', disabled: busy || wtBusy, onClick: createWorktree }, wtBusy ? '…' : '创建审阅 worktree 并注释'),
                   h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'approved') }, t('reviewCardsApproveBatch')),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'ignored') }, t('reviewCardsIgnoreBatch')))),
-              message ? h('div', { className: `dr-notice ${message.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '6px 0 0' } }, message.text) : null,
+              worktree
+                ? h('div', { className: 'dr-notice', style: { margin: '6px 0 0' } },
+                    h('div', { className: 'dr-muted', style: { wordBreak: 'break-all' } }, `审阅工作区：${worktree.path}`),
+                    worktree.diffStat ? h('pre', { style: { margin: '4px 0', whiteSpace: 'pre-wrap', fontSize: '11px' } }, worktree.diffStat) : null,
+                    h('div', { className: 'dr-actions', style: { marginTop: '4px' } },
+                      h('button', { className: 'dr-btn', type: 'button', onClick: () => { try { window.open(`vscode://file/${String(worktree.path).replace(/\\/g, '/')}`); } catch { /* ignore */ } } }, '在 VS Code 打开'),
+                      h('button', { className: 'dr-btn', type: 'button', disabled: wtBusy, onClick: removeWorktree }, '清理 worktree')))
+                : null,              message ? h('div', { className: `dr-notice ${message.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '6px 0 0' } }, message.text) : null,
             ),
       );
     }
