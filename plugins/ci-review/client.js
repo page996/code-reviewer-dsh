@@ -182,6 +182,10 @@ window.__ModuleLoader__.load({
         reviewCardsHideLow: '收起低优先级批次',
         reviewCardsExcerpt: '源码片段',
         reviewCardsUncertainty: '不确定点',
+        sourceLabel: '来源',
+        vscodeLive: 'VS Code 实时缓冲区',
+        vscodeLiveDirty: 'VS Code 实时缓冲区（未保存）',
+        diskSource: '磁盘内容（L1）',
         openInVscode: '在 VS Code 打开',
         agentOpenSession: '打开子会话',
         agentSessionHint: '子会话是 DSH 中真实的后台会话，可打开后继续聊天/追问。',
@@ -376,6 +380,10 @@ window.__ModuleLoader__.load({
         reviewCardsHideLow: 'Hide low-priority batches',
         reviewCardsExcerpt: 'Source excerpt',
         reviewCardsUncertainty: 'Uncertainty',
+        sourceLabel: 'Source',
+        vscodeLive: 'VS Code live buffer',
+        vscodeLiveDirty: 'VS Code live buffer (unsaved)',
+        diskSource: 'Disk content (L1)',
         openInVscode: 'Open in VS Code',
         agentOpenSession: 'Open child session',
         agentSessionHint: 'The child session is a real DSH session; open it to keep chatting or asking follow-ups.',
@@ -1027,6 +1035,18 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function bufferFor(snapshot, file) {
+      try {
+        const bridge = snapshot?.vscode;
+        if (!bridge || !bridge.connected) return null;
+        const buffer = bridge.buffers?.[file];
+        if (!buffer || !Array.isArray(buffer.lines)) return null;
+        return buffer;
+      } catch {
+        return null;
+      }
+    }
+
     function statusTone(status) {
       if (status === 'completed' || status === 'addressed') return 'ok';
       if (status === 'failed' || status === 'critical') return 'bad';
@@ -1093,13 +1113,28 @@ window.__ModuleLoader__.load({
                       h('span', { className: 'dr-muted' }, cardItem.decision === 'pending' ? '' : cardItem.decision)),
                     h('div', { style: { whiteSpace: 'pre-wrap', margin: '3px 0' } }, cardItem.problem || cardItem.title),
                     cardItem.suggestion ? h('div', { className: 'dr-muted' }, `建议：${cardItem.suggestion}`) : null,
-                    cardItem.excerpt
-                      ? h('pre', { className: 'dr-gutter', style: { margin: '4px 0', maxHeight: '150px', overflow: 'auto' } },
-                          cardItem.excerpt.lines.map((line) => {
+                    (() => {
+                      const buffer = bufferFor(snapshot, cardItem.file);
+                      let rows = [];
+                      let source = '';
+                      if (buffer && buffer.lines.length) {
+                        const from = Math.max(1, (cardItem.startLine || 1) - 6);
+                        const to = Math.min(buffer.lines.length, (cardItem.startLine || 1) + 6);
+                        rows = buffer.lines.slice(from - 1, to).map((text, index) => ({ n: from + index, text }));
+                        source = buffer.dirty ? t('vscodeLiveDirty') : t('vscodeLive');
+                      } else if (cardItem.excerpt) {
+                        rows = cardItem.excerpt.lines;
+                        source = t('diskSource');
+                      }
+                      if (rows.length === 0) return null;
+                      return h('div', null,
+                        h('div', { className: 'dr-muted', style: { fontSize: '11px' } }, `${t('sourceLabel')}: ${source}`),
+                        h('pre', { className: 'dr-gutter', style: { margin: '4px 0', maxHeight: '150px', overflow: 'auto' } },
+                          rows.map((line) => {
                             const selected = line.n >= (cardItem.startLine || 1) && line.n <= (cardItem.endLine || cardItem.startLine || 1);
                             return `${selected ? '▶' : ' '} ${String(line.n).padStart(4)}  ${line.text}${selected ? '   // 选中原因：' + (cardItem.title || '问题位置') : ''}`;
-                          }).join('\n'))
-                      : null,
+                          }).join('\n')));
+                    })(),
                     h('div', { className: 'dr-actions', style: { marginTop: '4px' } },
                       h('button', { className: 'dr-btn', type: 'button', onClick: () => { try { const root = String(snapshot.project.root || '').replace(/\\/g, '/').replace(/\/$/, ''); window.open(`vscode://file/${root}/${cardItem.file}:${cardItem.startLine}:1`); } catch (cause) { setMessage({ tone: 'bad', text: String(cause?.message || cause) }); } } }, t('openInVscode')),
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'approved') }, t('reviewCardsApprove')),
@@ -1172,7 +1207,13 @@ window.__ModuleLoader__.load({
           if (!marks.has(number)) marks.set(number, finding.severity);
         }
       }
-      const lines = file && !file.tooLarge && typeof file.content === 'string' ? file.content.split('\n') : [];
+      const vsBuffer = bufferFor(snapshot, selected);
+      const lines = vsBuffer && vsBuffer.lines.length
+        ? vsBuffer.lines
+        : file && !file.tooLarge && typeof file.content === 'string'
+          ? file.content.split('\n')
+          : [];
+      const diagnosticLines = new Map((vsBuffer?.diagnostics || []).map((item) => [item.line, item.message]));
       const selectedFinding = fileFindings.find((finding) => (finding.startLine || 1) <= line && line <= (finding.endLine || finding.startLine || 1)) ?? null;
       const askHere = () => {
         if (!selected || !line) return;
@@ -1231,7 +1272,7 @@ window.__ModuleLoader__.load({
             { style: { minWidth: 0 } },
             error ? h('div', { className: 'dr-notice dr-error' }, error) : null,
             selected
-              ? h('div', { className: 'dr-path', style: { marginBottom: '4px' } }, selected)
+              ? h('div', { className: 'dr-path', style: { marginBottom: '4px' } }, `${selected}${vsBuffer ? ` · ${vsBuffer.dirty ? t('vscodeLiveDirty') : t('vscodeLive')}` : ` · ${t('diskSource')}`}`)
               : h('p', { className: 'dr-muted' }, t('filesPick')),
             line > 0
               ? h(
@@ -1269,6 +1310,9 @@ window.__ModuleLoader__.load({
                           },
                         },
                         h('span', { style: { color: '#6f7987', width: '46px', textAlign: 'right', flex: 'none', userSelect: 'none' } }, number),
+                        diagnosticLines.has(number)
+                          ? h('span', { title: diagnosticLines.get(number), style: { color: '#f0b429', flex: 'none' } }, '⚠')
+                          : null,
                         h('span', { style: { whiteSpace: 'pre', color: severity ? '#ffdcd7' : '#e6edf3' } }, text || ' '),
                       );
                     }),
@@ -1733,6 +1777,7 @@ window.__ModuleLoader__.load({
             'div',
             { className: 'dr-header-right' },
             h(Badge, { tone: snapshot?.github?.available ? 'ok' : 'warn' }, snapshot?.capabilities?.dataSource === 'forge' ? t('dataSourceForge') : snapshot?.github?.available ? t('dataSourceRest') : t('githubMissing')),
+            snapshot?.vscode?.connected ? h(Badge, { tone: 'ok' }, t('vscodeLive')) : null,
             h('button', { className: 'dr-btn', type: 'button', onClick: () => setLang(lang === 'zh' ? 'en' : 'zh'), title: 'Language / 语言' }, lang === 'zh' ? 'EN' : '中文'),
             model.updatedAt ? h('span', { className: 'dr-row-state' }, interpolate(t('updated'), { time: new Date(model.updatedAt).toLocaleTimeString() })) : null,
             h('button', { className: 'dr-btn', type: 'button', onClick: model.refresh, disabled: model.refreshing || !model.selectedId }, model.refreshing ? t('refreshing') : t('refresh')),
