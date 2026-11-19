@@ -1512,17 +1512,21 @@ export function apply(ctx, config = {}) {
     return { path: relative.replace(/\\/g, '/'), size: stat.size };
   }
 
+  function hashText(text) {
+    return createHash('sha256').update(String(text ?? ''), 'utf8').digest('hex');
+  }
+
   function readProjectFile(root, relative) {
     const entry = fileEntry(root, relative);
     if (!entry) return null;
     if (entry.size > 400 * 1024) {
-      return { ...entry, tooLarge: true, content: '', lines: 0 };
+      return { ...entry, tooLarge: true, content: '', lines: 0, hash: '' };
     }
     try {
       const content = fs.readFileSync(path.resolve(root, relative), 'utf8');
-      return { ...entry, tooLarge: false, content, lines: content.split('\n').length };
+      return { ...entry, tooLarge: false, content, lines: content.split('\n').length, hash: hashText(content) };
     } catch (error) {
-      return { ...entry, tooLarge: false, content: '', lines: 0, error: String(error?.message ?? error) };
+      return { ...entry, tooLarge: false, content: '', lines: 0, hash: '', error: String(error?.message ?? error) };
     }
   }
 
@@ -2623,6 +2627,56 @@ export function apply(ctx, config = {}) {
       } catch (error) {
         return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 300) });
       }
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/file/save`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req, 2 * 1024 * 1024);
+      const relative = resolveInsideRoot(project.root, String(body?.path ?? ''));
+      if (!relative) return sendJson(res, 200, { ok: false, message: '文件路径必须位于项目根目录内' });
+      const absolute = path.resolve(project.root, relative);
+      let current = '';
+      try {
+        current = fs.readFileSync(absolute, 'utf8');
+      } catch {
+        current = '';
+      }
+      const currentHash = hashText(current);
+      if (body?.expectedHash && body.expectedHash !== currentHash) {
+        return sendJson(res, 200, {
+          ok: false, code: 'stale', message: '文件已在磁盘上被修改，请重新加载后再保存', hash: currentHash,
+        });
+      }
+      if (typeof body?.content !== 'string') return sendJson(res, 200, { ok: false, message: '缺少 content' });
+      const backupDir = path.join(project.root, '.review', 'ci-review', 'backups', new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 15) + '-' + randomBytes(3).toString('hex'));
+      let backupPath = null;
+      if (current) {
+        try {
+          fs.mkdirSync(backupDir, { recursive: true });
+          const backupFile = path.join(backupDir, relative.replace(/[\\/]/g, '__'));
+          fs.writeFileSync(backupFile, current, 'utf8');
+          backupPath = backupFile;
+        } catch {
+          backupPath = null;
+        }
+      }
+      try {
+        fs.mkdirSync(path.dirname(absolute), { recursive: true });
+        const temp = `${absolute}.ci-review-tmp-${process.pid}-${Date.now()}`;
+        fs.writeFileSync(temp, body.content, 'utf8');
+        fs.renameSync(temp, absolute);
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: `写入失败：${String(error?.message ?? error).slice(0, 200)}` });
+      }
+      const nextHash = hashText(body.content);
+      snapshotCache.delete(project.id);
+      return sendJson(res, 200, {
+        ok: true,
+        path: relative,
+        hash: nextHash,
+        backupPath,
+        lines: body.content.split('\n').length,
+      });
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }

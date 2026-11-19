@@ -214,7 +214,13 @@ window.__ModuleLoader__.load({
         addProject: '添加项目',
         projectPathPlaceholder: '项目根目录，如 C:\\work\\my-repo',
         fileReview: '文件与问题',
-        fileReviewHint: '先看文件，再决定改哪里',
+        editFile: '编辑文件',
+        saveEdit: '保存并跑 gate',
+        cancelEdit: '取消编辑',
+        savedOk: '已保存，gate 通过',
+        savedFail: '已保存，但 gate 失败',
+        unsavedConflict: '文件已在磁盘上被修改，已重新加载最新内容，请重新编辑',
+        vscodeDirtyBlock: 'VS Code 有未保存缓冲区，请先在 VS Code 保存后再在面板编辑',
         filesPriority: '优先文件',
         filesAll: '全部文件',
         filesNone: '还没有发现/批注/PR 改动文件。',
@@ -428,6 +434,13 @@ window.__ModuleLoader__.load({
         projectPathPlaceholder: 'Project root, e.g. C:\\work\\my-repo',
         fileReview: 'Files & findings',
         fileReviewHint: 'See the file first, then decide what to change',
+        editFile: 'Edit file',
+        saveEdit: 'Save and run gate',
+        cancelEdit: 'Cancel edit',
+        savedOk: 'Saved; gate passed',
+        savedFail: 'Saved; gate failed',
+        unsavedConflict: 'File changed on disk; reloaded the latest content, please edit again',
+        vscodeDirtyBlock: 'VS Code has unsaved changes; save in VS Code before editing here',
         filesPriority: 'Priority files',
         filesAll: 'All files',
         filesNone: 'No finding, annotation or PR-changed file yet.',
@@ -1369,6 +1382,47 @@ window.__ModuleLoader__.load({
       const [line, setLine] = React.useState(0);
       const [error, setError] = React.useState('');
       const [prMessage, setPrMessage] = React.useState(null);
+      const [editing, setEditing] = React.useState(false);
+      const [draft, setDraft] = React.useState('');
+      const [editMessage, setEditMessage] = React.useState(null);
+      const startEdit = () => {
+        if (vsBuffer?.dirty) {
+          setEditMessage({ tone: 'bad', text: t('vscodeDirtyBlock') });
+          return;
+        }
+        setDraft(file?.content ?? '');
+        setEditing(true);
+        setEditMessage(null);
+      };
+      const saveEdit = async () => {
+        setEditMessage({ tone: 'ok', text: '保存中…' });
+        try {
+          const result = await request(`api/file/save?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ path: selected, content: draft, expectedHash: file?.hash ?? '' }),
+          });
+          if (!result.ok) {
+            setEditMessage({ tone: 'bad', text: result.message || '保存失败' });
+            if (result.code === 'stale') {
+              const data = await request(`api/file?projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(selected)}`);
+              setFile(data.file);
+              setDraft(data.file.content ?? '');
+            }
+            return;
+          }
+          setEditing(false);
+          const data = await request(`api/file?projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(selected)}`);
+          setFile(data.file);
+          setEditMessage({ tone: 'ok', text: `已保存（备份：${result.backupPath || '无'}），运行 gate…` });
+          const gate = await request(`api/gate/run?projectId=${encodeURIComponent(projectId)}`, { method: 'POST', body: '{}' });
+          setEditMessage(gate.ok
+            ? { tone: 'ok', text: t('savedOk') }
+            : { tone: 'bad', text: `${t('savedFail')}：${(gate.results || []).map((item) => `${item.command} → ${item.exitCode}`).join('；') || gate.message || ''}` });
+          onRefresh();
+        } catch (cause) {
+          setEditMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        }
+      };
       React.useEffect(() => {
         if (mode === 'priority') setFiles(snapshot.files || []);
       }, [snapshot.files, mode]);
@@ -1435,6 +1489,9 @@ window.__ModuleLoader__.load({
           h('h3', { className: 'dr-card-title' }, t('fileReview')),
           h('span', { className: 'dr-card-title-sub' }, t('fileReviewHint')),
           h('span', { className: 'dr-spacer' }),
+          editing
+            ? null
+            : h('button', { className: 'dr-btn', type: 'button', disabled: !selected, onClick: startEdit }, t('editFile')),
           h('button', { className: `dr-btn ${mode === 'priority' ? 'primary' : ''}`, type: 'button', onClick: () => switchMode('priority') }, t('filesPriority')),
           h('button', { className: `dr-btn ${mode === 'all' ? 'primary' : ''}`, type: 'button', onClick: () => switchMode('all') }, t('filesAll')),
         ),
@@ -1510,7 +1567,19 @@ window.__ModuleLoader__.load({
                   selectedFinding ? h('span', { className: 'dr-muted' }, `${selectedFinding.severity} · ${selectedFinding.title}`) : null,
                 )
               : null,
-            file && file.tooLarge
+            editMessage ? h('div', { className: `dr-notice ${editMessage.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '0 0 6px' } }, editMessage.text) : null,
+            editing
+              ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+                  h('textarea', {
+                    className: 'dr-input dr-textarea',
+                    value: draft,
+                    onChange: (event) => setDraft(event.target.value),
+                    style: { width: '100%', minHeight: '320px', boxSizing: 'border-box', fontFamily: 'ui-monospace,Consolas,monospace', fontSize: '12px' },
+                  }),
+                  h('div', { className: 'dr-actions' },
+                    h('button', { className: 'dr-btn primary', type: 'button', onClick: saveEdit }, t('saveEdit')),
+                    h('button', { className: 'dr-btn', type: 'button', onClick: () => { setEditing(false); setEditMessage(null); } }, t('cancelEdit'))))
+              : file && file.tooLarge
               ? h('p', { className: 'dr-muted' }, t('fileTooLarge'))
               : lines.length
                 ? h(
