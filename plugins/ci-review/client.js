@@ -168,7 +168,18 @@ window.__ModuleLoader__.load({
         agentStartFailed: '启动失败',
         agentChildSession: '子会话',
         agentNoInstruction: '请先填写指令',
-        helpTitle: '使用说明：这个面板怎么用',
+        fileReview: '文件与问题',
+        fileReviewHint: '先看文件，再决定改哪里',
+        filesPriority: '优先文件',
+        filesAll: '全部文件',
+        filesNone: '还没有发现/批注/PR 改动文件。',
+        filesPick: '从左侧选择文件，或点下面的发现直接定位。',
+        filesLoading: '读取文件…',
+        fileTooLarge: '文件超过 400KB，暂不展示内容（可到 GitHub 查看）。',
+        fileFindings: '该文件的问题',
+        askAgentHere: '让 Agent 修订此处',
+        annotateHere: '在这里批注',
+        copyPosition: '复制位置',
         helpText: '① 左上角选项目 → 中间看「正在发生什么」（PR、检查、Actions 运行、本地评审、会话）。\n② 点 Actions 运行可展开 job / step 看 CI 进度与失败点。\n③ 在「本地批注」填文件（相对项目根，如 plugins/ci-review/client.js）、起始行、内容 → 点「添加批注」，这就是对指定位置的审阅。\n④ 在批注行点「让 Agent 修订」；在「后台 Agent 修订任务」里可再填目标文件/行号和指令 → 点「启动后台 Agent」。\n⑤ Agent 在独立上下文修改文件并运行测试，完成后在任务卡展示：结论 / 改动 / 可能后果 / 测试 / 未解决 / 下一步（中文）。它不会 commit/push/merge，改完由你决定是否保留。\n\n按钮含义：刷新=重新拉取状态；重跑失败检查=只重跑失败的 workflow；标记为可审阅=草稿 PR 转正式；更新分支=把基线合入当前分支；合并 PR=按所选方式合并（会二次确认）；打开 PR/创建 PR/Actions/仓库=跳转 GitHub；复制分支名=复制当前分支；标记已处理/重新打开/删除=管理批注状态；取消任务=停止后台 Agent。\n\n禁用的按钮下方会写出原因（例如「没有失败的检查」「PR 不是草稿」「与基线冲突」）。',
       },
       en: {
@@ -325,7 +336,18 @@ window.__ModuleLoader__.load({
         agentStartFailed: 'Failed to start',
         agentChildSession: 'child session',
         agentNoInstruction: 'Instruction is required',
-        helpTitle: 'How to use this panel',
+        fileReview: 'Files & findings',
+        fileReviewHint: 'See the file first, then decide what to change',
+        filesPriority: 'Priority files',
+        filesAll: 'All files',
+        filesNone: 'No finding, annotation or PR-changed file yet.',
+        filesPick: 'Pick a file on the left, or click a finding below to jump to it.',
+        filesLoading: 'Loading file…',
+        fileTooLarge: 'This file is over 400KB; its content is not shown.',
+        fileFindings: 'Findings in this file',
+        askAgentHere: 'Ask agent to fix here',
+        annotateHere: 'Annotate here',
+        copyPosition: 'Copy position',
         helpText: '1. Pick a project on the left; the centre shows what is happening (PR, checks, Actions runs, local reviews, sessions).\n2. Click an Actions run to expand jobs/steps.\n3. Under "Local annotations", fill file (relative to project root), start line and text, then click "Add annotation" — that is how you review a specific location.\n4. Click "Ask agent to fix" on the annotation; in the task card you may add a target file/line and instruction, then click "Start background agent".\n5. The agent edits files in an independent context and runs tests, then reports Summary / Changes / Possible consequences / Tests / Unresolved / Next steps. It never commits/pushes/merges.\n\nButtons: Refresh = reload state; Rerun failed checks = rerun only failed workflows; Mark ready = convert a draft PR; Update branch = merge the base into the head branch; Merge PR = merge with confirmation; Open PR/Create PR/Actions/Repository = jump to GitHub; Copy branch = copy the branch name; Mark addressed/Reopen/Delete = manage an annotation; Cancel task = stop the background agent.\n\nA disabled button lists its reason below the row (e.g. "no failed checks", "PR is not a draft", "conflicts with base").',
       },
     };
@@ -956,12 +978,190 @@ window.__ModuleLoader__.load({
       return 'idle';
     }
 
-    function AnnotationsCard({ snapshot, t, projectId, onRefresh, onAskAgent }) {
+    function FileReviewCard({ snapshot, t, projectId, onAskAgentAt, onAnnotateAt, onRefresh }) {
+      const allFindings = snapshot.findings || [];
+      const [mode, setMode] = React.useState('priority');
+      const [files, setFiles] = React.useState(snapshot.files || []);
+      const [selected, setSelected] = React.useState('');
+      const [file, setFile] = React.useState(null);
+      const [line, setLine] = React.useState(0);
+      const [error, setError] = React.useState('');
+      React.useEffect(() => {
+        if (mode === 'priority') setFiles(snapshot.files || []);
+      }, [snapshot.files, mode]);
+      React.useEffect(() => {
+        if (!selected && files.length) setSelected(files[0].path);
+      }, [files, selected]);
+      React.useEffect(() => {
+        if (!selected) return undefined;
+        let cancelled = false;
+        setFile(null);
+        request(`api/file?projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(selected)}`)
+          .then((data) => { if (!cancelled) setFile(data.file); })
+          .catch((cause) => { if (!cancelled) setError(String(cause?.message || cause)); });
+        return () => { cancelled = true; };
+      }, [selected, projectId]);
+      const switchMode = async (nextMode) => {
+        setMode(nextMode);
+        setError('');
+        try {
+          const data = await request(`api/files?projectId=${encodeURIComponent(projectId)}&mode=${nextMode}`);
+          setFiles(data.files || []);
+        } catch (cause) {
+          setError(String(cause?.message || cause));
+        }
+      };
+      const fileFindings = allFindings.filter((finding) => finding.file === selected);
+      const fileAnnotations = (snapshot.annotations || []).filter((annotation) => annotation.file === selected);
+      const marks = new Map();
+      for (const finding of fileFindings) {
+        const end = Math.min(finding.endLine || finding.startLine, (finding.startLine || 1) + 4);
+        for (let number = finding.startLine || 1; number <= end; number += 1) {
+          if (!marks.has(number)) marks.set(number, finding.severity);
+        }
+      }
+      const lines = file && !file.tooLarge && typeof file.content === 'string' ? file.content.split('\n') : [];
+      const selectedFinding = fileFindings.find((finding) => (finding.startLine || 1) <= line && line <= (finding.endLine || finding.startLine || 1)) ?? null;
+      const askHere = () => {
+        if (!selected || !line) return;
+        onAskAgentAt(selected, line, selectedFinding);
+      };
+      return h(
+        Card,
+        null,
+        h(
+          'div',
+          { className: 'dr-card-head' },
+          h('h3', { className: 'dr-card-title' }, t('fileReview')),
+          h('span', { className: 'dr-card-title-sub' }, t('fileReviewHint')),
+          h('span', { className: 'dr-spacer' }),
+          h('button', { className: `dr-btn ${mode === 'priority' ? 'primary' : ''}`, type: 'button', onClick: () => switchMode('priority') }, t('filesPriority')),
+          h('button', { className: `dr-btn ${mode === 'all' ? 'primary' : ''}`, type: 'button', onClick: () => switchMode('all') }, t('filesAll')),
+        ),
+        h(
+          'div',
+          { style: { display: 'grid', gridTemplateColumns: '230px minmax(0,1fr)', gap: '10px' } },
+          h(
+            'div',
+            { style: { maxHeight: '360px', overflow: 'auto', borderRight: '1px solid #23262d', paddingRight: '6px' } },
+            files.length === 0
+              ? h('p', { className: 'dr-muted' }, t('filesNone'))
+              : files.map((row) =>
+                  h(
+                    'button',
+                    {
+                      key: row.path,
+                      type: 'button',
+                      className: 'dr-project',
+                      'data-active': String(row.path === selected),
+                      title: row.path,
+                      onClick: () => { setSelected(row.path); setLine(0); },
+                      style: { textAlign: 'left' },
+                    },
+                    h(
+                      'span',
+                      { className: 'dr-project-name', style: { fontSize: '12px', fontWeight: '500' } },
+                      row.blockers > 0 ? h('span', { className: 'dr-dot bad' }) : row.majors > 0 ? h('span', { className: 'dr-dot warn' }) : row.findings > 0 ? h('span', { className: 'dr-dot run' }) : h('span', { className: 'dr-dot ok' }),
+                      row.path.split('/').slice(-1)[0],
+                    ),
+                    h(
+                      'span',
+                      { className: 'dr-project-meta' },
+                      row.findings ? `${row.findings} 问题` : '',
+                      row.annotations ? ` · ${row.annotations} 批注` : '',
+                      row.changed ? ' · PR 改动' : '',
+                    ),
+                  ),
+                ),
+          ),
+          h(
+            'div',
+            { style: { minWidth: 0 } },
+            error ? h('div', { className: 'dr-notice dr-error' }, error) : null,
+            selected
+              ? h('div', { className: 'dr-path', style: { marginBottom: '4px' } }, selected)
+              : h('p', { className: 'dr-muted' }, t('filesPick')),
+            line > 0
+              ? h(
+                  'div',
+                  { className: 'dr-notice', style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '6px', borderLeftColor: '#2f81f7' } },
+                  h('span', { className: 'dr-code' }, `L${line}`),
+                  h('button', { className: 'dr-btn primary', type: 'button', onClick: askHere }, t('askAgentHere')),
+                  h('button', { className: 'dr-btn', type: 'button', onClick: () => onAnnotateAt(selected, line) }, t('annotateHere')),
+                  h('button', { className: 'dr-btn', type: 'button', onClick: () => { try { navigator.clipboard.writeText(`${selected}:${line}`); } catch { /* ignore */ } } }, t('copyPosition')),
+                  selectedFinding ? h('span', { className: 'dr-muted' }, `${selectedFinding.severity} · ${selectedFinding.title}`) : null,
+                )
+              : null,
+            file && file.tooLarge
+              ? h('p', { className: 'dr-muted' }, t('fileTooLarge'))
+              : lines.length
+                ? h(
+                    'div',
+                    { style: { maxHeight: '340px', overflow: 'auto', background: '#050608', border: '1px solid #23262d', borderRadius: '8px', fontFamily: 'ui-monospace,Consolas,monospace', fontSize: '12px', lineHeight: '1.55' } },
+                    ...lines.slice(0, 4000).map((text, index) => {
+                      const number = index + 1;
+                      const severity = marks.get(number);
+                      const isSelected = number === line;
+                      return h(
+                        'div',
+                        {
+                          key: number,
+                          onClick: () => setLine(number),
+                          style: {
+                            display: 'flex',
+                            gap: '10px',
+                            padding: '0 8px',
+                            cursor: 'pointer',
+                            background: isSelected ? '#1b2a44' : undefined,
+                            borderLeft: severity ? `3px solid ${severity === 'blocker' ? '#f85149' : severity === 'major' ? '#d29922' : '#2f81f7'}` : '3px solid transparent',
+                          },
+                        },
+                        h('span', { style: { color: '#6f7987', width: '46px', textAlign: 'right', flex: 'none', userSelect: 'none' } }, number),
+                        h('span', { style: { whiteSpace: 'pre', color: severity ? '#ffdcd7' : '#e6edf3' } }, text || ' '),
+                      );
+                    }),
+                  )
+                : h('p', { className: 'dr-muted' }, t('filesLoading')),
+            fileFindings.length
+              ? h(
+                  'div',
+                  { style: { marginTop: '8px' } },
+                  h('div', { className: 'dr-muted', style: { marginBottom: '4px' } }, t('fileFindings')),
+                  ...fileFindings.map((finding, index) =>
+                    h(
+                      'div',
+                      { key: index, className: 'dr-row', style: { cursor: 'pointer' }, onClick: () => { setSelected(finding.file); setLine(finding.startLine || 1); } },
+                      h('span', { className: `dr-dot ${finding.severity === 'blocker' ? 'bad' : finding.severity === 'major' ? 'warn' : 'run'}` }),
+                      h('span', { className: 'dr-row-name', title: finding.problem }, `L${finding.startLine} · ${finding.title}`),
+                      h('span', { className: 'dr-row-state' }, finding.severity),
+                    ),
+                  ),
+                )
+              : null,
+            fileAnnotations.length
+              ? h('div', { className: 'dr-muted', style: { marginTop: '6px' } }, `${t('annotations')}: ${fileAnnotations.map((a) => `L${a.startLine}`).join(', ')}`)
+              : null,
+          ),
+        ),
+      );
+    }
+
+    function AnnotationsCard({ snapshot, t, projectId, onRefresh, onAskAgent, draft, onClearDraft }) {
       const annotations = snapshot.annotations || [];
       const [form, setForm] = React.useState({ file: '', startLine: '', endLine: '', body: '', severity: 'warning' });
       const [busy, setBusy] = React.useState(false);
       const [message, setMessage] = React.useState(null);
       const change = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+      React.useEffect(() => {
+        if (!draft) return;
+        setForm({
+          file: draft.file || '',
+          startLine: draft.startLine ? String(draft.startLine) : '',
+          endLine: '',
+          body: draft.body || '',
+          severity: 'warning',
+        });
+      }, [draft]);
       const post = async (payload) => {
         setBusy(true);
         setMessage(null);
@@ -974,7 +1174,10 @@ window.__ModuleLoader__.load({
             setMessage({ tone: 'bad', text: result.message || 'failed' });
           } else {
             setMessage({ tone: 'ok', text: t('annotationSaved') });
-            if (payload.action === 'create') setForm({ file: '', startLine: '', endLine: '', body: '', severity: 'warning' });
+            if (payload.action === 'create') {
+              setForm({ file: '', startLine: '', endLine: '', body: '', severity: 'warning' });
+              onClearDraft?.();
+            }
             onRefresh();
           }
         } catch (cause) {
@@ -1245,6 +1448,7 @@ window.__ModuleLoader__.load({
       const model = useWorkbench(t);
       const snapshot = model.snapshot;
       const [agentDraft, setAgentDraft] = React.useState(null);
+      const [annotationDraft, setAnnotationDraft] = React.useState(null);
       return h(
         'div',
         { className: 'dr-root' },
@@ -1292,6 +1496,22 @@ window.__ModuleLoader__.load({
                       null,
                       h(SummaryCard, { snapshot, t }),
                       h(GitHubNotice, { snapshot, t }),
+                      h(FileReviewCard, {
+                        snapshot,
+                        t,
+                        projectId: snapshot.project.id,
+                        onAskAgentAt: (file, line, finding) => setAgentDraft({
+                          file,
+                          startLine: line,
+                          target: `${file}:${line}`,
+                          instruction: finding
+                            ? `请修复该问题（${finding.severity}）：${finding.title}\n\n位置：${file}:${line}\n问题：${finding.problem}\n证据：${finding.evidence}\n影响：${finding.impact}\n建议：${finding.suggestion}`
+                            : `请审阅并修订 ${file}:${line} 附近的代码，保持接口兼容。`,
+                          riskBudget: finding && (finding.severity === 'blocker' || finding.severity === 'major') ? 'medium' : 'low',
+                        }),
+                        onAnnotateAt: (file, line) => setAnnotationDraft({ file, startLine: line, body: '' }),
+                        onRefresh: model.refresh,
+                      }),
                       h(PrCard, { snapshot, t }),
                       h(RunsCard, { snapshot, t, projectId: snapshot.project.id }),
                       h(LocalReviewsCard, { snapshot, t }),
@@ -1301,6 +1521,8 @@ window.__ModuleLoader__.load({
                         t,
                         projectId: snapshot.project.id,
                         onRefresh: model.refresh,
+                        draft: annotationDraft,
+                        onClearDraft: () => setAnnotationDraft(null),
                         onAskAgent: (annotation) => setAgentDraft({
                           annotationId: annotation.id,
                           target: `${annotation.file}:${annotation.startLine}${annotation.endLine ? `-${annotation.endLine}` : ''}`,

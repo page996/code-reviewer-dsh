@@ -444,6 +444,13 @@ export function apply(ctx, config = {}) {
     }));
   }
 
+  async function readPrFiles(repo, number) {
+    const data = await githubRequest(`/repos/${repo.owner}/${repo.name}/pulls/${number}/files?per_page=100`).catch(() => []);
+    return (Array.isArray(data) ? data : [])
+      .map((file) => file?.filename)
+      .filter((file) => typeof file === 'string');
+  }
+
   function reviewDecisionFromReviews(reviews) {
     const latest = new Map();
     for (const review of Array.isArray(reviews) ? reviews : []) {
@@ -811,6 +818,7 @@ export function apply(ctx, config = {}) {
         const entry = await forgeUpdateFor(ref);
         const normalized = normalizeForgePr(entry.snapshot);
         normalized.runs = active.value ? await readRuns(repo, branch).catch(() => []) : [];
+        normalized.files = active.value ? await readPrFiles(repo, pr.number) : [];
         return {
           available: true,
           status: 'ok',
@@ -835,13 +843,15 @@ export function apply(ctx, config = {}) {
       let runs = [];
       let reviews = { decision: 'none', latest: [] };
       let detail = null;
+      let prFiles = [];
       if (pr) {
         detail = await githubRequest(`${base}/pulls/${pr.number}`).catch(() => pr);
         const headSha = detail?.head?.sha ?? pr.head?.sha;
-        [checks, runs, reviews] = await Promise.all([
+        [checks, runs, reviews, prFiles] = await Promise.all([
           headSha ? readChecks(repo, headSha) : checks,
           readRuns(repo, branch),
           githubRequest(`${base}/pulls/${pr.number}/reviews?per_page=100`).then(reviewDecisionFromReviews).catch(() => reviews),
+          readPrFiles(repo, pr.number),
         ]);
       }
       const actions = restActions(
@@ -890,6 +900,7 @@ export function apply(ctx, config = {}) {
               checks,
               reviews,
               runs,
+              files: prFiles,
             }
           : null,
         openPullRequests,
@@ -1251,6 +1262,128 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  /* ------------------------------------------------------ review evidence */
+
+  function readLatestFindings(root) {
+    const base = path.join(root, '.review', 'runs');
+    let entries;
+    try {
+      entries = fs
+        .readdirSync(base, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => ({ name: entry.name, stat: fs.statSync(path.join(base, entry.name)) }))
+        .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs)
+        .slice(0, 6);
+    } catch {
+      return [];
+    }
+    for (const entry of entries) {
+      const aggregate = safeReadJson(path.join(base, entry.name, 'aggregate.json'));
+      const findings = Array.isArray(aggregate?.findings) ? aggregate.findings : [];
+      const real = findings.filter((finding) => finding && finding.status !== 'dropped' && finding.file);
+      if (real.length === 0) continue;
+      return real.slice(0, 300).map((finding) => ({
+        file: String(finding.file),
+        startLine: Number(finding.startLine) || 1,
+        endLine: Number(finding.endLine) || Number(finding.startLine) || 1,
+        severity: ['blocker', 'major', 'minor'].includes(finding.severity) ? finding.severity : 'minor',
+        category: finding.category ?? '',
+        title: finding.title ?? '',
+        problem: String(finding.problem ?? '').slice(0, 1200),
+        evidence: String(finding.evidence ?? '').slice(0, 1200),
+        impact: String(finding.impact ?? '').slice(0, 800),
+        suggestion: String(finding.suggestion ?? '').slice(0, 800),
+        status: finding.status ?? 'real',
+        runId: entry.name,
+      }));
+    }
+    return [];
+  }
+
+  const SKIP_DIRS = new Set(['.git', 'node_modules', '.review', '.cache', 'coverage', 'dist', 'build', 'out', 'target', '.next', '.venv', 'venv', '__pycache__']);
+
+  function listProjectFiles(root, limit = 800) {
+    const files = [];
+    const queue = [''];
+    while (queue.length > 0 && files.length < limit) {
+      const relative = queue.shift();
+      const absolute = relative ? path.join(root, relative) : root;
+      let entries;
+      try {
+        entries = fs.readdirSync(absolute, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (files.length >= limit) break;
+        if (entry.name.startsWith('.') && entry.name !== '.github') continue;
+        const next = relative ? path.join(relative, entry.name) : entry.name;
+        if (entry.isDirectory()) {
+          if (SKIP_DIRS.has(entry.name)) continue;
+          queue.push(next);
+        } else if (entry.isFile()) {
+          files.push(next.replace(/\\/g, '/'));
+        }
+      }
+    }
+    return files;
+  }
+
+  function priorityFiles(root, findings, annotations, changedFiles) {
+    const byPath = new Map();
+    const ensure = (file) => {
+      if (!file) return null;
+      const key = String(file).replace(/\\/g, '/');
+      if (!byPath.has(key)) byPath.set(key, { path: key, findings: 0, blockers: 0, majors: 0, annotations: 0, changed: false });
+      return byPath.get(key);
+    };
+    for (const finding of findings) {
+      const row = ensure(finding.file);
+      if (!row) continue;
+      row.findings += 1;
+      if (finding.severity === 'blocker') row.blockers += 1;
+      else if (finding.severity === 'major') row.majors += 1;
+    }
+    for (const annotation of annotations) {
+      const row = ensure(annotation.file);
+      if (row) row.annotations += 1;
+    }
+    for (const file of changedFiles) {
+      const row = ensure(file);
+      if (row) row.changed = true;
+    }
+    return [...byPath.values()].sort((a, b) =>
+      b.blockers - a.blockers || b.majors - a.majors || b.findings - a.findings || b.annotations - a.annotations
+      || Number(b.changed) - Number(a.changed) || a.path.localeCompare(b.path));
+  }
+
+  function fileEntry(root, relative) {
+    const resolved = path.resolve(root, relative);
+    if (!normalizePath(resolved).startsWith(normalizePath(root))) return null;
+    let stat;
+    try {
+      stat = fs.statSync(resolved);
+    } catch {
+      return null;
+    }
+    if (!stat.isFile()) return null;
+    return { path: relative.replace(/\\/g, '/'), size: stat.size };
+  }
+
+  function readProjectFile(root, relative) {
+    const entry = fileEntry(root, relative);
+    if (!entry) return null;
+    if (entry.size > 400 * 1024) {
+      return { ...entry, tooLarge: true, content: '', lines: 0 };
+    }
+    try {
+      const content = fs.readFileSync(path.resolve(root, relative), 'utf8');
+      return { ...entry, tooLarge: false, content, lines: content.split('\n').length };
+    } catch (error) {
+      return { ...entry, tooLarge: false, content: '', lines: 0, error: String(error?.message ?? error) };
+    }
+  }
+
   /* -------------------------------------------------------------- snapshot */
 
   async function buildSnapshot(project) {
@@ -1260,6 +1393,10 @@ export function apply(ctx, config = {}) {
       readSessions(project.root),
     ]);
     const localReviews = summary.exists ? readLocalReviewRuns(project.root) : [];
+    const annotations = summary.exists ? readAnnotations(project.root) : [];
+    const findings = summary.exists ? readLatestFindings(project.root) : [];
+    const changedPaths = Array.isArray(github.pr?.files) ? github.pr.files : [];
+    const files = summary.exists ? priorityFiles(project.root, findings, annotations, changedPaths) : [];
     const repoUrl = summary.repo ? `https://github.com/${summary.repo}` : null;
     return {
       ok: true,
@@ -1268,7 +1405,9 @@ export function apply(ctx, config = {}) {
       github,
       localReviews,
       sessions,
-      annotations: summary.exists ? readAnnotations(project.root) : [],
+      findings,
+      files,
+      annotations,
       agentTasks: summary.exists ? readTasks(project.root) : [],
       capabilities: {
         openRepoUrl: repoUrl,
@@ -1588,6 +1727,32 @@ export function apply(ctx, config = {}) {
       writeTask(project.root, task);
       snapshotCache.delete(project.id);
       return sendJson(res, 200, { ok: true, task });
+    }
+    if (req.method === 'GET' && url.pathname === `${ROUTE}/api/files`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const mode = url.searchParams.get('mode') === 'all' ? 'all' : 'priority';
+      const summary = projectSummary(project);
+      const annotations = readAnnotations(project.root);
+      const findings = readLatestFindings(project.root);
+      if (mode === 'priority') {
+        const cached = snapshotCache.get(project.id)?.snapshot;
+        const changed = Array.isArray(cached?.github?.pr?.files) ? cached.github.pr.files : [];
+        return sendJson(res, 200, { ok: true, mode, files: priorityFiles(project.root, findings, annotations, changed) });
+      }
+      const paths = listProjectFiles(project.root);
+      const priority = new Map(priorityFiles(project.root, findings, annotations, []).map((row) => [row.path, row]));
+      const files = paths.map((file) => priority.get(file) ?? { path: file, findings: 0, blockers: 0, majors: 0, annotations: 0, changed: false });
+      return sendJson(res, 200, { ok: true, mode, files, total: files.length, summary: { root: summary.root } });
+    }
+    if (req.method === 'GET' && url.pathname === `${ROUTE}/api/file`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const relative = url.searchParams.get('path') ?? '';
+      if (!resolveInsideRoot(project.root, relative)) return sendError(res, 400, 'path must stay inside the project root');
+      const file = readProjectFile(project.root, relative);
+      if (!file) return sendError(res, 404, 'file not found');
+      return sendJson(res, 200, { ok: true, file });
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }
