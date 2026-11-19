@@ -2207,6 +2207,23 @@ export function apply(ctx, config = {}) {
       }
       return sendJson(res, 200, { ok: results.every((item) => item.exitCode === 0), results });
     }
+    if (req.method === 'GET' && url.pathname === `${ROUTE}/api/agent-task/diff`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const task = readTasks(project.root).find((item) => item.id === (url.searchParams.get('taskId') ?? ''));
+      if (!task) return sendJson(res, 200, { ok: false, message: '找不到该任务' });
+      const files = Array.isArray(task.report?.changes)
+        ? task.report.changes.map((change) => change?.file).filter((file) => typeof file === 'string')
+        : [];
+      try {
+        const args = ['-C', project.root, 'diff', '--no-color'];
+        if (files.length > 0) args.push('--', ...files);
+        const diff = execFileSync('git', args, { encoding: 'utf8', timeout: 20000, windowsHide: true });
+        return sendJson(res, 200, { ok: true, files, diff: diff.slice(0, 200000), truncated: diff.length > 200000 });
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, files, message: String(error?.message ?? error).slice(0, 200) });
+      }
+    }
     return sendError(res, 404, 'unknown ci-review API route');
   }
 
