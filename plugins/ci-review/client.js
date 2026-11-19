@@ -168,7 +168,20 @@ window.__ModuleLoader__.load({
         agentStarted: '后台 Agent 已启动',
         agentStartFailed: '启动失败',
         agentChildSession: '子会话',
-        agentNoInstruction: '请先填写指令',
+        reviewCards: '审阅卡（按问题分批）',
+        reviewCardsNone: '还没有可审阅的问题批次。',
+        reviewCardsBatch: '第 {n} / {total} 批 · {severity} · {files} 个文件',
+        reviewCardsModules: '涉及模块',
+        reviewCardsCoverage: '覆盖：{findings} 条发现 / {files} 个文件 / 类别 {categories}',
+        reviewCardsApprove: '通过（进入待修复队列）',
+        reviewCardsRevision: '需修订',
+        reviewCardsIgnore: '忽略',
+        reviewCardsApproveBatch: '整批通过',
+        reviewCardsIgnoreBatch: '整批忽略',
+        reviewCardsShowLow: '显示低优先级批次',
+        reviewCardsHideLow: '收起低优先级批次',
+        reviewCardsExcerpt: '源码片段',
+        reviewCardsUncertainty: '不确定点',
         agentOpenSession: '打开子会话',
         agentSessionHint: '子会话是 DSH 中真实的后台会话，可打开后继续聊天/追问。',
         agentShowMessages: '查看对话',
@@ -348,6 +361,20 @@ window.__ModuleLoader__.load({
         agentStartFailed: 'Failed to start',
         agentChildSession: 'child session',
         agentNoInstruction: 'Instruction is required',
+        reviewCards: 'Review cards (problem batches)',
+        reviewCardsNone: 'No review batch yet.',
+        reviewCardsBatch: 'Batch {n} / {total} · {severity} · {files} file(s)',
+        reviewCardsModules: 'Modules',
+        reviewCardsCoverage: 'Coverage: {findings} findings / {files} files / categories {categories}',
+        reviewCardsApprove: 'Approve (queue for fix)',
+        reviewCardsRevision: 'Needs revision',
+        reviewCardsIgnore: 'Ignore',
+        reviewCardsApproveBatch: 'Approve batch',
+        reviewCardsIgnoreBatch: 'Ignore batch',
+        reviewCardsShowLow: 'Show low-priority batches',
+        reviewCardsHideLow: 'Hide low-priority batches',
+        reviewCardsExcerpt: 'Source excerpt',
+        reviewCardsUncertainty: 'Uncertainty',
         agentOpenSession: 'Open child session',
         agentSessionHint: 'The child session is a real DSH session; open it to keep chatting or asking follow-ups.',
         agentShowMessages: 'Show conversation',
@@ -1006,6 +1033,81 @@ window.__ModuleLoader__.load({
       return 'idle';
     }
 
+    function ReviewCardsCard({ snapshot, t, projectId, onRefresh, onAskAgentAt }) {
+      const batches = snapshot.reviewBatches || [];
+      const [showLow, setShowLow] = React.useState(false);
+      const [index, setIndex] = React.useState(0);
+      const [busy, setBusy] = React.useState(false);
+      const [message, setMessage] = React.useState(null);
+      const visible = batches.filter((batch) => showLow || !batch.collapsed);
+      const current = visible[Math.min(index, Math.max(0, visible.length - 1))];
+      const decide = async (cardIds, status) => {
+        setBusy(true);
+        setMessage(null);
+        try {
+          const result = await request(`api/review-cards/decide?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ cardIds, status }),
+          });
+          if (!result.ok) setMessage({ tone: 'bad', text: result.message || 'failed' });
+          else { setMessage({ tone: 'ok', text: `已标记 ${status}` }); onRefresh(); }
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setBusy(false);
+        }
+      };
+      return h(
+        Card,
+        null,
+        h('div', { className: 'dr-card-head' },
+          h('h3', { className: 'dr-card-title' }, t('reviewCards')),
+          h('span', { className: 'dr-card-title-sub' }, `${batches.length} 批`),
+          h('span', { className: 'dr-spacer' }),
+          h('button', { className: 'dr-btn', type: 'button', onClick: () => setShowLow(!showLow) }, showLow ? t('reviewCardsHideLow') : t('reviewCardsShowLow'))),
+        visible.length === 0
+          ? h('p', { className: 'dr-muted' }, t('reviewCardsNone'))
+          : h(
+              'div',
+              null,
+              h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' } },
+                h('button', { className: 'dr-btn', type: 'button', disabled: index <= 0, onClick: () => setIndex(index - 1) }, '←'),
+                h('button', { className: 'dr-btn', type: 'button', disabled: index >= visible.length - 1, onClick: () => setIndex(index + 1) }, '→'),
+                h('span', { className: 'dr-muted' }, `第 ${current.index} / ${visible.length} 批`)),
+              h('div', { className: 'dr-card', style: { borderColor: '#3a4150', marginBottom: '8px' } },
+                h('div', { className: 'dr-card-head' },
+                  h(Badge, { tone: current.severity === 'blocker' ? 'bad' : current.severity === 'major' ? 'warn' : 'run' }, current.severity),
+                  h('span', { className: 'dr-card-title' }, current.title),
+                  h('span', { className: 'dr-spacer' })),
+                current.explanation
+                  ? h('div', { className: 'dr-muted', style: { whiteSpace: 'pre-wrap', marginBottom: '6px' } },
+                      `发生了什么：${current.explanation.what || '-'}\n为什么重要：${current.explanation.whyImportant || '-'}\n证据：${current.explanation.evidence || '-'}${current.explanation.uncertainty ? `\n不确定点：${current.explanation.uncertainty}` : ''}`)
+                  : null,
+                h('div', { className: 'dr-muted', style: { marginBottom: '6px' } }, `${t('reviewCardsModules')}: ${(current.modules || []).join(', ') || '-'} · ${t('reviewCardsCoverage').replace('{findings}', current.coverage?.findings ?? 0).replace('{files}', (current.coverage?.files || []).length).replace('{categories}', (current.coverage?.categories || []).join('/'))}`),
+                ...(current.cards || []).map((cardItem) =>
+                  h('div', { key: cardItem.id, style: { borderTop: '1px dashed #23262d', paddingTop: '6px', marginTop: '6px' } },
+                    h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
+                      h('span', { className: 'dr-code' }, `${cardItem.file}:${cardItem.startLine}${cardItem.endLine && cardItem.endLine !== cardItem.startLine ? `-${cardItem.endLine}` : ''}`),
+                      h('span', { className: 'dr-muted' }, cardItem.decision === 'pending' ? '' : cardItem.decision)),
+                    h('div', { style: { whiteSpace: 'pre-wrap', margin: '3px 0' } }, cardItem.problem || cardItem.title),
+                    cardItem.suggestion ? h('div', { className: 'dr-muted' }, `建议：${cardItem.suggestion}`) : null,
+                    cardItem.excerpt
+                      ? h('pre', { className: 'dr-gutter', style: { margin: '4px 0', maxHeight: '150px', overflow: 'auto' } },
+                          cardItem.excerpt.lines.map((line) => `${String(line.n).padStart(4)}  ${line.text}`).join('\n'))
+                      : null,
+                    h('div', { className: 'dr-actions', style: { marginTop: '4px' } },
+                      h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'approved') }, t('reviewCardsApprove')),
+                      h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'needs-revision') }, t('reviewCardsRevision')),
+                      h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'ignored') }, t('reviewCardsIgnore')),
+                      h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => onAskAgentAt(cardItem.file, cardItem.startLine, { severity: cardItem.severity, title: cardItem.title, problem: cardItem.problem, evidence: cardItem.evidence, impact: cardItem.impact, suggestion: cardItem.suggestion }) }, t('askAgentHere'))))),
+                h('div', { className: 'dr-actions', style: { marginTop: '8px' } },
+                  h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'approved') }, t('reviewCardsApproveBatch')),
+                  h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'ignored') }, t('reviewCardsIgnoreBatch')))),
+              message ? h('div', { className: `dr-notice ${message.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '6px 0 0' } }, message.text) : null,
+            ),
+      );
+    }
+
     function FileReviewCard({ snapshot, t, projectId, onAskAgentAt, onAnnotateAt, onRefresh }) {
       const allFindings = snapshot.findings || [];
       const [mode, setMode] = React.useState('priority');
@@ -1638,6 +1740,19 @@ window.__ModuleLoader__.load({
                       null,
                       h(SummaryCard, { snapshot, t }),
                       h(GitHubNotice, { snapshot, t }),
+                      h(ReviewCardsCard, {
+                        snapshot,
+                        t,
+                        projectId: snapshot.project.id,
+                        onRefresh: model.refresh,
+                        onAskAgentAt: (file, line, finding) => setAgentDraft({
+                          file, startLine: line, target: `${file}:${line}`,
+                          instruction: finding
+                            ? `请修复该问题（${finding.severity}）：${finding.title}\n\n位置：${file}:${line}\n问题：${finding.problem}\n证据：${finding.evidence}\n影响：${finding.impact}\n建议：${finding.suggestion}`
+                            : `请审阅并修订 ${file}:${line} 附近的代码，保持接口兼容。`,
+                          riskBudget: finding && (finding.severity === 'blocker' || finding.severity === 'major') ? 'medium' : 'low',
+                        }),
+                      }),
                       h(FileReviewCard, {
                         snapshot,
                         t,

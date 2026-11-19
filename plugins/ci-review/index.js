@@ -1511,6 +1511,98 @@ export function apply(ctx, config = {}) {
     return batches;
   }
 
+  const PROBLEM_FAMILY = {
+    correctness: 'logic', errors: 'logic', data: 'logic', concurrency: 'concurrency',
+    security: 'security', contract: 'contract', intent: 'contract', tests: 'tests', style: 'style',
+  };
+
+  function buildReviewProblems(root, findings) {
+    const decisions = readCardDecisions(root);
+    const rank = { blocker: 0, major: 1, minor: 2 };
+    const sorted = [...findings].sort((a, b) =>
+      (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2) || a.file.localeCompare(b.file) || (a.startLine || 1) - (b.startLine || 1));
+    const problems = [];
+    for (const finding of sorted) {
+      const family = PROBLEM_FAMILY[finding.category] ?? 'logic';
+      let problem = problems.find((item) =>
+        item.family === family
+        && item.files.includes(finding.file)
+        && Math.abs(item.lastLine - (finding.startLine || 1)) <= 25);
+      if (!problem) {
+        problem = {
+          id: '', family, lastLine: finding.startLine || 1,
+          files: [], modules: [], categories: [],
+          findings: [], severity: 'minor', title: finding.title,
+          what: finding.problem, whyImportant: finding.impact, evidence: finding.evidence,
+        };
+        problems.push(problem);
+      }
+      problem.lastLine = Math.max(problem.lastLine, finding.endLine || finding.startLine || 1);
+      if (!problem.files.includes(finding.file)) problem.files.push(finding.file);
+      if (!problem.categories.includes(finding.category)) problem.categories.push(finding.category);
+      problem.findings.push(finding);
+      if ((rank[finding.severity] ?? 2) < (rank[problem.severity] ?? 2)) {
+        problem.severity = finding.severity;
+        problem.title = finding.title;
+        problem.what = finding.problem;
+        problem.whyImportant = finding.impact;
+        problem.evidence = finding.evidence;
+      }
+    }
+    for (const [index, problem] of problems.entries()) {
+      problem.id = `problem-${index + 1}-${problem.family}`;
+      problem.modules = [...new Set(problem.files.map((file) => file.split('/').slice(0, -1).join('/') || '.'))];
+      const cards = problem.findings.map((finding) => {
+        const id = `${finding.file}#${finding.startLine}#${finding.category}`;
+        return {
+          id, kind: 'defect',
+          file: finding.file, startLine: finding.startLine, endLine: finding.endLine,
+          severity: finding.severity, category: finding.category, title: finding.title,
+          problem: finding.problem, evidence: finding.evidence,
+          impact: finding.impact, suggestion: finding.suggestion,
+          runId: finding.runId,
+          excerpt: sourceExcerpt(root, finding.file, finding.startLine),
+          decision: decisions[id]?.status === 'approved' ? 'approved'
+            : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
+              : decisions[id]?.status === 'ignored' ? 'ignored' : 'pending',
+          decisionSurface: {
+            risk: finding.severity,
+            blastRadius: 'verify callers of this location before changing behavior',
+            compatibility: finding.category === 'contract' ? 'public interface/format may change' : 'keep API/format stable',
+            tests: finding.category === 'tests' ? 'add/adjust regression coverage' : 'run project gate after the fix',
+            rollback: 'git diff / revert task files before commit',
+          },
+        };
+      });
+      const pending = cards.filter((card) => card.decision === 'pending').length;
+      problem.batch = {
+        id: problem.id,
+        index: index + 1,
+        problemId: problem.id,
+        phase: problem.modules.length > 1 ? 'cross-module' : 'core',
+        title: problem.title,
+        severity: problem.severity,
+        category: problem.categories[0] ?? '',
+        explanation: {
+          what: problem.what, whyImportant: problem.whyImportant,
+          evidence: problem.evidence,
+          uncertainty: problem.categories.includes('contract') ? '契约类问题需确认调用方与兼容策略' : '',
+        },
+        modules: problem.modules,
+        coverage: {
+          files: problem.files, modules: problem.modules,
+          categories: problem.categories, findings: problem.findings.length,
+          excluded: [], unknown: [],
+        },
+        cards,
+        collapsed: problem.severity === 'minor' && cards.length <= 2,
+        progress: { approved: cards.length - pending, pending },
+      };
+    }
+    return problems.map((problem) => problem.batch).sort((a, b) =>
+      (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2) || a.modules.join().localeCompare(b.modules.join()) || a.index - b.index);
+  }
+
   /* -------------------------------------------------------------- snapshot */
 
   async function buildSnapshot(project) {
@@ -1534,7 +1626,7 @@ export function apply(ctx, config = {}) {
       sessions,
       findings,
       files,
-      reviewBatches: summary.exists ? buildReviewBatches(project.root, findings) : [],
+      reviewBatches: summary.exists ? buildReviewProblems(project.root, findings) : [],
       annotations,
       agentTasks: summary.exists ? readTasks(project.root) : [],
       capabilities: {
