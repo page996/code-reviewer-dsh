@@ -1603,6 +1603,8 @@ export function apply(ctx, config = {}) {
       (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2) || a.modules.join().localeCompare(b.modules.join()) || a.index - b.index);
   }
 
+  const vscodeBridge = { connected: false, workspaceRoot: '', updatedAt: null, buffers: {} };
+
   /* -------------------------------------------------------------- snapshot */
 
   async function buildSnapshot(project) {
@@ -1624,6 +1626,7 @@ export function apply(ctx, config = {}) {
       github,
       localReviews,
       sessions,
+      vscode: { ...vscodeBridge },
       findings,
       files,
       reviewBatches: summary.exists ? buildReviewProblems(project.root, findings) : [],
@@ -2223,6 +2226,25 @@ export function apply(ctx, config = {}) {
       } catch (error) {
         return sendJson(res, 200, { ok: false, files, message: String(error?.message ?? error).slice(0, 200) });
       }
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/vscode/push`) {
+      const body = await readJsonBody(req, 2 * 1024 * 1024);
+      if (!body || typeof body !== 'object') return sendError(res, 400, 'invalid JSON body');
+      vscodeBridge.connected = true;
+      vscodeBridge.updatedAt = new Date().toISOString();
+      if (body.type === 'hello') vscodeBridge.workspaceRoot = String(body.workspaceRoot ?? '');
+      if (body.type === 'buffer' && typeof body.file === 'string') {
+        vscodeBridge.buffers[body.file] = {
+          file: body.file,
+          languageId: body.languageId ?? '',
+          version: Number(body.version) || 0,
+          dirty: Boolean(body.dirty),
+          lines: Array.isArray(body.lines) ? body.lines.slice(0, 3000) : [],
+          diagnostics: Array.isArray(body.diagnostics) ? body.diagnostics.slice(0, 200) : [],
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      return sendJson(res, 200, { ok: true });
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }
