@@ -2176,6 +2176,37 @@ export function apply(ctx, config = {}) {
         : [];
       return sendJson(res, 200, { ok: true, source: fs.existsSync(configPath) ? 'config' : 'missing', commands });
     }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/gate/run`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const config = safeReadJson(path.join(project.root, '.review', 'config.json')) ?? {};
+      const raw = Array.isArray(body?.commands) && body.commands.length > 0 ? body.commands : config?.gate?.commands;
+      const commands = (Array.isArray(raw) ? raw : [])
+        .map((item) => (typeof item === 'string' ? item : item?.command))
+        .filter((item) => typeof item === 'string' && item.trim());
+      if (commands.length === 0) return sendJson(res, 200, { ok: false, message: '没有 gate 命令：请配置 .review/config.json 的 gate.commands 或临时指定' });
+      const results = [];
+      for (const command of commands) {
+        const started = Date.now();
+        try {
+          const stdout = execFileSync(process.platform === 'win32' ? 'cmd' : 'sh', process.platform === 'win32' ? ['/c', command] : ['-lc', command], {
+            cwd: project.root, encoding: 'utf8', timeout: 120000, windowsHide: true,
+            windowsVerbatimArguments: process.platform === 'win32',
+            env: { ...process.env, CI: '1' },
+          });
+          results.push({ command, exitCode: 0, durationMs: Date.now() - started, output: String(stdout).slice(-4000) });
+        } catch (error) {
+          results.push({
+            command,
+            exitCode: Number.isInteger(error?.status) ? error.status : 1,
+            durationMs: Date.now() - started,
+            output: `${String(error?.stdout ?? '')}\n${String(error?.stderr ?? error?.message ?? '')}`.slice(-4000),
+          });
+        }
+      }
+      return sendJson(res, 200, { ok: results.every((item) => item.exitCode === 0), results });
+    }
     return sendError(res, 404, 'unknown ci-review API route');
   }
 
