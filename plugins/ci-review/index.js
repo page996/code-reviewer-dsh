@@ -2165,6 +2165,17 @@ export function apply(ctx, config = {}) {
       snapshotCache.delete(project.id);
       return sendJson(res, 200, { ok: true, updated: ids.length, status });
     }
+    if (req.method === 'GET' && url.pathname === `${ROUTE}/api/gate/config`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const configPath = path.join(project.root, '.review', 'config.json');
+      const config = safeReadJson(configPath) ?? {};
+      const raw = config?.gate?.commands;
+      const commands = Array.isArray(raw)
+        ? raw.map((item) => (typeof item === 'string' ? item : item?.command)).filter((item) => typeof item === 'string' && item.trim())
+        : [];
+      return sendJson(res, 200, { ok: true, source: fs.existsSync(configPath) ? 'config' : 'missing', commands });
+    }
     return sendError(res, 404, 'unknown ci-review API route');
   }
 
