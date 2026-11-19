@@ -1,0 +1,8 @@
+- insert:
+    - id: dsh-ci-review
+      name: '@local/dsh-ci-review'
+      config:
+        # Extra projects beyond the DSH workspaces discovered automatically.
+        # Each entry: { name: string, root: absolute directory }
+        projects: []
+        refreshSeconds: 20
