@@ -180,6 +180,47 @@ export function apply(ctx, config = {}) {
   const refreshMs = refreshSeconds * 1000;
   const token = randomBytes(24).toString('base64url');
   const snapshotCache = new Map();
+  const snapshotInflight = new Map();
+  const snapshotDiskDir = path.join(process.env.DSH_HOME || path.join(os.homedir(), '.dsh'), 'ci-review-cache');
+
+  function diskSnapshotPath(projectId) {
+    return path.join(snapshotDiskDir, `${projectId}.json`);
+  }
+
+  function readDiskSnapshot(projectId) {
+    try {
+      return JSON.parse(fs.readFileSync(diskSnapshotPath(projectId), 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
+  function writeDiskSnapshot(projectId, snapshot) {
+    try {
+      fs.mkdirSync(snapshotDiskDir, { recursive: true });
+      fs.writeFileSync(diskSnapshotPath(projectId), JSON.stringify(snapshot), 'utf8');
+    } catch {
+      /* cache is best effort */
+    }
+  }
+
+  function storeSnapshot(project, snapshot) {
+    snapshotCache.set(project.id, { at: Date.now(), snapshot });
+    if (snapshot && !snapshot.stale) writeDiskSnapshot(project.id, snapshot);
+  }
+
+  function scheduleSnapshotRebuild(project) {
+    if (snapshotInflight.has(project.id)) return;
+    const promise = buildSnapshot(project)
+      .then((snapshot) => {
+        storeSnapshot(project, snapshot);
+      })
+      .catch(() => {})
+      .finally(() => {
+        snapshotInflight.delete(project.id);
+      });
+    snapshotInflight.set(project.id, promise);
+  }
   let credential = { value: '', source: 'none', at: 0 };
 
   function log(message) {
@@ -1676,8 +1717,17 @@ export function apply(ctx, config = {}) {
   async function snapshotFor(project, { force = false } = {}) {
     const cached = snapshotCache.get(project.id);
     if (!force && cached && Date.now() - cached.at < refreshMs) return cached.snapshot;
+    if (!force && !cached) {
+      const disk = readDiskSnapshot(project.id);
+      if (disk) {
+        const instant = { ...disk, stale: true };
+        snapshotCache.set(project.id, { at: 0, snapshot: instant });
+        scheduleSnapshotRebuild(project);
+        return instant;
+      }
+    }
     const snapshot = await buildSnapshot(project);
-    snapshotCache.set(project.id, { at: Date.now(), snapshot });
+    storeSnapshot(project, snapshot);
     return snapshot;
   }
 
@@ -2374,6 +2424,20 @@ export function apply(ctx, config = {}) {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`);
     try {
       if (!url.pathname.startsWith(ROUTE)) return sendError(res, 404, 'not found');
+      // Public, loopback-only discovery endpoints for the IDE bridge. They never
+      // expose repository data; the pair call exists so a local IDE extension can
+      // connect without persisting a token in user settings.
+      if (url.pathname === `${ROUTE}/api/bridge/ping` && req.method === 'GET') {
+        return sendJson(res, 200, { ok: true, plugin: name, route: ROUTE });
+      }
+      if (url.pathname === `${ROUTE}/api/bridge/pair` && req.method === 'POST') {
+        const remote = String(req.socket?.remoteAddress ?? '');
+        const loopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1' || remote === '';
+        if (!loopback) return sendError(res, 403, 'pairing is loopback-only');
+        const host = String(req.headers.host ?? '');
+        const portPart = host.includes(':') ? host.slice(host.lastIndexOf(':') + 1) : '80';
+        return sendJson(res, 200, { ok: true, port: Number(portPart) || null, token, route: ROUTE, host });
+      }
       if (url.pathname.startsWith(`${ROUTE}/api/`)) {
         if (!checkOrigin(req)) return sendError(res, 403, 'cross-site request refused');
         if (!isAuthenticated(req)) return sendError(res, 401, 'missing or invalid ci-review authentication');

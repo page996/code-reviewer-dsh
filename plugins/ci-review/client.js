@@ -190,6 +190,12 @@ window.__ModuleLoader__.load({
         bridgeCopied: '已复制',
         prCommentHere: 'PR 行内评论',
         prComments: 'PR 行内评论',
+        connectVscode: '连接 VS Code',
+        connectRequested: '已唤起 VS Code',
+        unchangedLines: '与磁盘一致',
+        unsavedLines: '未保存修改 {count} 行（相对磁盘）',
+        taskDiff: '查看改动 diff',
+        taskDiffHide: '收起 diff',
         openInVscode: '在 VS Code 打开',
         agentOpenSession: '打开子会话',
         agentSessionHint: '子会话是 DSH 中真实的后台会话，可打开后继续聊天/追问。',
@@ -392,6 +398,12 @@ window.__ModuleLoader__.load({
         bridgeCopied: 'Copied',
         prCommentHere: 'PR inline comment',
         prComments: 'PR inline comments',
+        connectVscode: 'Connect VS Code',
+        connectRequested: 'VS Code requested',
+        unchangedLines: 'matches disk',
+        unsavedLines: '{count} unsaved line(s) vs disk',
+        taskDiff: 'Show diff',
+        taskDiffHide: 'Hide diff',
         openInVscode: 'Open in VS Code',
         agentOpenSession: 'Open child session',
         agentSessionHint: 'The child session is a real DSH session; open it to keep chatting or asking follow-ups.',
@@ -601,7 +613,13 @@ window.__ModuleLoader__.load({
 
     function useWorkbench(t) {
       const [projects, setProjects] = React.useState([]);
-      const [selectedId, setSelectedId] = React.useState('');
+      const [selectedId, setSelectedId] = React.useState(() => {
+        try {
+          return localStorage.getItem('ciReview:project') || '';
+        } catch {
+          return '';
+        }
+      });
       const [snapshot, setSnapshot] = React.useState(null);
       const [error, setError] = React.useState('');
       const [loading, setLoading] = React.useState(true);
@@ -654,6 +672,15 @@ window.__ModuleLoader__.load({
           cancelled = true;
         };
       }, [loadProjects]);
+
+      React.useEffect(() => {
+        if (!selectedId) return;
+        try {
+          localStorage.setItem('ciReview:project', selectedId);
+        } catch {
+          /* storage may be unavailable */
+        }
+      }, [selectedId]);
 
       React.useEffect(() => {
         if (!selectedId) return undefined;
@@ -1229,6 +1256,14 @@ window.__ModuleLoader__.load({
         : file && !file.tooLarge && typeof file.content === 'string'
           ? file.content.split('\n')
           : [];
+      const diskLines = file && !file.tooLarge && typeof file.content === 'string' ? file.content.split('\n') : [];
+      const changedLines = new Set();
+      if (vsBuffer && vsBuffer.dirty && diskLines.length) {
+        const max = Math.max(lines.length, diskLines.length);
+        for (let index = 0; index < max; index += 1) {
+          if ((lines[index] ?? null) !== (diskLines[index] ?? null)) changedLines.add(index + 1);
+        }
+      }
       const diagnosticLines = new Map((vsBuffer?.diagnostics || []).map((item) => [item.line, item.message]));
       const prComments = (snapshot.github?.pr?.reviewComments || []).filter((comment) => comment.path === selected);
       const commentLines = new Map(prComments.map((comment) => [comment.line, comment]));
@@ -1290,7 +1325,7 @@ window.__ModuleLoader__.load({
             { style: { minWidth: 0 } },
             error ? h('div', { className: 'dr-notice dr-error' }, error) : null,
             selected
-              ? h('div', { className: 'dr-path', style: { marginBottom: '4px' } }, `${selected}${vsBuffer ? ` · ${vsBuffer.dirty ? t('vscodeLiveDirty') : t('vscodeLive')}` : ` · ${t('diskSource')}`}`)
+              ? h('div', { className: 'dr-path', style: { marginBottom: '4px' } }, `${selected}${vsBuffer ? ` · ${vsBuffer.dirty ? t('vscodeLiveDirty') : t('vscodeLive')}` : ` · ${t('diskSource')}`}${changedLines.size ? ` · ${interpolate(t('unsavedLines'), { count: changedLines.size })}` : ''}`)
               : h('p', { className: 'dr-muted' }, t('filesPick')),
             line > 0
               ? h(
@@ -1342,7 +1377,11 @@ window.__ModuleLoader__.load({
                             padding: '0 8px',
                             cursor: 'pointer',
                             background: isSelected ? '#1b2a44' : undefined,
-                            borderLeft: severity ? `3px solid ${severity === 'blocker' ? '#f85149' : severity === 'major' ? '#d29922' : '#2f81f7'}` : '3px solid transparent',
+                            borderLeft: severity
+                              ? `3px solid ${severity === 'blocker' ? '#f85149' : severity === 'major' ? '#d29922' : '#2f81f7'}`
+                              : changedLines.has(number)
+                                ? '3px solid #d29922'
+                                : '3px solid transparent',
                           },
                         },
                         h('span', { style: { color: '#6f7987', width: '46px', textAlign: 'right', flex: 'none', userSelect: 'none' } }, number),
@@ -1581,6 +1620,20 @@ window.__ModuleLoader__.load({
       const [chat, setChat] = React.useState({ taskId: '', messages: [], error: '', loading: false });
       const [followUp, setFollowUp] = React.useState('');
       const [sending, setSending] = React.useState('');
+      const [taskDiff, setTaskDiff] = React.useState({ taskId: '', text: '', error: '', loading: false });
+      const toggleDiff = async (taskId) => {
+        if (taskDiff.taskId === taskId) {
+          setTaskDiff({ taskId: '', text: '', error: '', loading: false });
+          return;
+        }
+        setTaskDiff({ taskId, text: '', error: '', loading: true });
+        try {
+          const data = await request(`api/agent-task/diff?projectId=${encodeURIComponent(projectId)}&taskId=${encodeURIComponent(taskId)}`);
+          setTaskDiff({ taskId, text: data.diff || '', error: data.ok ? '' : (data.message || 'failed'), loading: false });
+        } catch (cause) {
+          setTaskDiff({ taskId, text: '', error: String(cause?.message || cause), loading: false });
+        }
+      };
       const toggleMessages = async (taskId) => {        if (chat.taskId === taskId) {
           setChat({ taskId: '', messages: [], error: '', loading: false });
           return;
@@ -1691,6 +1744,9 @@ window.__ModuleLoader__.load({
                     task.childId ? h('span', { className: 'dr-row-state' }, `${t('agentChildSession')}: ${task.childId}`) : null,
                     task.childId ? h('button', { className: 'dr-btn', type: 'button', title: t('agentSessionHint'), onClick: () => openChild(task.childId) }, t('agentOpenSession')) : null,
                     task.childId ? h('button', { className: 'dr-btn', type: 'button', onClick: () => toggleMessages(task.id) }, chat.taskId === task.id ? t('agentHideMessages') : t('agentShowMessages')) : null,
+                    task.report?.changes?.length
+                      ? h('button', { className: 'dr-btn', type: 'button', onClick: () => toggleDiff(task.id) }, taskDiff.taskId === task.id ? t('taskDiffHide') : t('taskDiff'))
+                      : null,
                     h('span', { className: 'dr-spacer' }),
                     task.status === 'running' ? h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => cancel(task.id) }, t('agentCancel')) : null,
                   ),
@@ -1727,6 +1783,17 @@ window.__ModuleLoader__.load({
                           style: { flex: 1, minWidth: '220px' },
                         }),
                         h('button', { className: 'dr-btn', type: 'button', disabled: sending === task.id || !followUp.trim(), onClick: () => sendFollowUp(task.id) }, sending === task.id ? '…' : t('agentSend')),
+                      )
+                    : null,
+                  taskDiff.taskId === task.id
+                    ? h(
+                        'div',
+                        { style: { margin: '4px 0', maxHeight: '300px', overflow: 'auto', background: '#050608', border: '1px solid #23262d', borderRadius: '8px', padding: '8px' } },
+                        taskDiff.loading
+                          ? h('p', { className: 'dr-muted' }, '…')
+                          : taskDiff.error
+                            ? h('p', { className: 'dr-muted', style: { color: '#ff9b95' } }, taskDiff.error)
+                            : h('pre', { style: { margin: 0, whiteSpace: 'pre-wrap', fontSize: '12px', color: '#e6edf3' } }, taskDiff.text || '(no changes)'),
                       )
                     : null,
                   task.error ? h('div', { className: 'dr-notice dr-error', style: { margin: '4px 0' } }, task.error) : null,
@@ -1796,7 +1863,20 @@ window.__ModuleLoader__.load({
     }
 
     function Page({ locale }) {
-      const [lang, setLang] = React.useState('zh');
+      const [lang, setLang] = React.useState(() => {
+        try {
+          return localStorage.getItem('ciReview:lang') || 'zh';
+        } catch {
+          return 'zh';
+        }
+      });
+      React.useEffect(() => {
+        try {
+          localStorage.setItem('ciReview:lang', lang);
+        } catch {
+          /* storage may be unavailable */
+        }
+      }, [lang]);
       const t = React.useCallback((key, params) => {
         const dict = DICT[lang] || DICT.zh;
         const template = dict[key] ?? DICT.zh[key] ?? key;
@@ -1807,6 +1887,7 @@ window.__ModuleLoader__.load({
       const [agentDraft, setAgentDraft] = React.useState(null);
       const [annotationDraft, setAnnotationDraft] = React.useState(null);
       const [bridgeCopied, setBridgeCopied] = React.useState(false);
+      const [bridgeConnect, setBridgeConnect] = React.useState(false);
       return h(
         'div',
         { className: 'dr-root' },
@@ -1850,6 +1931,22 @@ window.__ModuleLoader__.load({
                 }
               },
             }, bridgeCopied ? t('bridgeCopied') : t('copyBridge')),
+            h('button', {
+              className: 'dr-btn',
+              type: 'button',
+              onClick: async () => {
+                try {
+                  const config = await request('api/bridge/config');
+                  if (!config?.port || !config?.token) throw new Error('bridge config unavailable');
+                  const url = `vscode://local.ci-review-bridge/connect?port=${encodeURIComponent(config.port)}&token=${encodeURIComponent(config.token)}`;
+                  window.open(url);
+                  setBridgeConnect(true);
+                  setTimeout(() => setBridgeConnect(false), 2000);
+                } catch {
+                  /* ignore: VS Code may be absent */
+                }
+              },
+            }, bridgeConnect ? t('connectRequested') : t('connectVscode')),
             model.updatedAt ? h('span', { className: 'dr-row-state' }, interpolate(t('updated'), { time: new Date(model.updatedAt).toLocaleTimeString() })) : null,
             h('button', { className: 'dr-btn', type: 'button', onClick: model.refresh, disabled: model.refreshing || !model.selectedId }, model.refreshing ? t('refreshing') : t('refresh')),
           ),

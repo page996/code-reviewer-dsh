@@ -41,6 +41,23 @@ the user knows the projection differs from disk.
 - Large files are sliced around the card lines (max 2,000 lines) before push.
 - Extension absence is never an error: panel states which layers are active.
 
+## One-click connect (recommended)
+
+Open the DSH CI review panel and click **「连接 VS Code」** in the panel header.
+The panel hands `port + token` to VS Code through
+`vscode://local.ci-review-bridge/connect?port=…&token=…`; the extension connects
+with these overrides and **nothing is persisted** in VS Code settings (so the
+plugin also works on other machines with no per-machine configuration).
+
+Terminal alternative (discovers the DSH port automatically via loopback ping):
+
+```powershell
+plugins/ci-review/scripts/connect-vscode.cmd
+```
+
+Host endpoints used by pairing: `GET /api/bridge/ping` (public, loopback) and
+`POST /api/bridge/pair` (loopback-only, returns the current panel token).
+
 ## Install (manual, user action)
 
 A packaged VSIX is committed next to this README:
