@@ -1,0 +1,22 @@
+{
+  "name": "ci-review-bridge",
+  "displayName": "CI Review Bridge (DSH)",
+  "description": "Streams the active VS Code buffer and diagnostics to the DSH ci-review panel for a read-only projection.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "engines": { "vscode": "^1.80.0" },
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "ciReviewBridge.connect", "title": "CI Review: Connect to DSH panel" }
+    ],
+    "configuration": {
+      "title": "CI Review Bridge",
+      "properties": {
+        "ciReviewBridge.port": { "type": "number", "default": 64972, "description": "DSH web port" },
+        "ciReviewBridge.token": { "type": "string", "default": "", "description": "Panel token from DSH" }
+      }
+    }
+  }
+}
