@@ -41,13 +41,20 @@ the user knows the projection differs from disk.
 - Large files are sliced around the card lines (max 2,000 lines) before push.
 - Extension absence is never an error: panel states which layers are active.
 
-## Files to create (next round)
+## Install (manual, user action)
 
-```
-vscode-extension/
-  package.json        # name, main, activationEvents: onStartupFinished, contributes.commands (pair)
-  extension.js        # workspace.onDidChangeTextDocument + languages diagnostics watch → ws push
-  README.md           # install: vsce package → code --install-extension ci-review-bridge-0.1.0.vsix
+A packaged VSIX is committed next to this README:
+
+```powershell
+code --install-extension E:/dsh-new-1/code-reviewer-dsh/plugins/ci-review/vscode-extension/ci-review-bridge-0.1.0.vsix
 ```
 
-Install is **manual by the user** (`code --install-extension ...`), never silent.
+Then in VS Code:
+
+1. Settings → `CI Review Bridge` → set `port` (the DSH web port, e.g. 64972) and
+   `token` (the DSH panel token, `window.__DSH_CI_REVIEW_TOKEN__`).
+2. Command Palette → `CI Review: Connect to DSH panel`.
+3. Keep the reviewed file open; edits/selection changes are pushed to the panel.
+
+Installation is reversible: `code --uninstall-extension local.ci-review-bridge`.
+
