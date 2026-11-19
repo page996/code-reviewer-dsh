@@ -1107,6 +1107,22 @@ window.__ModuleLoader__.load({
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'ignored') }, t('reviewCardsIgnore')),
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => onAskAgentAt(cardItem.file, cardItem.startLine, { severity: cardItem.severity, title: cardItem.title, problem: cardItem.problem, evidence: cardItem.evidence, impact: cardItem.impact, suggestion: cardItem.suggestion }) }, t('askAgentHere'))))),
                 h('div', { className: 'dr-actions', style: { marginTop: '8px' } },
+                  h('button', {
+                    className: 'dr-btn',
+                    type: 'button',
+                    disabled: busy,
+                    onClick: async () => {
+                      setBusy(true); setMessage(null);
+                      try {
+                        const run = await request(`api/gate/run?projectId=${encodeURIComponent(projectId)}`, { method: 'POST', body: '{}' });
+                        setMessage(run.ok
+                          ? { tone: 'ok', text: 'gate 通过' }
+                          : { tone: 'bad', text: `gate 失败：${(run.results || []).map((item) => `${item.command} → exit ${item.exitCode}`).join('；') || run.message || ''}` });
+                      } catch (cause) {
+                        setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+                      } finally { setBusy(false); }
+                    },
+                  }, '运行 gate'),
                   h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'approved') }, t('reviewCardsApproveBatch')),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'ignored') }, t('reviewCardsIgnoreBatch')))),
               message ? h('div', { className: `dr-notice ${message.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '6px 0 0' } }, message.text) : null,
