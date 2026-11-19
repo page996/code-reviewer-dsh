@@ -74,6 +74,18 @@ function connect(overrides = {}) {
   vscode.window.showInformationMessage(`CI Review Bridge: connecting to 127.0.0.1:${port}`);
 }
 
+function readDiscovery() {
+  try {
+    const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
+    const file = path.join(home, 'ci-review-bridge.json');
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (data && data.token && data.port) return { port: Number(data.port), token: String(data.token) };
+  } catch {
+    /* no discovery file yet */
+  }
+  return null;
+}
+
 function activate(context) {
   log('activate');
   context.subscriptions.push(vscode.commands.registerCommand('ciReviewBridge.connect', () => connect()));
@@ -97,7 +109,12 @@ function activate(context) {
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
     if (event.affectsConfiguration('ciReviewBridge')) connect();
   }));
-  connect();
+  // Prefer the live discovery file written by the DSH Host on every start; fall
+  // back to user settings for manually configured hosts.
+  const discovery = readDiscovery();
+  log(`discovery ${discovery ? `port=${discovery.port}` : 'missing'}`);
+  if (discovery) connect({ port: discovery.port, token: discovery.token });
+  else connect();
 }
 
 function deactivate() {

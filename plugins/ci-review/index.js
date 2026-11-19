@@ -183,6 +183,32 @@ export function apply(ctx, config = {}) {
   const snapshotInflight = new Map();
   const snapshotDiskDir = path.join(process.env.DSH_HOME || path.join(os.homedir(), '.dsh'), 'ci-review-cache');
 
+  function hostPort(req) {
+    const host = String(req?.headers?.host ?? '');
+    const part = host.includes(':') ? host.slice(host.lastIndexOf(':') + 1) : '';
+    return Number(part) || null;
+  }
+
+  function writeBridgeDiscovery(portOverride = null) {
+    try {
+      const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
+      let port = Number(portOverride) || null;
+      if (!port) {
+        try {
+          port = Number(new URL(process.env.DSH_WEB_URL || '').port) || null;
+        } catch {
+          port = null;
+        }
+      }
+      const file = path.join(home, 'ci-review-bridge.json');
+      fs.mkdirSync(home, { recursive: true });
+      fs.writeFileSync(file, `${JSON.stringify({ port, token, route: ROUTE, updatedAt: new Date().toISOString() }, null, 2)}\n`, 'utf8');
+      return file;
+    } catch {
+      return null;
+    }
+  }
+
   function diskSnapshotPath(projectId) {
     return path.join(snapshotDiskDir, `${projectId}.json`);
   }
@@ -1904,6 +1930,7 @@ export function apply(ctx, config = {}) {
       return sendJson(res, 200, { ok: true, plugin: name, refreshSeconds, tokenConfigured: Boolean(token) });
     }
     if (req.method === 'GET' && url.pathname === `${ROUTE}/api/bridge/config`) {
+      writeBridgeDiscovery(hostPort(req));
       const host = String(req.headers.host ?? '');
       const portPart = host.includes(':') ? host.slice(host.lastIndexOf(':') + 1) : '80';
       return sendJson(res, 200, {
@@ -1915,6 +1942,7 @@ export function apply(ctx, config = {}) {
       });
     }
     if (req.method === 'GET' && url.pathname === `${ROUTE}/api/projects`) {
+      writeBridgeDiscovery(hostPort(req));
       const active = currentCredential();
       const projects = discoverProjects().map((project) => {
         const summary = projectSummary(project);
@@ -1935,6 +1963,7 @@ export function apply(ctx, config = {}) {
       return sendJson(res, 200, { ok: true, projects, refreshSeconds });
     }
     if (req.method === 'GET' && url.pathname === `${ROUTE}/api/snapshot`) {
+      writeBridgeDiscovery(hostPort(req));
       const projectIdParam = url.searchParams.get('projectId') ?? '';
       const project = findProject(projectIdParam);
       if (!project) return sendError(res, 404, 'unknown project');
@@ -2417,6 +2446,20 @@ export function apply(ctx, config = {}) {
         return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 240) });
       }
     }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/bridge/open-vscode`) {
+      try {
+        if (process.platform === 'win32') {
+          execFileSync('cmd', ['/c', 'start', '""', 'code'], { windowsVerbatimArguments: true, windowsHide: true, timeout: 15000 });
+        } else if (process.platform === 'darwin') {
+          execFileSync('open', ['-a', 'Visual Studio Code'], { timeout: 15000 });
+        } else {
+          execFileSync('code', [], { timeout: 15000 });
+        }
+        return sendJson(res, 200, { ok: true, launched: true, discovery: writeBridgeDiscovery() });
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 200) });
+      }
+    }
     return sendError(res, 404, 'unknown ci-review API route');
   }
 
@@ -2428,6 +2471,7 @@ export function apply(ctx, config = {}) {
       // expose repository data; the pair call exists so a local IDE extension can
       // connect without persisting a token in user settings.
       if (url.pathname === `${ROUTE}/api/bridge/ping` && req.method === 'GET') {
+        writeBridgeDiscovery(hostPort(req));
         return sendJson(res, 200, { ok: true, plugin: name, route: ROUTE });
       }
       if (url.pathname === `${ROUTE}/api/bridge/pair` && req.method === 'POST') {
@@ -2481,4 +2525,5 @@ export function apply(ctx, config = {}) {
   );
 
   log(`mounted at ${ROUTE} (workspaces: ${registryProjects().length}, configured: ${configuredProjects().length})`);
+  writeBridgeDiscovery();
 }

@@ -1936,12 +1936,13 @@ window.__ModuleLoader__.load({
               type: 'button',
               onClick: async () => {
                 try {
-                  const config = await request('api/bridge/config');
-                  if (!config?.port || !config?.token) throw new Error('bridge config unavailable');
-                  const url = `vscode://local.ci-review-bridge/connect?port=${encodeURIComponent(config.port)}&token=${encodeURIComponent(config.token)}`;
-                  window.open(url);
-                  setBridgeConnect(true);
-                  setTimeout(() => setBridgeConnect(false), 2000);
+                  const result = await request('api/bridge/open-vscode', { method: 'POST', body: '{}' });
+                  if (result?.ok) {
+                    setBridgeConnect(true);
+                    setTimeout(() => setBridgeConnect(false), 2000);
+                  } else {
+                    setBridgeConnect(false);
+                  }
                 } catch {
                   /* ignore: VS Code may be absent */
                 }
