@@ -136,7 +136,9 @@ window.__ModuleLoader__.load({
         severityInfo: '提示',
         severityWarning: '警告',
         severityCritical: '严重',
-        agentTasks: '后台 Agent 任务',
+        agentTasks: '后台 Agent 修订任务',
+        agentTasksExplain: '后台 Agent 是一个独立上下文的子代理：它按你的指令在项目里修改文件、运行测试，并把「结论 / 改动 / 可能后果 / 测试 / 未解决 / 下一步」汇报到这里。它不会 commit、push、merge 或批准 PR，所以改完仍由你决定是否保留。',
+        agentTasksFlow: '用法：先在「本地批注」里点「让 Agent 修订」，或直接在下方填写指令；启动后任务卡会实时显示运行状态，完成后展开报告逐项审阅。',
         agentTasksNone: '还没有后台任务。可以在批注上点「让 Agent 修订」开始。',
         agentInstruction: '给 Agent 的指令',
         agentStart: '启动后台 Agent',
@@ -288,6 +290,8 @@ window.__ModuleLoader__.load({
         severityWarning: 'warning',
         severityCritical: 'critical',
         agentTasks: 'Background agent tasks',
+        agentTasksExplain: 'A background agent is a subagent with its own context: it edits files in the project and runs tests per your instruction, then reports Summary / Changes / Possible consequences / Tests / Unresolved / Next steps here. It never commits, pushes, merges or approves, so you stay in control.',
+        agentTasksFlow: 'Use "Ask agent to fix" on an annotation, or write an instruction below. The task card shows live status; when it finishes, review the report item by item.',
         agentTasksNone: 'No background task yet. Use "Ask agent to fix" on an annotation.',
         agentInstruction: 'Instruction for the agent',
         agentStart: 'Start background agent',
@@ -359,11 +363,14 @@ window.__ModuleLoader__.load({
 .dr-link{color:var(--dsw-alias-brand-primary,#2563eb);text-decoration:none}
 .dr-link:hover{text-decoration:underline}
 .dr-actions{display:flex;flex-wrap:wrap;gap:8px}
-.dr-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--dsw-alias-border-l2,#d1d5db);border-radius:8px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);padding:5px 11px;font:inherit;font-size:12px;cursor:pointer}
-.dr-btn:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2,#f3f4f6)}
-.dr-btn:disabled{opacity:.5;cursor:not-allowed}
+.dr-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--dsw-alias-border-l2,#d1d5db);border-radius:8px;background:var(--dsw-alias-bg-layer-2,#f3f4f6);color:var(--dsw-alias-label-primary,#1f2328);padding:5px 11px;font:inherit;font-size:12px;cursor:pointer;font-weight:500}
+.dr-btn:hover:not(:disabled){background:var(--dsw-alias-bg-layer-1,#fff);border-color:var(--dsw-alias-border-l2,#d1d5db)}
+.dr-btn:disabled{opacity:.55;cursor:not-allowed}
 .dr-btn.primary{background:var(--dsw-alias-brand-primary,#2563eb);border-color:transparent;color:#fff}
 .dr-btn.primary:hover:not(:disabled){opacity:.92;background:var(--dsw-alias-brand-primary,#2563eb)}
+.dr-link{color:var(--dsw-alias-brand-primary,#2563eb);text-decoration:none;font-weight:500}
+.dr-link:hover{text-decoration:underline}
+.dr-btn.dr-link{background:transparent;border:none;color:var(--dsw-alias-brand-primary,#2563eb);padding:0;font-weight:500}
 .dr-notice{border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-left:3px solid var(--dsw-alias-state-warn-primary,#d97706);border-radius:8px;padding:9px 11px;background:var(--dsw-alias-bg-layer-2,#f3f4f6);font-size:12px;margin:0 0 10px}
 .dr-error{border-left-color:var(--dsw-alias-state-error-primary,#dc2626)}
 .dr-empty{padding:28px 10px;text-align:center;color:var(--dsw-alias-label-secondary,#6b7280)}
@@ -1064,6 +1071,8 @@ window.__ModuleLoader__.load({
         null,
         h('div', { className: 'dr-card-head' }, h('h3', { className: 'dr-card-title' }, t('agentTasks')), h('span', { className: 'dr-spacer' }),
           h('span', { className: 'dr-card-title-sub' }, `${tasks.length}`)),
+        h('p', { className: 'dr-muted', style: { marginBottom: '4px' } }, t('agentTasksExplain')),
+        h('p', { className: 'dr-muted', style: { marginBottom: '8px' } }, t('agentTasksFlow')),
         draft
           ? h(
               'div',
@@ -1134,7 +1143,12 @@ window.__ModuleLoader__.load({
     }
 
     function Page({ locale }) {
-      const t = locale || ((key) => key);
+      const [lang, setLang] = React.useState('zh');
+      const t = React.useCallback((key, params) => {
+        const dict = DICT[lang] || DICT.zh;
+        const template = dict[key] ?? DICT.zh[key] ?? key;
+        return params ? interpolate(template, params) : template;
+      }, [lang]);
       const model = useWorkbench(t);
       const snapshot = model.snapshot;
       const [agentDraft, setAgentDraft] = React.useState(null);
@@ -1150,6 +1164,7 @@ window.__ModuleLoader__.load({
             'div',
             { className: 'dr-header-right' },
             h(Badge, { tone: snapshot?.github?.available ? 'ok' : 'warn' }, snapshot?.capabilities?.dataSource === 'forge' ? t('dataSourceForge') : snapshot?.github?.available ? t('dataSourceRest') : t('githubMissing')),
+            h('button', { className: 'dr-btn', type: 'button', onClick: () => setLang(lang === 'zh' ? 'en' : 'zh'), title: 'Language / 语言' }, lang === 'zh' ? 'EN' : '中文'),
             model.updatedAt ? h('span', { className: 'dr-row-state' }, interpolate(t('updated'), { time: new Date(model.updatedAt).toLocaleTimeString() })) : null,
             h('button', { className: 'dr-btn', type: 'button', onClick: model.refresh, disabled: model.refreshing || !model.selectedId }, model.refreshing ? t('refreshing') : t('refresh')),
           ),
