@@ -1040,6 +1040,7 @@ export function apply(ctx, config = {}) {
       '{"status":"completed|blocked|failed","summary":"...","changes":[{"file":"...","locations":["L1-L2"],"summary":"...","rationale":"...","risk":{"level":"low|medium|high","notes":"..."}}],"consequences":{"behavior":"...","compatibility":"...","performance":"...","security":"...","userVisible":"..."},"tests":{"planned":["..."],"executed":[{"command":"...","exitCode":0,"summary":"..."}],"notRun":[{"command":"...","reason":"..."}]},"unresolved":["..."],"nextSteps":["..."],"confidence":"low|medium|high"}',
       '',
       'Report what actually happened. Never claim a test ran unless it ran.',
+      '所有汇报内容（summary、changes、consequences、tests、unresolved、nextSteps）必须使用中文。',
     ].join('\n');
   }
 
@@ -1161,6 +1162,15 @@ export function apply(ctx, config = {}) {
     const summary = projectSummary(project);
     const annotations = readAnnotations(project.root);
     const annotation = body.annotationId ? annotations.find((item) => item.id === body.annotationId) ?? null : null;
+    let requestedTarget = null;
+    if (body.target && typeof body.target === 'object' && body.target.file) {
+      const file = resolveInsideRoot(project.root, String(body.target.file));
+      if (!file) return sendJson(res, 200, { ok: false, message: '目标文件必须位于项目根目录内' });
+      requestedTarget = {
+        file,
+        startLine: Number.isFinite(Number(body.target.startLine)) ? Math.max(1, Number(body.target.startLine)) : 1,
+      };
+    }
     const taskId = `agent-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomBytes(3).toString('hex')}`;
     const task = {
       id: taskId,
@@ -1171,7 +1181,7 @@ export function apply(ctx, config = {}) {
       annotationId: annotation?.id ?? null,
       target: annotation
         ? { file: annotation.file, startLine: annotation.startLine, endLine: annotation.endLine }
-        : body.location ?? null,
+        : requestedTarget,
       riskBudget: ['low', 'medium', 'high'].includes(body.riskBudget) ? body.riskBudget : 'low',
       status: 'running',
       childId: null,

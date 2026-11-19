@@ -120,6 +120,8 @@ window.__ModuleLoader__.load({
         branchUpdated: '分支更新方式',
         annotations: '本地批注',
         annotationsNone: '还没有批注。',
+        annotationsHelp: '用法（三步）：① 在下方填写文件（相对项目根）、起始行、批注内容，点「添加批注」——这就是对指定位置的审阅；② 在批注行点「让 Agent 修订」；③ 在「后台 Agent 修订任务」里补充指令并启动，完成后审阅报告。',
+        annotationFileExample: '如 plugins/ci-review/client.js',
         annotationFile: '文件（相对项目根）',
         annotationLine: '起始行',
         annotationEndLine: '结束行（可选）',
@@ -166,6 +168,8 @@ window.__ModuleLoader__.load({
         agentStartFailed: '启动失败',
         agentChildSession: '子会话',
         agentNoInstruction: '请先填写指令',
+        helpTitle: '使用说明：这个面板怎么用',
+        helpText: '① 左上角选项目 → 中间看「正在发生什么」（PR、检查、Actions 运行、本地评审、会话）。\n② 点 Actions 运行可展开 job / step 看 CI 进度与失败点。\n③ 在「本地批注」填文件（相对项目根，如 plugins/ci-review/client.js）、起始行、内容 → 点「添加批注」，这就是对指定位置的审阅。\n④ 在批注行点「让 Agent 修订」；在「后台 Agent 修订任务」里可再填目标文件/行号和指令 → 点「启动后台 Agent」。\n⑤ Agent 在独立上下文修改文件并运行测试，完成后在任务卡展示：结论 / 改动 / 可能后果 / 测试 / 未解决 / 下一步（中文）。它不会 commit/push/merge，改完由你决定是否保留。\n\n按钮含义：刷新=重新拉取状态；重跑失败检查=只重跑失败的 workflow；标记为可审阅=草稿 PR 转正式；更新分支=把基线合入当前分支；合并 PR=按所选方式合并（会二次确认）；打开 PR/创建 PR/Actions/仓库=跳转 GitHub；复制分支名=复制当前分支；标记已处理/重新打开/删除=管理批注状态；取消任务=停止后台 Agent。\n\n禁用的按钮下方会写出原因（例如「没有失败的检查」「PR 不是草稿」「与基线冲突」）。',
       },
       en: {
         panelLabel: 'CI review',
@@ -273,6 +277,8 @@ window.__ModuleLoader__.load({
         branchUpdated: 'Branch updates',
         annotations: 'Local annotations',
         annotationsNone: 'No annotations yet.',
+        annotationsHelp: 'How to use: (1) fill file (relative to the project root), start line and the annotation text, then click "Add annotation" — this is how you review a specific location; (2) click "Ask agent to fix" on that annotation; (3) refine the instruction and start the background agent in the task card, then review its report.',
+        annotationFileExample: 'e.g. plugins/ci-review/client.js',
         annotationFile: 'File (relative to project root)',
         annotationLine: 'Start line',
         annotationEndLine: 'End line (optional)',
@@ -319,6 +325,8 @@ window.__ModuleLoader__.load({
         agentStartFailed: 'Failed to start',
         agentChildSession: 'child session',
         agentNoInstruction: 'Instruction is required',
+        helpTitle: 'How to use this panel',
+        helpText: '1. Pick a project on the left; the centre shows what is happening (PR, checks, Actions runs, local reviews, sessions).\n2. Click an Actions run to expand jobs/steps.\n3. Under "Local annotations", fill file (relative to project root), start line and text, then click "Add annotation" — that is how you review a specific location.\n4. Click "Ask agent to fix" on the annotation; in the task card you may add a target file/line and instruction, then click "Start background agent".\n5. The agent edits files in an independent context and runs tests, then reports Summary / Changes / Possible consequences / Tests / Unresolved / Next steps. It never commits/pushes/merges.\n\nButtons: Refresh = reload state; Rerun failed checks = rerun only failed workflows; Mark ready = convert a draft PR; Update branch = merge the base into the head branch; Merge PR = merge with confirmation; Open PR/Create PR/Actions/Repository = jump to GitHub; Copy branch = copy the branch name; Mark addressed/Reopen/Delete = manage an annotation; Cancel task = stop the background agent.\n\nA disabled button lists its reason below the row (e.g. "no failed checks", "PR is not a draft", "conflicts with base").',
       },
     };
 
@@ -357,20 +365,22 @@ window.__ModuleLoader__.load({
 .dr-row:first-of-type{border-top:none}
 .dr-row-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dr-row-state{color:var(--dsw-alias-label-secondary,#6b7280);font-size:11px;white-space:nowrap}
-.dr-input{border:1px solid var(--dsw-alias-border-l2,#d1d5db);border-radius:6px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);padding:4px 7px;font:inherit;font-size:12px}
+.dr-input{border:1px solid #c7ced8;border-radius:6px;background:#ffffff;color:#1f2328;padding:4px 7px;font:inherit;font-size:12px}
 .dr-textarea{resize:vertical;min-height:56px}
-.dr-input:focus{outline:2px solid var(--dsw-alias-brand-primary,#2563eb);outline-offset:-1px}
+.dr-input:focus{outline:2px solid #1f6feb;outline-offset:-1px}
+.dr-input::placeholder{color:#7a8494}
 .dr-link{color:var(--dsw-alias-brand-primary,#2563eb);text-decoration:none}
 .dr-link:hover{text-decoration:underline}
 .dr-actions{display:flex;flex-wrap:wrap;gap:8px}
-.dr-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--dsw-alias-border-l2,#d1d5db);border-radius:8px;background:var(--dsw-alias-bg-layer-2,#f3f4f6);color:var(--dsw-alias-label-primary,#1f2328);padding:5px 11px;font:inherit;font-size:12px;cursor:pointer;font-weight:500}
-.dr-btn:hover:not(:disabled){background:var(--dsw-alias-bg-layer-1,#fff);border-color:var(--dsw-alias-border-l2,#d1d5db)}
-.dr-btn:disabled{opacity:.55;cursor:not-allowed}
-.dr-btn.primary{background:var(--dsw-alias-brand-primary,#2563eb);border-color:transparent;color:#fff}
-.dr-btn.primary:hover:not(:disabled){opacity:.92;background:var(--dsw-alias-brand-primary,#2563eb)}
-.dr-link{color:var(--dsw-alias-brand-primary,#2563eb);text-decoration:none;font-weight:500}
+.dr-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid #c7ced8;border-radius:8px;background:#eef1f5;color:#1f2328;padding:5px 11px;font:inherit;font-size:12px;cursor:pointer;font-weight:500}
+.dr-btn:hover:not(:disabled){background:#e2e7ee;border-color:#aab4c0}
+.dr-btn:disabled{opacity:1;cursor:not-allowed;background:#f6f7f9;color:#3f4854;border-color:#d5dbe3}
+.dr-btn.primary{background:#1f6feb;border-color:#1f6feb;color:#ffffff}
+.dr-btn.primary:hover:not(:disabled){background:#1a5fd0;border-color:#1a5fd0;opacity:1}
+.dr-link{color:#1f6feb;text-decoration:none;font-weight:500}
 .dr-link:hover{text-decoration:underline}
-.dr-btn.dr-link{background:transparent;border:none;color:var(--dsw-alias-brand-primary,#2563eb);padding:0;font-weight:500}
+.dr-btn.dr-link{background:transparent;border:none;color:#1f6feb;padding:0;font-weight:500;text-align:left}
+.dr-btn.dr-link:hover:not(:disabled){background:transparent;text-decoration:underline}
 .dr-notice{border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-left:3px solid var(--dsw-alias-state-warn-primary,#d97706);border-radius:8px;padding:9px 11px;background:var(--dsw-alias-bg-layer-2,#f3f4f6);font-size:12px;margin:0 0 10px}
 .dr-error{border-left-color:var(--dsw-alias-state-error-primary,#dc2626)}
 .dr-empty{padding:28px 10px;text-align:center;color:var(--dsw-alias-label-secondary,#6b7280)}
@@ -946,6 +956,7 @@ window.__ModuleLoader__.load({
         null,
         h('div', { className: 'dr-card-head' }, h('h3', { className: 'dr-card-title' }, t('annotations')), h('span', { className: 'dr-spacer' }),
           h('span', { className: 'dr-card-title-sub' }, `${annotations.length}`)),
+        h('p', { className: 'dr-muted', style: { marginBottom: '8px' } }, t('annotationsHelp')),
         annotations.length
           ? h(
               'div',
@@ -973,7 +984,7 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { style: { borderTop: '1px dashed var(--dsw-alias-border-l1,#e5e7eb)', paddingTop: '10px', marginTop: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
-          h('input', { className: 'dr-input', placeholder: t('annotationFile'), value: form.file, onChange: change('file'), style: { minWidth: '180px', flex: 1 } }),
+          h('input', { className: 'dr-input', placeholder: `${t('annotationFile')} (${t('annotationFileExample')})`, value: form.file, onChange: change('file'), style: { minWidth: '180px', flex: 1 } }),
           h('input', { className: 'dr-input', placeholder: t('annotationLine'), value: form.startLine, onChange: change('startLine'), style: { width: '72px' } }),
           h('input', { className: 'dr-input', placeholder: t('annotationEndLine'), value: form.endLine, onChange: change('endLine'), style: { width: '92px' } }),
           h('select', { className: 'dr-input', value: form.severity, onChange: change('severity') },
@@ -1024,10 +1035,16 @@ window.__ModuleLoader__.load({
     function AgentTasksCard({ snapshot, t, projectId, draft, onClearDraft, onRefresh }) {
       const tasks = snapshot.agentTasks || [];
       const [instruction, setInstruction] = React.useState('');
+      const [targetFile, setTargetFile] = React.useState('');
+      const [targetLine, setTargetLine] = React.useState('');
       const [busy, setBusy] = React.useState(false);
       const [message, setMessage] = React.useState(null);
       React.useEffect(() => {
-        if (draft) setInstruction(draft.instruction || '');
+        if (draft) {
+          setInstruction(draft.instruction || '');
+          setTargetFile(draft.file || '');
+          setTargetLine(draft.startLine ? String(draft.startLine) : '');
+        }
       }, [draft]);
       const start = async () => {
         if (!instruction.trim()) {
@@ -1039,7 +1056,14 @@ window.__ModuleLoader__.load({
         try {
           const result = await request(`api/agent-task?projectId=${encodeURIComponent(projectId)}`, {
             method: 'POST',
-            body: JSON.stringify({ instruction, annotationId: draft?.annotationId ?? null, riskBudget: draft?.riskBudget ?? 'low' }),
+            body: JSON.stringify({
+              instruction,
+              annotationId: draft?.annotationId ?? null,
+              riskBudget: draft?.riskBudget ?? 'low',
+              target: targetFile.trim()
+                ? { file: targetFile.trim(), startLine: Number(targetLine) > 0 ? Number(targetLine) : 1 }
+                : null,
+            }),
           });
           if (result.ok) {
             setMessage({ tone: 'ok', text: `${t('agentStarted')} · ${result.task.childId ?? ''}` });
@@ -1073,19 +1097,56 @@ window.__ModuleLoader__.load({
           h('span', { className: 'dr-card-title-sub' }, `${tasks.length}`)),
         h('p', { className: 'dr-muted', style: { marginBottom: '4px' } }, t('agentTasksExplain')),
         h('p', { className: 'dr-muted', style: { marginBottom: '8px' } }, t('agentTasksFlow')),
-        draft
-          ? h(
-              'div',
-              { style: { marginBottom: '10px' } },
-              h('p', { className: 'dr-muted' }, `${t('agentDraftTitle')} · ${t('agentTarget')}: ${draft.target || ''}`),
-              h('p', { className: 'dr-muted' }, t('agentDraftHint')),
-              h('textarea', { className: 'dr-input dr-textarea', value: instruction, onChange: (event) => setInstruction(event.target.value), placeholder: t('agentInstruction'), rows: 3, style: { width: '100%', boxSizing: 'border-box' } }),
-              h('div', { className: 'dr-actions', style: { marginTop: '6px' } },
-                h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: start }, busy ? t('agentStarting') : t('agentStart')),
-                h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: onClearDraft }, t('agentCancel')),
-              ),
-            )
-          : null,
+        h(
+          'div',
+          { style: { marginBottom: '10px', border: '1px solid #d5dbe3', borderRadius: '8px', padding: '10px', background: '#f8fafc' } },
+          h('p', { className: 'dr-muted', style: { margin: '0 0 4px', color: '#1f2328', fontWeight: '600' } }, draft ? `${t('agentDraftTitle')} · ${t('agentTarget')}: ${draft.target || ''}` : t('agentDraftTitle')),
+          h('p', { className: 'dr-muted', style: { margin: '0 0 8px' } }, t('agentDraftHint')),
+          h(
+            'div',
+            { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' } },
+            h('input', {
+              className: 'dr-input',
+              placeholder: `${t('annotationFile')} (${t('annotationFileExample')})`,
+              value: targetFile,
+              onChange: (event) => setTargetFile(event.target.value),
+              style: { flex: 2, minWidth: '200px' },
+            }),
+            h('input', {
+              className: 'dr-input',
+              placeholder: t('annotationLine'),
+              value: targetLine,
+              onChange: (event) => setTargetLine(event.target.value),
+              style: { width: '96px' },
+            }),
+          ),
+          h('textarea', {
+            className: 'dr-input dr-textarea',
+            value: instruction,
+            onChange: (event) => setInstruction(event.target.value),
+            placeholder: t('agentInstruction'),
+            rows: 3,
+            style: { width: '100%', boxSizing: 'border-box' },
+          }),
+          h(
+            'div',
+            { className: 'dr-actions', style: { marginTop: '6px' } },
+            h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: start }, busy ? t('agentStarting') : t('agentStart')),
+            draft
+              ? h('button', {
+                  className: 'dr-btn',
+                  type: 'button',
+                  disabled: busy,
+                  onClick: () => {
+                    setInstruction('');
+                    setTargetFile('');
+                    setTargetLine('');
+                    onClearDraft();
+                  },
+                }, t('agentCancel'))
+              : null,
+          ),
+        ),
         message ? h('div', { className: `dr-notice ${message.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '0 0 8px' } }, message.text) : null,
         tasks.length
           ? h(
@@ -1157,6 +1218,12 @@ window.__ModuleLoader__.load({
         { className: 'dr-root' },
         h('style', { key: 'ci-review-css' }, CSS),
         h(
+          'details',
+          { className: 'dr-help', style: { margin: '10px 18px 0' } },
+          h('summary', { style: { cursor: 'pointer', fontWeight: '600', fontSize: '13px' } }, t('helpTitle')),
+          h('p', { className: 'dr-muted', style: { whiteSpace: 'pre-wrap', margin: '8px 0 0', lineHeight: '1.6' } }, t('helpText')),
+        ),
+        h(
           'header',
           { className: 'dr-header' },
           h('div', { className: 'dr-headline' }, h('h1', { className: 'dr-title' }, t('title')), h('p', { className: 'dr-subtitle' }, t('subtitle'))),
@@ -1205,6 +1272,8 @@ window.__ModuleLoader__.load({
                         onAskAgent: (annotation) => setAgentDraft({
                           annotationId: annotation.id,
                           target: `${annotation.file}:${annotation.startLine}${annotation.endLine ? `-${annotation.endLine}` : ''}`,
+                          file: annotation.file,
+                          startLine: annotation.startLine,
                           instruction: `修复这条批注指出的问题：${annotation.body}\n\n范围：${annotation.file}:${annotation.startLine}${annotation.endLine ? `-${annotation.endLine}` : ''}`,
                           riskBudget: annotation.severity === 'critical' ? 'medium' : 'low',
                         }),
