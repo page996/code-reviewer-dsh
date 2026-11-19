@@ -1228,6 +1228,40 @@ window.__ModuleLoader__.load({
       };
       const [worktree, setWorktree] = React.useState(null);
       const [wtBusy, setWtBusy] = React.useState(false);
+      const [verifyBusy, setVerifyBusy] = React.useState(false);
+      const verifyProblem = async () => {
+        if (!current) return;
+        const firstCard = (current.cards || [])[0] ?? {};
+        setVerifyBusy(true);
+        setMessage(null);
+        try {
+          const result = await request(`api/review-problems/verify?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({
+              problem: {
+                id: current.problemId ?? current.id,
+                file: firstCard.file,
+                startLine: firstCard.startLine,
+                severity: current.severity,
+                category: current.category,
+                title: current.title,
+                problem: current.explanation?.what ?? '',
+                evidence: current.explanation?.evidence ?? '',
+              },
+            }),
+          });
+          if (result.ok) {
+            setMessage({ tone: 'ok', text: '已启动独立 Agent 验证，完成后自动刷新结果' });
+            onRefresh();
+          } else {
+            setMessage({ tone: 'bad', text: result.message || 'verify failed' });
+          }
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setVerifyBusy(false);
+        }
+      };
       const createWorktree = async () => {
         if (!current) return;
         setWtBusy(true);
@@ -1301,6 +1335,12 @@ window.__ModuleLoader__.load({
                       `发生了什么：${current.explanation.what || '-'}\n为什么重要：${current.explanation.whyImportant || '-'}\n证据：${current.explanation.evidence || '-'}${current.explanation.uncertainty ? `\n不确定点：${current.explanation.uncertainty}` : ''}`)
                   : null,
                 h('div', { className: 'dr-muted', style: { marginBottom: '6px' } }, `${t('reviewCardsModules')}: ${(current.modules || []).join(', ') || '-'} · ${t('reviewCardsCoverage').replace('{findings}', current.coverage?.findings ?? 0).replace('{files}', (current.coverage?.files || []).length).replace('{categories}', (current.coverage?.categories || []).join('/'))}`),
+                current.verification
+                  ? h('div', { className: 'dr-muted', style: { marginBottom: '6px' } },
+                      current.verification.status === 'running'
+                        ? '独立验证：进行中…'
+                        : `独立验证：${current.verification.verdict === 'confirmed' ? '已确认' : current.verification.verdict === 'rejected' ? '被反证（已折叠）' : '存疑'}${current.verification.reason ? ` — ${current.verification.reason}` : ''}`)
+                  : null,
                 ...(current.cards || []).map((cardItem) =>
                   h('div', { key: cardItem.id, style: { borderTop: '1px dashed #23262d', paddingTop: '6px', marginTop: '6px' } },
                     h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
@@ -1354,6 +1394,7 @@ window.__ModuleLoader__.load({
                     },
                   }, '运行 gate'),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy || wtBusy, onClick: createWorktree }, wtBusy ? '…' : '创建审阅 worktree 并注释'),
+                  h('button', { className: 'dr-btn', type: 'button', disabled: verifyBusy, onClick: verifyProblem }, verifyBusy ? '验证中…' : '独立 Agent 验证此问题'),
                   h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'approved', current.cards) }, t('reviewCardsApproveBatch')),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'ignored') }, t('reviewCardsIgnoreBatch')))),
               worktree

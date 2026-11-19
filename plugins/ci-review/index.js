@@ -1612,6 +1612,7 @@ export function apply(ctx, config = {}) {
 
   function buildReviewProblems(root, findings) {
     const decisions = readCardDecisions(root);
+    const verifications = readVerifications(root);
     const rank = { blocker: 0, major: 1, minor: 2 };
     const sorted = [...findings].sort((a, b) =>
       (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2) || a.file.localeCompare(b.file) || (a.startLine || 1) - (b.startLine || 1));
@@ -1689,7 +1690,8 @@ export function apply(ctx, config = {}) {
           excluded: [], unknown: [],
         },
         cards,
-        collapsed: problem.severity === 'minor' && cards.length <= 2,
+        collapsed: (problem.severity === 'minor' && cards.length <= 2) || verifications[problem.id]?.verdict === 'rejected',
+        verification: verifications[problem.id] ?? null,
         progress: { approved: cards.length - pending, pending },
       };
     }
@@ -1891,6 +1893,149 @@ export function apply(ctx, config = {}) {
     Object.assign(item, patch, { updatedAt: new Date().toISOString() });
     writeFixQueue(root, items);
     return item;
+  }
+
+  function verificationsPath(root) {
+    return path.join(root, '.review', 'ci-review', 'verifications.json');
+  }
+
+  function readVerifications(root) {
+    const data = safeReadJson(verificationsPath(root));
+    return data && typeof data.byProblem === 'object' ? data.byProblem : {};
+  }
+
+  function writeVerifications(root, byProblem) {
+    const dir = path.join(root, '.review', 'ci-review');
+    fs.mkdirSync(dir, { recursive: true });
+    const temp = `${verificationsPath(root)}.tmp-${process.pid}-${Date.now()}`;
+    fs.writeFileSync(temp, `${JSON.stringify({ version: 1, byProblem }, null, 2)}\n`, 'utf8');
+    fs.renameSync(temp, verificationsPath(root));
+    return byProblem;
+  }
+
+  function verificationPrompt(problem) {
+    return [
+      '你是独立问题验证子代理（另一个上下文，不是原始评审者）。请只读验证下面这个代码问题是否真实成立，不要修改任何文件。',
+      '',
+      '问题（JSON）：',
+      JSON.stringify({
+        file: problem.file,
+        startLine: problem.startLine,
+        severity: problem.severity,
+        category: problem.category,
+        title: problem.title,
+        problem: problem.problem,
+        evidence: problem.evidence,
+      }, null, 2),
+      '',
+      '验证要求：',
+      '1. 打开该文件与相关调用方，确认问题是否可复现；检查是否有反证（上游校验、调用约束、测试覆盖）。',
+      '2. 只输出一个 JSON 对象（不要 markdown 围栏），字段：',
+      '{"verdict":"confirmed|rejected|uncertain","reason":"中文理由","evidenceFor":["..."],"evidenceAgainst":["..."],"callSites":["file:line"],"confidence":"low|medium|high"}',
+      '3. rejected 必须给出明确反证；uncertain 必须说明缺什么信息。',
+    ].join('\n');
+  }
+
+  async function startVerification({ project, problem, parent, subagents }) {
+    const taskId = `verify-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomBytes(3).toString('hex')}`;
+    const record = {
+      id: taskId,
+      problemId: String(problem.id ?? ''),
+      status: 'running',
+      verdict: null,
+      reason: null,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      childId: null,
+    };
+    const byProblem = readVerifications(project.root);
+    byProblem[record.problemId] = { ...record, history: [...(byProblem[record.problemId]?.history ?? []), record] };
+    writeVerifications(project.root, byProblem);
+    try {
+      const activation = await subagents.startActivation({
+        provider: 'spawn',
+        label: `verify ${taskId}`,
+        name: `verify-${taskId.slice(-6)}`,
+        prompt: [{ type: 'text', text: verificationPrompt(problem) }],
+        parent,
+        cwd: project.root,
+        signal: AbortSignal.timeout(15 * 60 * 1000),
+        delivery: 'caller',
+      });
+      byProblem[record.problemId] = { ...byProblem[record.problemId], childId: activation.childId };
+      writeVerifications(project.root, byProblem);
+      activation.result
+        .then((result) => {
+          const report = parseAgentReport(result);
+          const entry = {
+            ...byProblem[record.problemId],
+            status: 'completed',
+            verdict: ['confirmed', 'rejected', 'uncertain'].includes(report?.verdict) ? report.verdict : 'uncertain',
+            reason: String(report?.reason ?? report?.summary ?? '').slice(0, 2000),
+            evidenceFor: report?.evidenceFor ?? [],
+            evidenceAgainst: report?.evidenceAgainst ?? [],
+            callSites: report?.callSites ?? [],
+            confidence: report?.confidence ?? null,
+            finishedAt: new Date().toISOString(),
+          };
+          const latest = readVerifications(project.root);
+          latest[record.problemId] = entry;
+          writeVerifications(project.root, latest);
+          snapshotCache.delete(project.id);
+        })
+        .catch((error) => {
+          const latest = readVerifications(project.root);
+          latest[record.problemId] = { ...latest[record.problemId], status: 'failed', error: String(error?.message ?? error), finishedAt: new Date().toISOString() };
+          writeVerifications(project.root, latest);
+          snapshotCache.delete(project.id);
+        });
+      snapshotCache.delete(project.id);
+      return { ok: true, verification: byProblem[record.problemId] };
+    } catch (error) {
+      const latest = readVerifications(project.root);
+      latest[record.problemId] = { ...latest[record.problemId], status: 'failed', error: String(error?.message ?? error) };
+      writeVerifications(project.root, latest);
+      return { ok: false, message: String(error?.message ?? error) };
+    }
+  }
+
+  async function resolveVerificationParent(project) {
+    const agentsSvc = (() => {
+      try {
+        return ctx.get('agents') ?? null;
+      } catch {
+        return null;
+      }
+    })();
+    const subagents = (() => {
+      try {
+        return ctx.get('subagents') ?? null;
+      } catch {
+        return null;
+      }
+    })();
+    if (!agentsSvc?.list || !subagents?.startActivation || !subagents?.rootOf) return { agentsSvc, subagents, parent: null };
+    let parent = null;
+    const prefix = normalizePath(project.root);
+    for (const agent of agentsSvc.list()) {
+      try {
+        const candidate = subagents.rootOf(agent);
+        if (!candidate?.id) continue;
+        parent = candidate;
+        let cwd = '';
+        try {
+          const query = ctx.get('sessionQuery');
+          const session = await query.readSession(candidate.id);
+          cwd = String(session?.header?.cwd ?? '');
+        } catch {
+          cwd = '';
+        }
+        if (cwd && normalizePath(cwd).startsWith(prefix)) break;
+      } catch {
+        /* try next */
+      }
+    }
+    return { agentsSvc, subagents, parent };
   }
 
   /* -------------------------------------------------------------- snapshot */
@@ -2765,6 +2910,17 @@ export function apply(ctx, config = {}) {
       });
       snapshotCache.delete(project.id);
       return sendJson(res, 200, item ? { ok: true, item } : { ok: false, message: '找不到队列项' });
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/review-problems/verify`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const problem = body?.problem;
+      if (!problem || !problem.id || !problem.file) return sendJson(res, 200, { ok: false, message: '缺少 problem 信息' });
+      const { parent, subagents } = await resolveVerificationParent(project);
+      if (!parent || !subagents) return sendJson(res, 200, { ok: false, message: '没有可用在线会话，无法启动验证子代理' });
+      const result = await startVerification({ project, problem, parent, subagents });
+      return sendJson(res, 200, result);
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }
