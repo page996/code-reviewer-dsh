@@ -1305,7 +1305,7 @@ export function apply(ctx, config = {}) {
 
   /* ------------------------------------------------------ review evidence */
 
-  function readLatestFindings(root) {
+  function readFindings(root, { limit = 600 } = {}) {
     const base = path.join(root, '.review', 'runs');
     let entries;
     try {
@@ -1314,31 +1314,39 @@ export function apply(ctx, config = {}) {
         .filter((entry) => entry.isDirectory())
         .map((entry) => ({ name: entry.name, stat: fs.statSync(path.join(base, entry.name)) }))
         .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs)
-        .slice(0, 6);
+        .slice(0, 16);
     } catch {
       return [];
     }
+    const seen = new Set();
+    const out = [];
     for (const entry of entries) {
       const aggregate = safeReadJson(path.join(base, entry.name, 'aggregate.json'));
       const findings = Array.isArray(aggregate?.findings) ? aggregate.findings : [];
-      const real = findings.filter((finding) => finding && finding.status !== 'dropped' && finding.file);
-      if (real.length === 0) continue;
-      return real.slice(0, 300).map((finding) => ({
-        file: String(finding.file),
-        startLine: Number(finding.startLine) || 1,
-        endLine: Number(finding.endLine) || Number(finding.startLine) || 1,
-        severity: ['blocker', 'major', 'minor'].includes(finding.severity) ? finding.severity : 'minor',
-        category: finding.category ?? '',
-        title: finding.title ?? '',
-        problem: String(finding.problem ?? '').slice(0, 1200),
-        evidence: String(finding.evidence ?? '').slice(0, 1200),
-        impact: String(finding.impact ?? '').slice(0, 800),
-        suggestion: String(finding.suggestion ?? '').slice(0, 800),
-        status: finding.status ?? 'real',
-        runId: entry.name,
-      }));
+      for (const finding of findings) {
+        if (out.length >= limit) return out;
+        if (!finding || !finding.file || finding.status === 'dropped') continue;
+        const key = finding.fingerprint
+          || `${finding.file}|${finding.startLine}|${finding.category}|${finding.title}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          file: String(finding.file),
+          startLine: Number(finding.startLine) || 1,
+          endLine: Number(finding.endLine) || Number(finding.startLine) || 1,
+          severity: ['blocker', 'major', 'minor'].includes(finding.severity) ? finding.severity : 'minor',
+          category: finding.category ?? '',
+          title: finding.title ?? '',
+          problem: String(finding.problem ?? '').slice(0, 1200),
+          evidence: String(finding.evidence ?? '').slice(0, 1200),
+          impact: String(finding.impact ?? '').slice(0, 800),
+          suggestion: String(finding.suggestion ?? '').slice(0, 800),
+          status: finding.status ?? 'real',
+          runId: entry.name,
+        });
+      }
     }
-    return [];
+    return out;
   }
 
   const SKIP_DIRS = new Set(['.git', 'node_modules', '.review', '.cache', 'coverage', 'dist', 'build', 'out', 'target', '.next', '.venv', 'venv', '__pycache__']);
@@ -1435,7 +1443,7 @@ export function apply(ctx, config = {}) {
     ]);
     const localReviews = summary.exists ? readLocalReviewRuns(project.root) : [];
     const annotations = summary.exists ? readAnnotations(project.root) : [];
-    const findings = summary.exists ? readLatestFindings(project.root) : [];
+    const findings = summary.exists ? readFindings(project.root) : [];
     const changedPaths = Array.isArray(github.pr?.files) ? github.pr.files : [];
     const files = summary.exists ? priorityFiles(project.root, findings, annotations, changedPaths) : [];
     const repoUrl = summary.repo ? `https://github.com/${summary.repo}` : null;
@@ -1775,7 +1783,7 @@ export function apply(ctx, config = {}) {
       const mode = url.searchParams.get('mode') === 'all' ? 'all' : 'priority';
       const summary = projectSummary(project);
       const annotations = readAnnotations(project.root);
-      const findings = readLatestFindings(project.root);
+      const findings = readFindings(project.root);
       if (mode === 'priority') {
         const cached = snapshotCache.get(project.id)?.snapshot;
         const changed = Array.isArray(cached?.github?.pr?.files) ? cached.github.pr.files : [];
@@ -1831,6 +1839,42 @@ export function apply(ctx, config = {}) {
       const kept = readExtraProjects().filter((entry) => normalizePath(entry.root) !== normalizePath(resolved));
       writeExtraProjects(kept);
       return sendJson(res, 200, { ok: true });
+    }
+    if (req.method === 'GET' && url.pathname === `${ROUTE}/api/agent-task/messages`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const taskId = url.searchParams.get('taskId') ?? '';
+      const task = readTasks(project.root).find((item) => item.id === taskId);
+      if (!task || !task.childId) return sendJson(res, 200, { ok: false, message: '该任务还没有子会话' });
+      const query = (() => {
+        try {
+          return ctx.get('sessionQuery') ?? null;
+        } catch {
+          return null;
+        }
+      })();
+      if (!query || typeof query.readSession !== 'function') {
+        return sendJson(res, 200, { ok: false, message: 'sessionQuery 不可用，无法读取子会话消息' });
+      }
+      try {
+        const session = await query.readSession(task.childId);
+        const messages = typeof session?.deriveMessages === 'function' ? session.deriveMessages() : [];
+        const textOf = (message) => {
+          const blocks = Array.isArray(message?.content) ? message.content : [];
+          return blocks
+            .filter((block) => block && block.type === 'text' && typeof block.text === 'string')
+            .map((block) => block.text)
+            .join('\n')
+            .trim();
+        };
+        const rows = messages
+          .map((message) => ({ role: message?.role ?? 'unknown', text: textOf(message) }))
+          .filter((row) => row.text.length > 0)
+          .slice(-30);
+        return sendJson(res, 200, { ok: true, messages: rows, running: task.status === 'running' });
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: `读取子会话失败：${String(error?.message ?? error).slice(0, 200)}` });
+      }
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }

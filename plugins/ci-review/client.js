@@ -171,6 +171,9 @@ window.__ModuleLoader__.load({
         agentNoInstruction: '请先填写指令',
         agentOpenSession: '打开子会话',
         agentSessionHint: '子会话是 DSH 中真实的后台会话，可打开后继续聊天/追问。',
+        agentShowMessages: '查看对话',
+        agentHideMessages: '收起对话',
+        agentMessagesEmpty: '子会话还没有可展示的消息。',
         addProject: '添加项目',
         projectPathPlaceholder: '项目根目录，如 C:\\work\\my-repo',
         fileReview: '文件与问题',
@@ -343,6 +346,9 @@ window.__ModuleLoader__.load({
         agentNoInstruction: 'Instruction is required',
         agentOpenSession: 'Open child session',
         agentSessionHint: 'The child session is a real DSH session; open it to keep chatting or asking follow-ups.',
+        agentShowMessages: 'Show conversation',
+        agentHideMessages: 'Hide conversation',
+        agentMessagesEmpty: 'The child session has no messages to show yet.',
         addProject: 'Add project',
         projectPathPlaceholder: 'Project root, e.g. C:\\work\\my-repo',
         fileReview: 'Files & findings',
@@ -1349,6 +1355,21 @@ window.__ModuleLoader__.load({
           setMessage({ tone: 'bad', text: `打开子会话失败：${String(cause?.message || cause)}` });
         }
       };
+      const [chat, setChat] = React.useState({ taskId: '', messages: [], error: '', loading: false });
+      const toggleMessages = async (taskId) => {
+        if (chat.taskId === taskId) {
+          setChat({ taskId: '', messages: [], error: '', loading: false });
+          return;
+        }
+        setChat({ taskId, messages: [], error: '', loading: true });
+        try {
+          const data = await request(`api/agent-task/messages?projectId=${encodeURIComponent(projectId)}&taskId=${encodeURIComponent(taskId)}`);
+          if (!data.ok) setChat({ taskId, messages: [], error: data.message || 'failed', loading: false });
+          else setChat({ taskId, messages: data.messages || [], error: '', loading: false });
+        } catch (cause) {
+          setChat({ taskId, messages: [], error: String(cause?.message || cause), loading: false });
+        }
+      };
       return h(
         Card,
         null,
@@ -1422,10 +1443,31 @@ window.__ModuleLoader__.load({
                     h('span', { className: 'dr-code' }, task.id),
                     task.childId ? h('span', { className: 'dr-row-state' }, `${t('agentChildSession')}: ${task.childId}`) : null,
                     task.childId ? h('button', { className: 'dr-btn', type: 'button', title: t('agentSessionHint'), onClick: () => openChild(task.childId) }, t('agentOpenSession')) : null,
+                    task.childId ? h('button', { className: 'dr-btn', type: 'button', onClick: () => toggleMessages(task.id) }, chat.taskId === task.id ? t('agentHideMessages') : t('agentShowMessages')) : null,
                     h('span', { className: 'dr-spacer' }),
                     task.status === 'running' ? h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => cancel(task.id) }, t('agentCancel')) : null,
                   ),
                   h('div', { className: 'dr-muted', style: { whiteSpace: 'pre-wrap', margin: '4px 0' } }, task.instruction),
+                  chat.taskId === task.id
+                    ? h(
+                        'div',
+                        { style: { background: '#0b0f14', border: '1px solid #23262d', borderRadius: '8px', padding: '8px', margin: '4px 0', maxHeight: '220px', overflow: 'auto' } },
+                        chat.loading
+                          ? h('p', { className: 'dr-muted' }, '…')
+                          : chat.error
+                            ? h('p', { className: 'dr-muted', style: { color: '#ff9b95' } }, chat.error)
+                            : chat.messages.length === 0
+                              ? h('p', { className: 'dr-muted' }, t('agentMessagesEmpty'))
+                              : chat.messages.map((row, index) =>
+                                  h(
+                                    'div',
+                                    { key: index, style: { marginBottom: '6px' } },
+                                    h('div', { className: 'dr-muted', style: { fontWeight: '600', color: row.role === 'user' ? '#6cb6ff' : '#7ee787' } }, row.role),
+                                    h('div', { style: { whiteSpace: 'pre-wrap', color: '#e6edf3', fontSize: '12px' } }, row.text),
+                                  ),
+                                ),
+                      )
+                    : null,
                   task.error ? h('div', { className: 'dr-notice dr-error', style: { margin: '4px 0' } }, task.error) : null,
                   task.report ? reportLines(task.report, t) : null,
                 ),
