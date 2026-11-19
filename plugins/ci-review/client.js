@@ -1095,7 +1095,10 @@ window.__ModuleLoader__.load({
                     cardItem.suggestion ? h('div', { className: 'dr-muted' }, `建议：${cardItem.suggestion}`) : null,
                     cardItem.excerpt
                       ? h('pre', { className: 'dr-gutter', style: { margin: '4px 0', maxHeight: '150px', overflow: 'auto' } },
-                          cardItem.excerpt.lines.map((line) => `${String(line.n).padStart(4)}  ${line.text}`).join('\n'))
+                          cardItem.excerpt.lines.map((line) => {
+                            const selected = line.n >= (cardItem.startLine || 1) && line.n <= (cardItem.endLine || cardItem.startLine || 1);
+                            return `${selected ? '▶' : ' '} ${String(line.n).padStart(4)}  ${line.text}${selected ? '   // 选中原因：' + (cardItem.title || '问题位置') : ''}`;
+                          }).join('\n'))
                       : null,
                     h('div', { className: 'dr-actions', style: { marginTop: '4px' } },
                       h('button', { className: 'dr-btn', type: 'button', onClick: () => { try { const root = String(snapshot.project.root || '').replace(/\\/g, '/').replace(/\/$/, ''); window.open(`vscode://file/${root}/${cardItem.file}:${cardItem.startLine}:1`); } catch (cause) { setMessage({ tone: 'bad', text: String(cause?.message || cause) }); } } }, t('openInVscode')),
