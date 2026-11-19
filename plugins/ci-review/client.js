@@ -189,6 +189,11 @@ window.__ModuleLoader__.load({
         copyBridge: '复制桥接参数',
         bridgeCopied: '已复制',
         prCommentHere: 'PR 行内评论',
+        approvePr: 'Approve',
+        requestChanges: 'Request changes',
+        commentPr: 'Comment',
+        requestChangesPrompt: '填写要求修改的说明（必须）',
+        commentPrompt: '填写 PR 评论内容',
         prComments: 'PR 行内评论',
         connectVscode: '连接 VS Code',
         connectRequested: '已唤起 VS Code',
@@ -397,6 +402,11 @@ window.__ModuleLoader__.load({
         copyBridge: 'Copy bridge settings',
         bridgeCopied: 'Copied',
         prCommentHere: 'PR inline comment',
+        approvePr: 'Approve',
+        requestChanges: 'Request changes',
+        commentPr: 'Comment',
+        requestChangesPrompt: 'Describe the required changes (required)',
+        commentPrompt: 'PR comment text',
         prComments: 'PR inline comments',
         connectVscode: 'Connect VS Code',
         connectRequested: 'VS Code requested',
@@ -771,10 +781,49 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dr-notice' }, h('div', null, reason), h('div', { className: 'dr-muted' }, t('tokenHint')));
     }
 
-    function PrCard({ snapshot, t }) {
+    function PrCard({ snapshot, t, projectId, onRefresh }) {
       const github = snapshot.github;
       const pr = github?.pr;
       const links = snapshot.capabilities || {};
+      const [reviewBusy, setReviewBusy] = React.useState('');
+      const [reviewMessage, setReviewMessage] = React.useState(null);
+      const submitReview = async (event, body) => {
+        setReviewBusy(event);
+        setReviewMessage(null);
+        try {
+          const result = await request(`api/pr/review?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ event, body }),
+          });
+          setReviewMessage(result.ok
+            ? { tone: 'ok', text: `PR review 已提交：${event}` }
+            : { tone: 'bad', text: result.message || 'review failed' });
+          if (result.ok) onRefresh();
+        } catch (cause) {
+          setReviewMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setReviewBusy('');
+        }
+      };
+      const mergePullRequest = async () => {
+        if (!window.confirm('确认用 squash 合并该 PR？此操作会改变远端仓库。')) return;
+        setReviewBusy('MERGE');
+        setReviewMessage(null);
+        try {
+          const result = await request(`api/pr/merge?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ method: 'squash' }),
+          });
+          setReviewMessage(result.ok
+            ? { tone: 'ok', text: 'PR 已合并（squash）' }
+            : { tone: 'bad', text: result.message || 'merge failed' });
+          if (result.ok) onRefresh();
+        } catch (cause) {
+          setReviewMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setReviewBusy('');
+        }
+      };
       if (!pr) {
         return h(
           Card,
@@ -812,6 +861,15 @@ window.__ModuleLoader__.load({
           pr.checks?.counts?.failed > 0 ? h(Badge, { tone: 'bad' }, interpolate(t('failedChecks'), { count: pr.checks.counts.failed })) : null,
           pr.headSha ? h('span', { className: 'dr-muted' }, pr.headSha.slice(0, 12)) : null,
         ),
+        h(
+          'div',
+          { className: 'dr-actions', style: { marginBottom: '8px' } },
+          h('button', { className: 'dr-btn primary', type: 'button', disabled: Boolean(reviewBusy), onClick: () => submitReview('APPROVE', '') }, reviewBusy === 'APPROVE' ? '…' : t('approvePr')),
+          h('button', { className: 'dr-btn', type: 'button', disabled: Boolean(reviewBusy), onClick: () => { const body = window.prompt(t('requestChangesPrompt')); if (body && body.trim()) submitReview('REQUEST_CHANGES', body.trim()); } }, t('requestChanges')),
+          h('button', { className: 'dr-btn', type: 'button', disabled: Boolean(reviewBusy), onClick: () => { const body = window.prompt(t('commentPrompt')); if (body && body.trim()) submitReview('COMMENT', body.trim()); } }, t('commentPr')),
+          h('button', { className: 'dr-btn', type: 'button', disabled: Boolean(reviewBusy), onClick: mergePullRequest }, reviewBusy === 'MERGE' ? '…' : t('mergePr')),
+        ),
+        reviewMessage ? h('div', { className: `dr-notice ${reviewMessage.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '0 0 8px' } }, reviewMessage.text) : null,
         h(
           'p',
           { className: 'dr-muted', style: { marginBottom: '10px' } },
@@ -2045,7 +2103,7 @@ window.__ModuleLoader__.load({
                         onAnnotateAt: (file, line) => setAnnotationDraft({ file, startLine: line, body: '' }),
                         onRefresh: model.refresh,
                       }),
-                      h(PrCard, { snapshot, t }),
+                      h(PrCard, { snapshot, t, projectId: snapshot.project.id, onRefresh: model.refresh }),
                       h(RunsCard, { snapshot, t, projectId: snapshot.project.id }),
                       h(LocalReviewsCard, { snapshot, t }),
                       h(SessionsCard, { snapshot, t }),
