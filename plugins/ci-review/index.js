@@ -1853,6 +1853,17 @@ export function apply(ctx, config = {}) {
     if (req.method === 'GET' && url.pathname === `${ROUTE}/api/health`) {
       return sendJson(res, 200, { ok: true, plugin: name, refreshSeconds, tokenConfigured: Boolean(token) });
     }
+    if (req.method === 'GET' && url.pathname === `${ROUTE}/api/bridge/config`) {
+      const host = String(req.headers.host ?? '');
+      const portPart = host.includes(':') ? host.slice(host.lastIndexOf(':') + 1) : '80';
+      return sendJson(res, 200, {
+        ok: true,
+        port: Number(portPart) || null,
+        token,
+        route: ROUTE,
+        host,
+      });
+    }
     if (req.method === 'GET' && url.pathname === `${ROUTE}/api/projects`) {
       const active = currentCredential();
       const projects = discoverProjects().map((project) => {
@@ -2295,6 +2306,62 @@ export function apply(ctx, config = {}) {
         });
         snapshotCache.delete(project.id);
         return sendJson(res, 200, { ok: true, url: comment?.html_url ?? null, id: comment?.id ?? null });
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 240) });
+      }
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/pr/review`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const event = ['APPROVE', 'REQUEST_CHANGES', 'COMMENT'].includes(body?.event) ? body.event : '';
+      if (!event) return sendJson(res, 200, { ok: false, message: 'event 必须是 APPROVE/REQUEST_CHANGES/COMMENT' });
+      const text = String(body?.body ?? '').trim();
+      if (event !== 'APPROVE' && !text) return sendJson(res, 200, { ok: false, message: '该 review 类型必须填写内容' });
+      let snapshot = snapshotCache.get(project.id)?.snapshot;
+      if (!snapshot?.github?.pr) {
+        snapshot = await buildSnapshot(project);
+        snapshotCache.set(project.id, { at: Date.now(), snapshot });
+      }
+      const pr = snapshot.github?.pr;
+      if (!pr) return sendJson(res, 200, { ok: false, message: '当前分支没有打开的 PR' });
+      const summary = projectSummary(project);
+      const repo = repoParts(summary.repo);
+      if (!repo) return sendJson(res, 200, { ok: false, message: '项目没有 GitHub 仓库' });
+      try {
+        const review = await githubRequest(`/repos/${repo.owner}/${repo.name}/pulls/${pr.number}/reviews`, {
+          method: 'POST',
+          body: { event, body: text || undefined, commit_id: pr.headSha || undefined },
+        });
+        snapshotCache.delete(project.id);
+        return sendJson(res, 200, { ok: true, url: review?.html_url ?? null, state: review?.state ?? event });
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 240) });
+      }
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/pr/merge`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const method = ['squash', 'merge', 'rebase'].includes(body?.method) ? body.method : 'squash';
+      let snapshot = snapshotCache.get(project.id)?.snapshot;
+      if (!snapshot?.github?.pr) {
+        snapshot = await buildSnapshot(project);
+        snapshotCache.set(project.id, { at: Date.now(), snapshot });
+      }
+      const pr = snapshot.github?.pr;
+      if (!pr) return sendJson(res, 200, { ok: false, message: '当前分支没有打开的 PR' });
+      if (pr.state === 'closed' || pr.merged) return sendJson(res, 200, { ok: false, message: 'PR 已关闭或已合并' });
+      const summary = projectSummary(project);
+      const repo = repoParts(summary.repo);
+      if (!repo) return sendJson(res, 200, { ok: false, message: '项目没有 GitHub 仓库' });
+      try {
+        const merged = await githubRequest(`/repos/${repo.owner}/${repo.name}/pulls/${pr.number}/merge`, {
+          method: 'PUT',
+          body: { merge_method: method, sha: pr.headSha || undefined },
+        });
+        snapshotCache.delete(project.id);
+        return sendJson(res, 200, { ok: Boolean(merged?.merged), merged: Boolean(merged?.merged), message: merged?.message ?? '' });
       } catch (error) {
         return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 240) });
       }

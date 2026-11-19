@@ -2,7 +2,7 @@
   "name": "ci-review-bridge",
   "displayName": "CI Review Bridge (DSH)",
   "description": "Streams the active VS Code buffer and diagnostics to the DSH ci-review panel for a read-only projection.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "local",
   "engines": { "vscode": "^1.80.0" },
   "activationEvents": ["onStartupFinished"],

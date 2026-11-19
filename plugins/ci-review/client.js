@@ -1825,7 +1825,16 @@ window.__ModuleLoader__.load({
               type: 'button',
               onClick: async () => {
                 try {
-                  const payload = JSON.stringify({ port: window.location.port || '', token: apiToken() });
+                  let port = window.location.port || '';
+                  let token = apiToken();
+                  try {
+                    const config = await request('api/bridge/config');
+                    if (config?.port) port = String(config.port);
+                    if (config?.token) token = config.token;
+                  } catch {
+                    /* fall back to page values */
+                  }
+                  const payload = JSON.stringify({ port, token });
                   await navigator.clipboard.writeText(payload);
                   setBridgeCopied(true);
                   setTimeout(() => setBridgeCopied(false), 1500);
