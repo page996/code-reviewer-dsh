@@ -182,6 +182,15 @@ window.__ModuleLoader__.load({
         reviewCardsHideLow: '收起低优先级批次',
         reviewCardsExcerpt: '源码片段',
         reviewCardsUncertainty: '不确定点',
+        fixQueue: '待修复队列',
+        fixQueueNone: '还没有进入待修复队列的问题。审阅卡点「通过」后会出现在这里。',
+        fixQueueStatusQueued: '待修复',
+        fixQueueStatusStarted: '修复中',
+        fixQueueStatusFixed: '已修复',
+        fixQueueStatusVerified: '已验证',
+        fixQueueStart: '让 Agent 修复',
+        fixQueueMarkFixed: '标记已修复',
+        fixQueueRemove: '移出队列',
         sourceLabel: '来源',
         vscodeLive: 'VS Code 实时缓冲区',
         vscodeLiveDirty: 'VS Code 实时缓冲区（未保存）',
@@ -401,6 +410,15 @@ window.__ModuleLoader__.load({
         reviewCardsHideLow: 'Hide low-priority batches',
         reviewCardsExcerpt: 'Source excerpt',
         reviewCardsUncertainty: 'Uncertainty',
+        fixQueue: 'Fix queue',
+        fixQueueNone: 'No approved problem queued yet. Approve a review card to add it here.',
+        fixQueueStatusQueued: 'queued',
+        fixQueueStatusStarted: 'fix started',
+        fixQueueStatusFixed: 'fixed',
+        fixQueueStatusVerified: 'verified',
+        fixQueueStart: 'Ask agent to fix',
+        fixQueueMarkFixed: 'Mark fixed',
+        fixQueueRemove: 'Remove from queue',
         sourceLabel: 'Source',
         vscodeLive: 'VS Code live buffer',
         vscodeLiveDirty: 'VS Code live buffer (unsaved)',
@@ -1189,16 +1207,19 @@ window.__ModuleLoader__.load({
       const [message, setMessage] = React.useState(null);
       const visible = batches.filter((batch) => showLow || !batch.collapsed);
       const current = visible[Math.min(index, Math.max(0, visible.length - 1))];
-      const decide = async (cardIds, status) => {
+      const decide = async (cardIds, status, cards) => {
         setBusy(true);
         setMessage(null);
         try {
           const result = await request(`api/review-cards/decide?projectId=${encodeURIComponent(projectId)}`, {
             method: 'POST',
-            body: JSON.stringify({ cardIds, status }),
+            body: JSON.stringify({ cardIds, status, cards: cards ?? undefined, problemId: current?.problemId }),
           });
           if (!result.ok) setMessage({ tone: 'bad', text: result.message || 'failed' });
-          else { setMessage({ tone: 'ok', text: `已标记 ${status}` }); onRefresh(); }
+          else {
+            setMessage({ tone: 'ok', text: status === 'approved' ? '已加入待修复队列' : `已标记 ${status}` });
+            onRefresh();
+          }
         } catch (cause) {
           setMessage({ tone: 'bad', text: String(cause?.message || cause) });
         } finally {
@@ -1311,7 +1332,7 @@ window.__ModuleLoader__.load({
                     })(),
                     h('div', { className: 'dr-actions', style: { marginTop: '4px' } },
                       h('button', { className: 'dr-btn', type: 'button', onClick: () => { try { const root = String(snapshot.project.root || '').replace(/\\/g, '/').replace(/\/$/, ''); window.open(`vscode://file/${root}/${cardItem.file}:${cardItem.startLine}:1`); } catch (cause) { setMessage({ tone: 'bad', text: String(cause?.message || cause) }); } } }, t('openInVscode')),
-                      h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'approved') }, t('reviewCardsApprove')),
+                      h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'approved', [cardItem]) }, t('reviewCardsApprove')),
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'needs-revision') }, t('reviewCardsRevision')),
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'ignored') }, t('reviewCardsIgnore')),
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => onAskAgentAt(cardItem.file, cardItem.startLine, { severity: cardItem.severity, title: cardItem.title, problem: cardItem.problem, evidence: cardItem.evidence, impact: cardItem.impact, suggestion: cardItem.suggestion }) }, t('askAgentHere'))))),
@@ -1333,7 +1354,7 @@ window.__ModuleLoader__.load({
                     },
                   }, '运行 gate'),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy || wtBusy, onClick: createWorktree }, wtBusy ? '…' : '创建审阅 worktree 并注释'),
-                  h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'approved') }, t('reviewCardsApproveBatch')),
+                  h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'approved', current.cards) }, t('reviewCardsApproveBatch')),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'ignored') }, t('reviewCardsIgnoreBatch')))),
               worktree
                 ? h('div', { className: 'dr-notice', style: { margin: '6px 0 0' } },
@@ -1343,6 +1364,46 @@ window.__ModuleLoader__.load({
                       h('button', { className: 'dr-btn', type: 'button', onClick: () => { try { window.open(`vscode://file/${String(worktree.path).replace(/\\/g, '/')}`); } catch { /* ignore */ } } }, '在 VS Code 打开'),
                       h('button', { className: 'dr-btn', type: 'button', disabled: wtBusy, onClick: removeWorktree }, '清理 worktree')))
                 : null,              message ? h('div', { className: `dr-notice ${message.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '6px 0 0' } }, message.text) : null,
+            ),
+      );
+    }
+
+    function FixQueueCard({ snapshot, t, projectId, onRefresh, onAskAgentAt }) {
+      const items = snapshot.fixQueue || [];
+      const [busy, setBusy] = React.useState('');
+      const update = async (id, status) => {
+        setBusy(id);
+        try {
+          await request(`api/fix-queue/update?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ id, status }),
+          });
+          onRefresh();
+        } catch {
+          /* next refresh shows the persisted state */
+        } finally {
+          setBusy('');
+        }
+      };
+      return h(
+        Card,
+        null,
+        h('div', { className: 'dr-card-head' },
+          h('h3', { className: 'dr-card-title' }, t('fixQueue')),
+          h('span', { className: 'dr-card-title-sub' }, `${items.filter((item) => item.status !== 'verified').length} 项`)),
+        items.length === 0
+          ? h('p', { className: 'dr-muted' }, t('fixQueueNone'))
+          : items.map((item) =>
+              h('div', { key: item.id, className: 'dr-row', style: { alignItems: 'flex-start', flexDirection: 'column', gap: '2px' } },
+                h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', width: '100%', flexWrap: 'wrap' } },
+                  h('span', { className: `dr-dot ${item.severity === 'blocker' ? 'bad' : item.severity === 'major' ? 'warn' : 'run'}` }),
+                  h('span', { className: 'dr-code' }, `${item.file}:${item.startLine}`),
+                  h('span', { className: 'dr-muted' }, item.status === 'verified' ? t('fixQueueStatusVerified') : item.status === 'fixed' ? t('fixQueueStatusFixed') : item.status === 'fix-started' ? t('fixQueueStatusStarted') : t('fixQueueStatusQueued')),
+                  h('span', { className: 'dr-spacer' }),
+                  h('button', { className: 'dr-btn', type: 'button', disabled: busy === item.id, onClick: () => { onAskAgentAt(item.file, item.startLine, { severity: item.severity, title: item.title, problem: item.problem, evidence: '', impact: '', suggestion: '' }); update(item.id, 'fix-started'); } }, t('fixQueueStart')),
+                  h('button', { className: 'dr-btn', type: 'button', disabled: busy === item.id, onClick: () => update(item.id, 'fixed') }, t('fixQueueMarkFixed')),
+                  h('button', { className: 'dr-btn', type: 'button', disabled: busy === item.id, onClick: () => update(item.id, 'removed') }, t('fixQueueRemove'))),
+                item.title ? h('div', { className: 'dr-muted', style: { whiteSpace: 'pre-wrap' } }, item.title) : null),
             ),
       );
     }
@@ -2209,6 +2270,19 @@ window.__ModuleLoader__.load({
                           instruction: finding
                             ? `请修复该问题（${finding.severity}）：${finding.title}\n\n位置：${file}:${line}\n问题：${finding.problem}\n证据：${finding.evidence}\n影响：${finding.impact}\n建议：${finding.suggestion}`
                             : `请审阅并修订 ${file}:${line} 附近的代码，保持接口兼容。`,
+                          riskBudget: finding && (finding.severity === 'blocker' || finding.severity === 'major') ? 'medium' : 'low',
+                        }),
+                      }),
+                      h(FixQueueCard, {
+                        snapshot,
+                        t,
+                        projectId: snapshot.project.id,
+                        onRefresh: model.refresh,
+                        onAskAgentAt: (file, line, finding) => setAgentDraft({
+                          file, startLine: line, target: `${file}:${line}`,
+                          instruction: finding
+                            ? `请修复该问题（${finding.severity}）：${finding.title}\n\n位置：${file}:${line}\n问题：${finding.problem}`
+                            : `请修复 ${file}:${line} 的问题。`,
                           riskBudget: finding && (finding.severity === 'blocker' || finding.severity === 'major') ? 'medium' : 'low',
                         }),
                       }),

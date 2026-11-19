@@ -1835,6 +1835,64 @@ export function apply(ctx, config = {}) {
     return { ok: true, removed: true };
   }
 
+  function fixQueuePath(root) {
+    return path.join(root, '.review', 'ci-review', 'fix-queue.json');
+  }
+
+  function readFixQueue(root) {
+    const data = safeReadJson(fixQueuePath(root));
+    return Array.isArray(data?.items) ? data.items : [];
+  }
+
+  function writeFixQueue(root, items) {
+    const dir = path.join(root, '.review', 'ci-review');
+    fs.mkdirSync(dir, { recursive: true });
+    const temp = `${fixQueuePath(root)}.tmp-${process.pid}-${Date.now()}`;
+    fs.writeFileSync(temp, `${JSON.stringify({ version: 1, items }, null, 2)}\n`, 'utf8');
+    fs.renameSync(temp, fixQueuePath(root));
+    return items;
+  }
+
+  function enqueueFixItems(root, cards, problemId) {
+    const items = readFixQueue(root);
+    const now = new Date().toISOString();
+    for (const card of Array.isArray(cards) ? cards : []) {
+      const id = String(card?.id ?? '');
+      if (!id) continue;
+      const existing = items.find((item) => item.id === id);
+      const next = {
+        id,
+        problemId: card.problemId ?? problemId ?? null,
+        file: String(card.file ?? ''),
+        startLine: Number(card.startLine) || 1,
+        title: String(card.title ?? '').slice(0, 300),
+        severity: card.severity ?? 'minor',
+        problem: String(card.problem ?? '').slice(0, 2000),
+        status: existing?.status ?? 'queued',
+        taskId: existing?.taskId ?? null,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      if (existing) Object.assign(existing, next);
+      else items.push(next);
+    }
+    return writeFixQueue(root, items);
+  }
+
+  function removeFixItems(root, cardIds) {
+    const ids = new Set((Array.isArray(cardIds) ? cardIds : []).map(String));
+    return writeFixQueue(root, readFixQueue(root).filter((item) => !ids.has(item.id)));
+  }
+
+  function updateFixItem(root, cardId, patch) {
+    const items = readFixQueue(root);
+    const item = items.find((entry) => entry.id === cardId);
+    if (!item) return null;
+    Object.assign(item, patch, { updatedAt: new Date().toISOString() });
+    writeFixQueue(root, items);
+    return item;
+  }
+
   /* -------------------------------------------------------------- snapshot */
 
   async function buildSnapshot(project) {
@@ -1859,6 +1917,7 @@ export function apply(ctx, config = {}) {
       vscode: { ...vscodeBridge },
       findings,
       files,
+      fixQueue: summary.exists ? readFixQueue(project.root) : [],
       reviewBatches: summary.exists ? buildReviewProblems(project.root, findings) : [],
       annotations,
       agentTasks: summary.exists ? readTasks(project.root) : [],
@@ -2418,6 +2477,12 @@ export function apply(ctx, config = {}) {
         else decisions[id] = { status, at: new Date().toISOString() };
       }
       writeCardDecisions(project.root, decisions);
+      if (status === 'approved' && Array.isArray(body?.cards)) {
+        enqueueFixItems(project.root, body.cards, body?.problemId);
+      }
+      if (status === 'ignored' || status === 'needs-revision' || status === 'pending') {
+        removeFixItems(project.root, ids);
+      }
       snapshotCache.delete(project.id);
       return sendJson(res, 200, { ok: true, updated: ids.length, status });
     }
@@ -2677,6 +2742,29 @@ export function apply(ctx, config = {}) {
         backupPath,
         lines: body.content.split('\n').length,
       });
+    }
+    if (req.method === 'GET' && url.pathname === `${ROUTE}/api/fix-queue`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      return sendJson(res, 200, { ok: true, items: readFixQueue(project.root) });
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/fix-queue/update`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const id = String(body?.id ?? '');
+      if (!id) return sendJson(res, 200, { ok: false, message: '缺少 id' });
+      if (body?.status === 'removed') {
+        removeFixItems(project.root, [id]);
+        snapshotCache.delete(project.id);
+        return sendJson(res, 200, { ok: true, removed: true });
+      }
+      const item = updateFixItem(project.root, id, {
+        status: ['queued', 'fix-started', 'fixed', 'verified'].includes(body?.status) ? body.status : 'queued',
+        taskId: body?.taskId ?? undefined,
+      });
+      snapshotCache.delete(project.id);
+      return sendJson(res, 200, item ? { ok: true, item } : { ok: false, message: '找不到队列项' });
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }
