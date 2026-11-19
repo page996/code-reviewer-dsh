@@ -1860,8 +1860,45 @@ export function apply(ctx, config = {}) {
         return sendJson(res, 200, { ok: false, message: 'sessionQuery 不可用，无法读取子会话消息' });
       }
       try {
-        const session = await query.readSession(task.childId);
-        const events = typeof session?.snapshotEvents === 'function' ? session.snapshotEvents() : [];
+        const diagnostics = { readSession: null, inspectSession: null, observeSession: null, listed: null };
+        let events = [];
+        const take = (session) => (session && typeof session.snapshotEvents === 'function' ? session.snapshotEvents() : []);
+        try {
+          const session = await query.readSession(task.childId);
+          diagnostics.readSession = take(session).length;
+          events = take(session);
+        } catch (error) {
+          diagnostics.readSession = `error: ${String(error?.message ?? error).slice(0, 120)}`;
+        }
+        if (events.length === 0 && typeof query.inspectSession === 'function') {
+          try {
+            const inspected = await query.inspectSession(task.childId, (session) => take(session));
+            diagnostics.inspectSession = Array.isArray(inspected) ? inspected.length : -1;
+            if (Array.isArray(inspected) && inspected.length > 0) events = inspected;
+          } catch (error) {
+            diagnostics.inspectSession = `error: ${String(error?.message ?? error).slice(0, 120)}`;
+          }
+        }
+        if (events.length === 0 && typeof query.observeSession === 'function') {
+          try {
+            const observation = await query.observeSession(task.childId, {});
+            const session = observation?.session ?? observation?.lease?.session ?? observation;
+            diagnostics.observeSession = take(session).length;
+            if (take(session).length > 0) events = take(session);
+          } catch (error) {
+            diagnostics.observeSession = `error: ${String(error?.message ?? error).slice(0, 120)}`;
+          }
+        }
+        if (typeof query.listSessions === 'function') {
+          try {
+            const rows = await query.listSessions();
+            diagnostics.listed = Array.isArray(rows)
+              ? rows.filter((row) => String(row?.id ?? row?.sessionId ?? row?.header?.id ?? '') === task.childId).length
+              : -1;
+          } catch (error) {
+            diagnostics.listed = `error: ${String(error?.message ?? error).slice(0, 120)}`;
+          }
+        }
         const types = {};
         const rows = [];
         for (const event of events) {
@@ -1886,6 +1923,7 @@ export function apply(ctx, config = {}) {
           ok: true,
           messages: rows.slice(-30),
           events: events.length,
+          diagnostics,
           types,
           running: task.status === 'running',
         });
