@@ -16,6 +16,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 export const name = 'dsh-ci-review';
@@ -301,10 +302,50 @@ export function apply(ctx, config = {}) {
     return result;
   }
 
+  function extraProjectsPath() {
+    const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
+    return path.join(home, 'ci-review-projects.json');
+  }
+
+  function readExtraProjects() {
+    const data = readJsonFile(extraProjectsPath());
+    if (!Array.isArray(data?.projects)) return [];
+    return data.projects
+      .filter((entry) => entry && typeof entry.root === 'string')
+      .map((entry) => ({ root: path.resolve(entry.root), name: typeof entry.name === 'string' ? entry.name : '' }));
+  }
+
+  function writeExtraProjects(projects) {
+    const file = extraProjectsPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
+    fs.writeFileSync(temp, `${JSON.stringify({ version: 1, projects }, null, 2)}\n`, 'utf8');
+    fs.renameSync(temp, file);
+  }
+
+  function readJsonFile(file) {
+    try {
+      return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
   function discoverProjects() {
     const byId = new Map();
     for (const project of registryProjects()) byId.set(project.id, project);
     for (const project of configuredProjects()) byId.set(project.id, project);
+    for (const entry of readExtraProjects()) {
+      let stat = null;
+      try {
+        stat = fs.statSync(entry.root);
+      } catch {
+        stat = null;
+      }
+      if (!stat || !stat.isDirectory()) continue;
+      const id = projectId(entry.root);
+      byId.set(id, { id, name: entry.name || path.basename(entry.root), root: entry.root, source: 'imported' });
+    }
     return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -1753,6 +1794,43 @@ export function apply(ctx, config = {}) {
       const file = readProjectFile(project.root, relative);
       if (!file) return sendError(res, 404, 'file not found');
       return sendJson(res, 200, { ok: true, file });
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/projects/add`) {
+      const body = await readJsonBody(req);
+      const rootInput = String(body?.root ?? '').trim();
+      if (!rootInput) return sendJson(res, 200, { ok: false, message: '请填写项目根目录路径' });
+      let resolved;
+      try {
+        resolved = fs.realpathSync(path.resolve(rootInput));
+      } catch {
+        return sendJson(res, 200, { ok: false, message: '目录不存在或不可访问' });
+      }
+      let stat = null;
+      try {
+        stat = fs.statSync(resolved);
+      } catch {
+        stat = null;
+      }
+      if (!stat || !stat.isDirectory()) return sendJson(res, 200, { ok: false, message: '不是一个目录' });
+      const name = String(body?.name ?? '').trim() || path.basename(resolved);
+      const existing = readExtraProjects().filter((entry) => normalizePath(entry.root) !== normalizePath(resolved));
+      existing.push({ root: resolved, name });
+      writeExtraProjects(existing);
+      return sendJson(res, 200, { ok: true, project: { id: projectId(resolved), name, root: resolved, source: 'imported' } });
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/projects/remove`) {
+      const body = await readJsonBody(req);
+      const root = String(body?.root ?? '').trim();
+      const resolved = (() => {
+        try {
+          return fs.realpathSync(path.resolve(root));
+        } catch {
+          return path.resolve(root);
+        }
+      })();
+      const kept = readExtraProjects().filter((entry) => normalizePath(entry.root) !== normalizePath(resolved));
+      writeExtraProjects(kept);
+      return sendJson(res, 200, { ok: true });
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }

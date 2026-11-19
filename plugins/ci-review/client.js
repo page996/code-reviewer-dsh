@@ -13,8 +13,9 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const h = React.createElement;
 
-    const DICT = {
-      zh: {
+    const clientServices = { sessions: null, uiWorkspace: null };
+
+    const DICT = {      zh: {
         panelLabel: 'CI 评审',
         title: 'CI 评审工作台',
         subtitle: '现在正在发生什么，以及你接下来能做什么',
@@ -168,6 +169,10 @@ window.__ModuleLoader__.load({
         agentStartFailed: '启动失败',
         agentChildSession: '子会话',
         agentNoInstruction: '请先填写指令',
+        agentOpenSession: '打开子会话',
+        agentSessionHint: '子会话是 DSH 中真实的后台会话，可打开后继续聊天/追问。',
+        addProject: '添加项目',
+        projectPathPlaceholder: '项目根目录，如 C:\\work\\my-repo',
         fileReview: '文件与问题',
         fileReviewHint: '先看文件，再决定改哪里',
         filesPriority: '优先文件',
@@ -336,6 +341,10 @@ window.__ModuleLoader__.load({
         agentStartFailed: 'Failed to start',
         agentChildSession: 'child session',
         agentNoInstruction: 'Instruction is required',
+        agentOpenSession: 'Open child session',
+        agentSessionHint: 'The child session is a real DSH session; open it to keep chatting or asking follow-ups.',
+        addProject: 'Add project',
+        projectPathPlaceholder: 'Project root, e.g. C:\\work\\my-repo',
         fileReview: 'Files & findings',
         fileReviewHint: 'See the file first, then decide what to change',
         filesPriority: 'Priority files',
@@ -604,6 +613,11 @@ window.__ModuleLoader__.load({
           setSelectedId(id);
           setLoading(true);
           setSnapshot(null);
+        },
+        addProject: async (root) => {
+          const result = await request('api/projects/add', { method: 'POST', body: JSON.stringify({ root }) });
+          if (!result.ok) throw new Error(result.message || 'add failed');
+          await loadProjects();
         },
         snapshot,
         error,
@@ -1325,6 +1339,16 @@ window.__ModuleLoader__.load({
           setBusy(false);
         }
       };
+      const openChild = (childId) => {
+        try {
+          const sessions = clientServices.sessions;
+          const uiWorkspace = clientServices.uiWorkspace;
+          const target = sessions?.subagentAddress?.(childId) ?? childId;
+          uiWorkspace?.openSession?.(target);
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: `打开子会话失败：${String(cause?.message || cause)}` });
+        }
+      };
       return h(
         Card,
         null,
@@ -1397,6 +1421,7 @@ window.__ModuleLoader__.load({
                     h(Badge, { tone: statusTone(task.status) }, task.status === 'running' ? t('agentStatusRunning') : task.status === 'completed' ? t('agentStatusCompleted') : task.status === 'blocked' ? t('agentStatusBlocked') : task.status === 'cancelled' ? t('agentStatusCancelled') : t('agentStatusFailed')),
                     h('span', { className: 'dr-code' }, task.id),
                     task.childId ? h('span', { className: 'dr-row-state' }, `${t('agentChildSession')}: ${task.childId}`) : null,
+                    task.childId ? h('button', { className: 'dr-btn', type: 'button', title: t('agentSessionHint'), onClick: () => openChild(task.childId) }, t('agentOpenSession')) : null,
                     h('span', { className: 'dr-spacer' }),
                     task.status === 'running' ? h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => cancel(task.id) }, t('agentCancel')) : null,
                   ),
@@ -1410,7 +1435,23 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function ProjectList({ projects, selectedId, onSelect, t }) {
+    function ProjectList({ projects, selectedId, onSelect, t, onAddProject }) {
+      const [newRoot, setNewRoot] = React.useState('');
+      const [busy, setBusy] = React.useState(false);
+      const [error, setError] = React.useState('');
+      const add = async () => {
+        if (!newRoot.trim()) return;
+        setBusy(true);
+        setError('');
+        try {
+          await onAddProject(newRoot.trim());
+          setNewRoot('');
+        } catch (cause) {
+          setError(String(cause?.message || cause));
+        } finally {
+          setBusy(false);
+        }
+      };
       return h(
         'div',
         { className: 'dr-list' },
@@ -1434,6 +1475,19 @@ window.__ModuleLoader__.load({
             ),
             h('span', { className: 'dr-project-meta' }, project.branch || t('noHead'), project.repo ? ` · ${project.repo}` : ''),
           ),
+        ),
+        h(
+          'div',
+          { style: { marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' } },
+          h('input', {
+            className: 'dr-input',
+            placeholder: t('projectPathPlaceholder'),
+            value: newRoot,
+            onChange: (event) => setNewRoot(event.target.value),
+            style: { width: '100%', boxSizing: 'border-box' },
+          }),
+          h('button', { className: 'dr-btn', type: 'button', disabled: busy || !newRoot.trim(), onClick: add }, busy ? '…' : t('addProject')),
+          error ? h('div', { className: 'dr-muted', style: { color: '#ff9b95' } }, error) : null,
         ),
       );
     }
@@ -1485,7 +1539,7 @@ window.__ModuleLoader__.load({
           : h(
               'div',
               { className: 'dr-body' },
-              h(ProjectList, { projects: model.projects, selectedId: model.selectedId, onSelect: model.selectProject, t }),
+              h(ProjectList, { projects: model.projects, selectedId: model.selectedId, onSelect: model.selectProject, t, onAddProject: model.addProject }),
               h(
                 'main',
                 { className: 'dr-main' },
@@ -1558,6 +1612,12 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots', 'locale'],
       apply(ctx) {
+        try {
+          clientServices.sessions = ctx.get('sessions') ?? null;
+          clientServices.uiWorkspace = ctx.get('uiWorkspace') ?? null;
+        } catch {
+          /* optional services */
+        }
         const localeService = ctx.locale;
         try {
           localeService?.register?.('ci-review', 'zh-CN', DICT.zh);
