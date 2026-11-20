@@ -63,7 +63,7 @@ Host endpoints used by pairing: `GET /api/bridge/ping` (public, loopback) and
 A packaged VSIX is committed next to this README:
 
 ```powershell
-code --install-extension E:/dsh-new-1/code-reviewer-dsh/plugins/ci-review/vscode-extension/ci-review-bridge-0.1.0.vsix
+code --install-extension E:/dsh-new-1/code-reviewer-dsh/plugins/ci-review/vscode-extension/ci-review-bridge-0.1.14.vsix
 ```
 
 Then in VS Code:
