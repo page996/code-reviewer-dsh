@@ -2824,18 +2824,33 @@ export function apply(ctx, config = {}) {
       if (!body || typeof body !== 'object') return sendError(res, 400, 'invalid JSON body');
       vscodeBridge.connected = true;
       vscodeBridge.updatedAt = new Date().toISOString();
-      if (body.type === 'hello') vscodeBridge.workspaceRoot = String(body.workspaceRoot ?? '');
-      if (body.type === 'buffer' && typeof body.file === 'string') {
-        vscodeBridge.buffers[body.file] = {
-          file: body.file,
-          absPath: typeof body.absPath === 'string' ? body.absPath : '',
-          languageId: body.languageId ?? '',
-          version: Number(body.version) || 0,
-          dirty: Boolean(body.dirty),
-          lines: Array.isArray(body.lines) ? body.lines.slice(0, 3000) : [],
-          diagnostics: Array.isArray(body.diagnostics) ? body.diagnostics.slice(0, 200) : [],
+      const applyPayload = (payload) => {
+        if (!payload || typeof payload !== 'object') return;
+        if (payload.type === 'hello') {
+          vscodeBridge.workspaceRoot = String(payload.workspaceRoot ?? '');
+          return;
+        }
+        if (payload.type !== 'buffer' || typeof payload.file !== 'string') return;
+        const incomingVersion = Number(payload.version) || 0;
+        const previous = vscodeBridge.buffers[payload.file];
+        // Out-of-order guard: coalesced pushes can arrive late; never regress.
+        if (previous && incomingVersion > 0 && previous.version > 0 && incomingVersion < previous.version) return;
+        vscodeBridge.buffers[payload.file] = {
+          file: payload.file,
+          absPath: typeof payload.absPath === 'string' ? payload.absPath : '',
+          languageId: payload.languageId ?? '',
+          version: incomingVersion,
+          dirty: Boolean(payload.dirty),
+          truncated: Boolean(payload.truncated),
+          lines: Array.isArray(payload.lines) ? payload.lines.slice(0, 3000) : [],
+          diagnostics: Array.isArray(payload.diagnostics) ? payload.diagnostics.slice(0, 200) : [],
           updatedAt: new Date().toISOString(),
         };
+      };
+      if (body.type === 'batch' && Array.isArray(body.buffers)) {
+        for (const payload of body.buffers) applyPayload(payload);
+      } else {
+        applyPayload(body);
       }
       return sendJson(res, 200, { ok: true });
     }
