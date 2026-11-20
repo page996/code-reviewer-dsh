@@ -181,6 +181,12 @@ function connect(overrides = {}) {
   const token = overrides.token || config.get('token', '');
   log(`connect port=${port} tokenLen=${token.length} workspace=${vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || ''}`);
   if (!token || !port) {
+    // Drop any previous connection so stale events cannot keep pushing to the old target.
+    target = null;
+    pending.clear();
+    if (flushTimer) clearTimeout(flushTimer);
+    flushTimer = null;
+    log('connect skipped: missing token/port -> cleared target/pending');
     vscode.window.showWarningMessage('CI Review Bridge: 未找到 DSH 连接信息（先打开 DSH CI 评审面板，或运行配对脚本）');
     return;
   }

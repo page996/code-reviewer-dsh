@@ -1982,6 +1982,16 @@ export function apply(ctx, config = {}) {
           latest[record.problemId] = entry;
           writeVerifications(project.root, latest);
           snapshotCache.delete(project.id);
+          if (entry.verdict === 'confirmed' && problem.severity === 'minor'
+            && readCiReviewConfig(project.root).autoFixMinor === true) {
+            void startAutoFix({
+              project, parent, subagents, source: 'verification',
+              problem: {
+                id: problem.id, problemId: problem.id, file: problem.file, startLine: problem.startLine,
+                severity: problem.severity, title: problem.title, problem: problem.problem,
+              },
+            });
+          }
         })
         .catch((error) => {
           const latest = readVerifications(project.root);
@@ -2162,6 +2172,110 @@ export function apply(ctx, config = {}) {
     }
     snapshotCache.delete(project.id);
     return job;
+  }
+
+  function readCiReviewConfig(root) {
+    const config = safeReadJson(path.join(root, '.review', 'config.json')) ?? {};
+    return config?.ciReview && typeof config.ciReview === 'object' ? config.ciReview : {};
+  }
+
+  function autoFixPrompt(problem, gateCommands) {
+    const gateText = gateCommands.length
+      ? `修改后依次运行这些 gate 命令并记录结果：\n${gateCommands.map((command) => `- ${command}`).join('\n')}`
+      : '项目没有配置 gate 命令；若改动 JS/TS，至少运行 `node --check <改动文件>` 自检。';
+    return [
+      '你是自动修复子代理（只处理下面这一个 minor 问题，不要扩散重构）。',
+      '',
+      '问题（JSON）：',
+      JSON.stringify(problem, null, 2),
+      '',
+      '要求：',
+      '1. 先读相关代码/调用方，确认根因后做最小修复；可以改代码和测试。',
+      '2. 不要 commit / push / merge，不要改动与问题无关的文件。',
+      '3. ' + gateText,
+      '4. 只输出一个 JSON 对象（不要 markdown 围栏）：',
+      '{"status":"fixed|not-fixed|blocked","reason":"中文说明","changes":["file:line"],"gate":{"passed":true,"commands":[{"command":"...","exitCode":0}]}}',
+      '若无法安全修复或需要产品决策，返回 not-fixed/blocked 并说明原因。',
+    ].join('\n');
+  }
+
+  const autoFixRunning = new Set();
+
+  async function startAutoFix({ project, problem, parent, subagents, source = 'manual' }) {
+    const cardId = String(problem.id ?? '');
+    if (!cardId) return { ok: false, message: '缺少问题 id' };
+    const items = enqueueFixItems(project.root, [{
+      id: cardId,
+      file: problem.file,
+      startLine: problem.startLine,
+      title: problem.title,
+      severity: problem.severity ?? 'minor',
+      problem: problem.problem,
+      problemId: problem.problemId ?? null,
+    }], problem.problemId ?? null);
+    if (autoFixRunning.has(cardId)) return { ok: false, message: '该问题的自动修复已在运行' };
+    autoFixRunning.add(cardId);
+    const config = readCiReviewConfig(project.root);
+    const max = Number(config.autoFixMaxPerRun) || 3;
+    if (autoFixRunning.size > max) {
+      autoFixRunning.delete(cardId);
+      return { ok: false, message: `自动修复并发已达上限 ${max}` };
+    }
+    const gateConfig = safeReadJson(path.join(project.root, '.review', 'config.json')) ?? {};
+    const gateCommands = (Array.isArray(gateConfig?.gate?.commands) ? gateConfig.gate.commands : [])
+      .map((item) => (typeof item === 'string' ? item : item?.command))
+      .filter((item) => typeof item === 'string' && item.trim());
+    const updated = updateFixItem(project.root, cardId, {
+      status: 'fixing',
+      auto: true,
+      autoSource: source,
+      startedAt: new Date().toISOString(),
+    });
+    try {
+      const activation = await subagents.startActivation({
+        provider: 'spawn',
+        label: `autofix ${cardId}`,
+        name: `fix-${String(cardId).slice(-8)}`,
+        prompt: [{ type: 'text', text: autoFixPrompt({
+          id: cardId, file: problem.file, startLine: problem.startLine,
+          severity: problem.severity ?? 'minor', title: problem.title, problem: problem.problem,
+        }, gateCommands) }],
+        parent,
+        cwd: project.root,
+        signal: AbortSignal.timeout(20 * 60 * 1000),
+        delivery: 'caller',
+      });
+      updateFixItem(project.root, cardId, { taskId: activation.childId });
+      activation.result
+        .then((result) => {
+          const report = parseAgentReport(result);
+          const gatePassed = report?.gate ? report.gate.passed === true : true;
+          const fixed = report?.status === 'fixed' && gatePassed;
+          updateFixItem(project.root, cardId, {
+            status: fixed ? 'fixed' : 'queued',
+            report: {
+              status: report?.status ?? 'unknown',
+              reason: String(report?.reason ?? '').slice(0, 2000),
+              changes: Array.isArray(report?.changes) ? report.changes.slice(0, 50) : [],
+              gate: report?.gate ?? null,
+            },
+            finishedAt: new Date().toISOString(),
+          });
+          autoFixRunning.delete(cardId);
+          snapshotCache.delete(project.id);
+        })
+        .catch((error) => {
+          updateFixItem(project.root, cardId, { status: 'queued', autoError: String(error?.message ?? error), finishedAt: new Date().toISOString() });
+          autoFixRunning.delete(cardId);
+          snapshotCache.delete(project.id);
+        });
+      snapshotCache.delete(project.id);
+      return { ok: true, item: items.find((item) => item.id === cardId) ?? updated, taskId: activation.childId };
+    } catch (error) {
+      autoFixRunning.delete(cardId);
+      updateFixItem(project.root, cardId, { status: 'queued', autoError: String(error?.message ?? error) });
+      return { ok: false, message: String(error?.message ?? error) };
+    }
   }
 
   /* -------------------------------------------------------------- snapshot */
@@ -3130,6 +3244,17 @@ export function apply(ctx, config = {}) {
       } catch (error) {
         return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 300) });
       }
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/fix-queue/auto-fix`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const problem = body?.problem;
+      if (!problem || !problem.id || !problem.file) return sendJson(res, 200, { ok: false, message: '缺少 problem 信息' });
+      const { parent, subagents } = await resolveVerificationParent(project);
+      if (!parent || !subagents) return sendJson(res, 200, { ok: false, message: '没有可用在线会话，无法启动自动修复' });
+      const result = await startAutoFix({ project, problem, parent, subagents, source: 'manual' });
+      return sendJson(res, 200, result);
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }

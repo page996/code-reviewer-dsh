@@ -1426,6 +1426,25 @@ window.__ModuleLoader__.load({
           setBusy('');
         }
       };
+      const autoFix = async (item) => {
+        setBusy(item.id);
+        try {
+          await request(`api/fix-queue/auto-fix?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({
+              problem: {
+                id: item.id, problemId: item.problemId, file: item.file, startLine: item.startLine,
+                severity: item.severity, title: item.title, problem: item.problem,
+              },
+            }),
+          });
+          onRefresh();
+        } catch {
+          /* refresh reflects persisted state */
+        } finally {
+          setBusy('');
+        }
+      };
       return h(
         Card,
         null,
@@ -1439,12 +1458,18 @@ window.__ModuleLoader__.load({
                 h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', width: '100%', flexWrap: 'wrap' } },
                   h('span', { className: `dr-dot ${item.severity === 'blocker' ? 'bad' : item.severity === 'major' ? 'warn' : 'run'}` }),
                   h('span', { className: 'dr-code' }, `${item.file}:${item.startLine}`),
-                  h('span', { className: 'dr-muted' }, item.status === 'verified' ? t('fixQueueStatusVerified') : item.status === 'fixed' ? t('fixQueueStatusFixed') : item.status === 'fix-started' ? t('fixQueueStatusStarted') : t('fixQueueStatusQueued')),
+                  h('span', { className: 'dr-muted' }, item.auto ? '自动修复' : ''),
+                  h('span', { className: 'dr-muted' }, item.status === 'fixing' ? t('fixQueueStatusStarted') : item.status === 'verified' ? t('fixQueueStatusVerified') : item.status === 'fixed' ? t('fixQueueStatusFixed') : item.status === 'fix-started' ? t('fixQueueStatusStarted') : t('fixQueueStatusQueued')),
                   h('span', { className: 'dr-spacer' }),
+                  item.severity === 'minor' ? h('button', { className: 'dr-btn', type: 'button', disabled: busy === item.id || item.status === 'fixing', onClick: () => autoFix(item) }, item.status === 'fixing' ? '修复中…' : '自动修复') : null,
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy === item.id, onClick: () => { onAskAgentAt(item.file, item.startLine, { severity: item.severity, title: item.title, problem: item.problem, evidence: '', impact: '', suggestion: '' }); update(item.id, 'fix-started'); } }, t('fixQueueStart')),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy === item.id, onClick: () => update(item.id, 'fixed') }, t('fixQueueMarkFixed')),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy === item.id, onClick: () => update(item.id, 'removed') }, t('fixQueueRemove'))),
-                item.title ? h('div', { className: 'dr-muted', style: { whiteSpace: 'pre-wrap' } }, item.title) : null),
+                item.title ? h('div', { className: 'dr-muted', style: { whiteSpace: 'pre-wrap' } }, item.title) : null,
+                item.report
+                  ? h('div', { className: 'dr-muted', style: { fontSize: '11px', whiteSpace: 'pre-wrap' } }, `自动修复结果：${item.report.status}${item.report.gate?.passed ? '（gate 通过）' : '（gate 未通过）'}${item.report.reason ? ` — ${item.report.reason}` : ''}`)
+                  : null,
+                item.autoError ? h('div', { className: 'dr-muted', style: { color: '#ff9b95', fontSize: '11px' } }, `自动修复失败：${item.autoError}`) : null),
             ),
       );
     }
