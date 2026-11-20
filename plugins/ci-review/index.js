@@ -1583,7 +1583,7 @@ export function apply(ctx, config = {}) {
           runId: finding.runId,
           lens: finding.lens ?? '',
           revision: finding.revision ?? '',
-          stale: !findingLineMatches(root, finding),
+          stale: findingIsStale(root, finding, currentHead),
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
@@ -1636,7 +1636,19 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  function findingIsStale(root, finding, currentHead) {
+    if (finding.revision && currentHead && finding.revision !== currentHead) return true;
+    return !findingLineMatches(root, finding);
+  }
+
   function buildReviewProblems(root, findings) {
+    const currentHead = (() => {
+      try {
+        return tryGit(root, ['rev-parse', 'HEAD']);
+      } catch {
+        return '';
+      }
+    })();
     const decisions = readCardDecisions(root);
     const verifications = readVerifications(root);
     const rank = { blocker: 0, major: 1, minor: 2 };
@@ -1686,7 +1698,7 @@ export function apply(ctx, config = {}) {
           runId: finding.runId,
           lens: finding.lens ?? '',
           revision: finding.revision ?? '',
-          stale: !findingLineMatches(root, finding),
+          stale: findingIsStale(root, finding, currentHead),
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
@@ -2101,7 +2113,7 @@ export function apply(ctx, config = {}) {
     const dir = reviewJobsDir(root);
     let files = [];
     try {
-      files = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort().reverse().slice(0, 8);
+      files = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort().reverse().slice(0, 200);
     } catch {
       return [];
     }
