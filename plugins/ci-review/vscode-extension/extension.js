@@ -8,12 +8,15 @@ const LOG = path.join(os.tmpdir(), 'ci-review-bridge.log');
 const MAX_LINES = 3000;
 const FLUSH_DELAY_MS = 180;
 const RETRY_DELAY_MS = 1500;
+const SESSION_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 let target = null;
 let flushTimer = null;
 let inFlight = false;
+let selectionTimer = null;
 const pending = new Map();
 const lastSentVersion = new Map();
+const semanticsByFile = new Map();
 
 function log(message) {
   try {
@@ -53,6 +56,8 @@ function post(bodyJson) {
 }
 
 function enqueue(payload) {
+  if (payload.semantics) semanticsByFile.set(payload.file, payload.semantics);
+  else if (semanticsByFile.has(payload.file)) payload.semantics = semanticsByFile.get(payload.file);
   pending.set(payload.file, payload);
   if (flushTimer) return;
   flushTimer = setTimeout(() => {
@@ -99,6 +104,7 @@ function snapshot(document) {
   return {
     type: 'buffer',
     file,
+    sessionId: SESSION_ID,
     absPath: document.uri.fsPath.replace(/\\/g, '/'),
     languageId: document.languageId,
     version: document.version,
@@ -107,6 +113,54 @@ function snapshot(document) {
     lines: truncated ? allLines.slice(0, MAX_LINES) : allLines,
     diagnostics,
   };
+}
+
+async function withSemantics(document, editor, base) {
+  let position;
+  try {
+    position = editor.selection?.active ?? new vscode.Position(0, 0);
+  } catch {
+    position = { line: 0, character: 0 };
+  }
+  let hover = '';
+  let definitions = [];
+  try {
+    const hovers = await Promise.race([
+      vscode.commands.executeCommand('vscode.executeHoverProvider', document.uri, position),
+      new Promise((resolve) => setTimeout(() => resolve([]), 2500)),
+    ]);
+    hover = (Array.isArray(hovers) ? hovers : [])
+      .map((item) => (Array.isArray(item.contents)
+        ? item.contents.map((content) => (typeof content === 'string' ? content : content?.value ?? '')).join('\n')
+        : String(item.contents ?? '')))
+      .join('\n---\n')
+      .slice(0, 4000);
+  } catch (error) {
+    log(`hover failed: ${error?.message ?? error}`);
+  }
+  try {
+    const defs = await Promise.race([
+      vscode.commands.executeCommand('vscode.executeDefinitionProvider', document.uri, position),
+      new Promise((resolve) => setTimeout(() => resolve([]), 2500)),
+    ]);
+    definitions = (Array.isArray(defs) ? defs : []).slice(0, 5).map((item) => ({
+      file: item?.uri?.fsPath?.replace(/\\/g, '/') ?? '',
+      line: (item?.range?.start?.line ?? 0) + 1,
+    }));
+  } catch (error) {
+    log(`definition failed: ${error?.message ?? error}`);
+  }
+  log(`semantics line=${position.line + 1} hoverLen=${hover.length} defs=${definitions.length}`);
+  return {
+    ...base,
+    semantics: { line: position.line + 1, character: position.character, hover, definitions },
+  };
+}
+
+async function pushWithSemantics(editor) {
+  if (!target || !editor) return;
+  const payload = await withSemantics(editor.document, editor, snapshot(editor.document));
+  enqueue(payload);
 }
 
 function readDiscovery() {
@@ -133,10 +187,10 @@ function connect(overrides = {}) {
   target = { port, token };
   pending.clear();
   const root = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
-  post(JSON.stringify({ type: 'hello', workspaceRoot: root.replace(/\\/g, '/'), vscodeVersion: vscode.version, extensionVersion: '0.1.8' }))
+  post(JSON.stringify({ type: 'hello', workspaceRoot: root.replace(/\\/g, '/'), vscodeVersion: vscode.version, extensionVersion: '0.1.13', sessionId: SESSION_ID }))
     .then((ok) => log(`hello accepted=${ok}`));
   const editor = vscode.window.activeTextEditor;
-  if (editor) enqueue(snapshot(editor.document));
+  if (editor) void pushWithSemantics(editor);
 }
 
 function activate(context) {
@@ -149,11 +203,18 @@ function activate(context) {
       connect({ port: Number(params.get('port')) || undefined, token: params.get('token') || '' });
     },
   }));
+  context.subscriptions.push(vscode.window.onDidChangeTextEditorSelection((event) => {
+    if (!target) return;
+    clearTimeout(selectionTimer);
+    selectionTimer = setTimeout(() => { void pushWithSemantics(event.textEditor); }, 300);
+  }));
   context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((event) => {
     if (target && vscode.window.activeTextEditor?.document === event.document) enqueue(snapshot(event.document));
   }));
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor((editor) => {
-    if (target && editor) enqueue(snapshot(editor.document));
+    if (!target || !editor) return;
+    clearTimeout(selectionTimer);
+    selectionTimer = setTimeout(() => { void pushWithSemantics(editor); }, 250);
   }));
   context.subscriptions.push(vscode.languages.onDidChangeDiagnostics(() => {
     const editor = vscode.window.activeTextEditor;

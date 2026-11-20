@@ -1449,6 +1449,29 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function SemanticsView({ semantics }) {
+      if (!semantics) return null;
+      const definitions = Array.isArray(semantics.definitions) ? semantics.definitions : [];
+      return h('div', { className: 'dr-notice', style: { margin: '0 0 6px', maxHeight: '200px', overflow: 'auto' } },
+        h('div', { className: 'dr-muted' }, `VS Code LSP 语义（光标 ${semantics.line}:${semantics.character}）`),
+        semantics.hover
+          ? h('pre', { style: { margin: '2px 0', whiteSpace: 'pre-wrap', fontSize: '12px' } }, semantics.hover)
+          : h('div', { className: 'dr-muted' }, '（光标处无悬停信息，在 VS Code 中移动光标即可同步）'),
+        definitions.map((definition, index) => h('div', { key: `${definition.file}-${index}`, className: 'dr-row', style: { gap: '6px' } },
+          h('span', { className: 'dr-code' }, `${String(definition.file).replace(/\\/g, '/').split('/').slice(-2).join('/')}:${definition.line}`),
+          h('button', {
+            className: 'dr-btn',
+            type: 'button',
+            onClick: () => {
+              try {
+                window.open(`vscode://file/${definition.file}:${definition.line}:1`);
+              } catch {
+                /* ignore */
+              }
+            },
+          }, '打开定义'))));
+    }
+
     function FileReviewCard({ snapshot, t, projectId, onAskAgentAt, onAnnotateAt, onRefresh }) {
       const allFindings = snapshot.findings || [];
       const [mode, setMode] = React.useState(() => {
@@ -1694,6 +1717,7 @@ window.__ModuleLoader__.load({
                 )
               : null,
             editMessage ? h('div', { className: `dr-notice ${editMessage.tone === 'bad' ? 'dr-error' : ''}`, style: { margin: '0 0 6px' } }, editMessage.text) : null,
+            vsBuffer?.semantics ? h(SemanticsView, { semantics: vsBuffer.semantics }) : null,
             selectedJobs.length
               ? h('div', { className: 'dr-muted', style: { marginBottom: '4px', fontSize: '11px' } },
                   selectedJobs.map((job) => {

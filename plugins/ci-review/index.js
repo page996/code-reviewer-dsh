@@ -2832,16 +2832,24 @@ export function apply(ctx, config = {}) {
         }
         if (payload.type !== 'buffer' || typeof payload.file !== 'string') return;
         const incomingVersion = Number(payload.version) || 0;
+        const incomingSession = typeof payload.sessionId === 'string' ? payload.sessionId : '';
         const previous = vscodeBridge.buffers[payload.file];
-        // Out-of-order guard: coalesced pushes can arrive late; never regress.
-        if (previous && incomingVersion > 0 && previous.version > 0 && incomingVersion < previous.version) return;
+        // Out-of-order guard only within one editor session: a new VS Code
+        // session restarts document versions from 1, which must not be treated
+        // as a stale payload.
+        if (previous && previous.sessionId && incomingSession === previous.sessionId
+          && incomingVersion > 0 && previous.version > 0 && incomingVersion < previous.version) return;
         vscodeBridge.buffers[payload.file] = {
           file: payload.file,
+          sessionId: incomingSession,
           absPath: typeof payload.absPath === 'string' ? payload.absPath : '',
           languageId: payload.languageId ?? '',
           version: incomingVersion,
           dirty: Boolean(payload.dirty),
           truncated: Boolean(payload.truncated),
+          semantics: payload.semantics && typeof payload.semantics === 'object'
+            ? payload.semantics
+            : previous?.semantics ?? null,
           lines: Array.isArray(payload.lines) ? payload.lines.slice(0, 3000) : [],
           diagnostics: Array.isArray(payload.diagnostics) ? payload.diagnostics.slice(0, 200) : [],
           updatedAt: new Date().toISOString(),
@@ -3083,6 +3091,44 @@ export function apply(ctx, config = {}) {
         return sendJson(res, 200, { ok: true, job });
       } catch (error) {
         return sendJson(res, 200, { ok: false, message: String(error?.message ?? error) });
+      }
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/lsp/query`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const file = resolveInsideRoot(project.root, String(body?.file ?? ''));
+      if (!file) return sendJson(res, 200, { ok: false, message: '文件必须在项目根目录内' });
+      const operation = ['hover', 'goToDefinition', 'findReferences', 'goToImplementation'].includes(body?.operation)
+        ? body.operation
+        : 'hover';
+      const line = Math.max(0, (Number(body?.line) || 1) - 1);
+      const character = Math.max(0, Number(body?.character) || 0);
+      let service = null;
+      try {
+        service = ctx.get('lsp') ?? null;
+      } catch {
+        service = null;
+      }
+      if (!service?.query) return sendJson(res, 200, { ok: false, message: '当前 DSH 没有 LSP 服务' });
+      try {
+        const result = await service.query({
+          operation,
+          filePath: path.resolve(project.root, file),
+          position: { line, character },
+          workspaceRoot: project.root,
+        }, AbortSignal.timeout(12000));
+        if (result?.kind === 'hover') {
+          return sendJson(res, 200, { ok: true, kind: 'hover', hover: result.hover ?? null, operation });
+        }
+        return sendJson(res, 200, {
+          ok: true,
+          kind: 'locations',
+          operation,
+          locations: (result?.locations ?? []).slice(0, 50),
+        });
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 300) });
       }
     }
     return sendError(res, 404, 'unknown ci-review API route');
