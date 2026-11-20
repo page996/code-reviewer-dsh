@@ -1587,7 +1587,8 @@ export function apply(ctx, config = {}) {
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
-              : decisions[id]?.status === 'ignored' ? 'ignored' : 'pending',
+              : decisions[id]?.status === 'ignored' ? 'ignored'
+                : decisions[id]?.status === 'resolved' ? 'resolved' : 'pending',
           decisionSurface: {
             risk: finding.severity,
             blastRadius: 'single file (verify callers before changing signatures)',
@@ -1702,7 +1703,8 @@ export function apply(ctx, config = {}) {
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
-              : decisions[id]?.status === 'ignored' ? 'ignored' : 'pending',
+              : decisions[id]?.status === 'ignored' ? 'ignored'
+                : decisions[id]?.status === 'resolved' ? 'resolved' : 'pending',
           decisionSurface: {
             risk: finding.severity,
             blastRadius: 'verify callers of this location before changing behavior',
@@ -2370,6 +2372,7 @@ export function apply(ctx, config = {}) {
     const summary = batches.map((batch) => ({
       id: batch.problemId,
       title: batch.title,
+      titles: batch.titles,
       severity: batch.severity,
       modules: batch.modules,
       lenses: batch.lenses,
@@ -3028,7 +3031,7 @@ export function apply(ctx, config = {}) {
       const project = findProject(url.searchParams.get('projectId') ?? '');
       if (!project) return sendError(res, 404, 'unknown project');
       const body = await readJsonBody(req);
-      const status = ['approved', 'needs-revision', 'ignored', 'pending'].includes(body?.status) ? body.status : 'pending';
+      const status = ['approved', 'needs-revision', 'ignored', 'pending', 'resolved'].includes(body?.status) ? body.status : 'pending';
       const decisions = readCardDecisions(project.root);
       const ids = Array.isArray(body?.cardIds) ? body.cardIds.map(String) : [String(body?.cardId ?? '')];
       for (const id of ids.filter(Boolean)) {
@@ -3039,7 +3042,7 @@ export function apply(ctx, config = {}) {
       if (status === 'approved' && Array.isArray(body?.cards)) {
         enqueueFixItems(project.root, body.cards, body?.problemId);
       }
-      if (status === 'ignored' || status === 'needs-revision' || status === 'pending') {
+      if (status === 'ignored' || status === 'needs-revision' || status === 'pending' || status === 'resolved') {
         removeFixItems(project.root, ids);
       }
       snapshotCache.delete(project.id);

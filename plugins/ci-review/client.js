@@ -1453,6 +1453,9 @@ window.__ModuleLoader__.load({
                   h('button', { className: 'dr-btn', type: 'button', disabled: verifyBusy, onClick: verifyProblem }, verifyBusy ? '验证中…' : '独立 Agent 验证此问题'),
                   h('button', { className: 'dr-btn', type: 'button', disabled: batchReviewBusy, onClick: startBatchReview }, batchReviewBusy ? '评审中…' : '优先文件多视角评审（前 3 个）'),
                   h('button', { className: 'dr-btn', type: 'button', disabled: auditBusy, onClick: runAudit }, auditBusy ? '审计中…' : '完整性审计'),
+                  current.stale
+                    ? h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'resolved') }, '标记旧批次已解决')
+                    : null,
                   h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'approved', current.cards) }, t('reviewCardsApproveBatch')),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'ignored') }, t('reviewCardsIgnoreBatch')))),
               worktree
