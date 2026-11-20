@@ -1444,6 +1444,7 @@ export function apply(ctx, config = {}) {
           suggestion: String(finding.suggestion ?? '').slice(0, 800),
           status: finding.status ?? 'real',
           runId: entry.name,
+          lens: finding.lens ?? finding.category ?? '',
           existingCode: String(finding.existing_code ?? '').slice(0, 2000),
         });
       }
@@ -1580,6 +1581,8 @@ export function apply(ctx, config = {}) {
           impact: finding.impact,
           suggestion: finding.suggestion,
           runId: finding.runId,
+          lens: finding.lens ?? '',
+          revision: finding.revision ?? '',
           stale: !findingLineMatches(root, finding),
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
@@ -1681,6 +1684,8 @@ export function apply(ctx, config = {}) {
           problem: finding.problem, evidence: finding.evidence,
           impact: finding.impact, suggestion: finding.suggestion,
           runId: finding.runId,
+          lens: finding.lens ?? '',
+          revision: finding.revision ?? '',
           stale: !findingLineMatches(root, finding),
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
@@ -1704,6 +1709,9 @@ export function apply(ctx, config = {}) {
         title: problem.titles.length > 1 ? `${problem.title}（含 ${problem.titles.length - 1} 个相关问题）` : problem.title,
         titles: problem.titles,
         stale: cards.some((card) => card.stale),
+        lenses: [...new Set(cards.map((card) => card.lens).filter(Boolean))],
+        revisions: [...new Set(cards.map((card) => card.revision).filter(Boolean))],
+        sources: [...new Set(cards.map((card) => card.runId).filter(Boolean))],
         severity: problem.severity,
         category: problem.categories[0] ?? '',
         explanation: {
@@ -2109,10 +2117,17 @@ export function apply(ctx, config = {}) {
 
   function agentJobFindings(root) {
     const jobs = readReviewJobs(root);
-    const seen = new Set();
-    const out = [];
+    // Only the newest completed job per file is authoritative; older jobs were
+    // reviewed against a previous revision and would otherwise stay as stale
+    // duplicate batches after a re-review.
+    const latestByFile = new Map();
     for (const job of jobs) {
       if (!job || job.status !== 'completed' || !job.results) continue;
+      if (!latestByFile.has(job.file)) latestByFile.set(job.file, job);
+    }
+    const seen = new Set();
+    const out = [];
+    for (const job of latestByFile.values()) {
       for (const [lens, result] of Object.entries(job.results)) {
         for (const finding of Array.isArray(result?.findings) ? result.findings : []) {
           if (!finding || !finding.file) continue;
@@ -2133,6 +2148,7 @@ export function apply(ctx, config = {}) {
             status: 'real',
             source: 'agent',
             lens,
+            revision: job.headSha || '',
             runId: `agent-job:${job.id}`,
           });
         }
@@ -2155,9 +2171,16 @@ export function apply(ctx, config = {}) {
 
   async function startReviewJob({ project, file, lenses, parent, subagents }) {
     const jobId = `job-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomBytes(3).toString('hex')}`;
+    let headSha = '';
+    try {
+      headSha = tryGit(project.root, ['rev-parse', 'HEAD']);
+    } catch {
+      headSha = '';
+    }
     const job = {
       id: jobId,
       file,
+      headSha,
       lenses,
       status: 'running',
       startedAt: new Date().toISOString(),
@@ -2337,6 +2360,9 @@ export function apply(ctx, config = {}) {
       title: batch.title,
       severity: batch.severity,
       modules: batch.modules,
+      lenses: batch.lenses,
+      revisions: batch.revisions,
+      stale: batch.stale,
       cards: (batch.cards || []).length,
       files: [...new Set((batch.cards || []).map((card) => card.file))].slice(0, 10),
     }));

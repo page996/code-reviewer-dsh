@@ -1380,6 +1380,8 @@ window.__ModuleLoader__.load({
                       `本批包含的独立问题：\n${current.titles.map((title, i) => `${i + 1}. ${title}`).join('\n')}`)
                   : null,
                 h('div', { className: 'dr-muted', style: { marginBottom: '6px' } }, `${t('reviewCardsModules')}: ${(current.modules || []).join(', ') || '-'} · ${t('reviewCardsCoverage').replace('{findings}', current.coverage?.findings ?? 0).replace('{files}', (current.coverage?.files || []).length).replace('{categories}', (current.coverage?.categories || []).join('/'))}`),
+                h('div', { className: 'dr-muted', style: { marginBottom: '6px', fontSize: '11px' } },
+                  `视角: ${(current.lenses || []).join(', ') || '-'} · 修订: ${(current.revisions || []).map((sha) => sha.slice(0, 8)).join(', ') || '未知'} · 源码状态: ${current.stale ? '旧代码（可能漂移）' : '当前代码'}`),
                 current.verification
                   ? h('div', { className: 'dr-muted', style: { marginBottom: '6px' } },
                       current.verification.status === 'running'
