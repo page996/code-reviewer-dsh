@@ -418,6 +418,24 @@ test('hooks: install / uninstall in a temp git repo', (t) => {
   assert.ok(existsSync(join(repo, '.githooks', 'pre-commit')), 'hook files are kept on uninstall');
 });
 
+test('hooks: install from a subdirectory targets repo root and never removes foreign hooksPath', (t) => {
+  const repo = initRepo(t);
+  const sub = join(repo, 'packages', 'app');
+  mkdirSync(sub, { recursive: true });
+  const log = collectLog();
+  const installed = installHooks({ cwd: sub, log });
+  assert.equal(installed.directory, join(repo, '.githooks'));
+  assert.ok(existsSync(join(repo, '.githooks', 'pre-commit')), 'hooks must be written at repo root');
+  assert.ok(!existsSync(join(sub, '.githooks')), 'no stray hooks directory in the subdirectory');
+  assert.equal(gitOk(repo, ['config', '--local', '--get', 'core.hooksPath']).stdout.trim(), '.githooks');
+
+  gitOk(repo, ['config', '--local', 'core.hooksPath', '.husky']);
+  const uninstalled = uninstallHooks({ cwd: sub, log });
+  assert.equal(uninstalled.preservedForeignHooksPath, true);
+  assert.equal(uninstalled.uninstalled, false);
+  assert.equal(gitOk(repo, ['config', '--local', '--get', 'core.hooksPath']).stdout.trim(), '.husky');
+});
+
 test('hooks: install fails outside a git repository', (t) => {
   const dir = tempDir(t);
   assert.throws(() => installHooks({ cwd: dir }), (err) => err.code === 'GIT');
