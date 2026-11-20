@@ -1229,6 +1229,46 @@ window.__ModuleLoader__.load({
       const [worktree, setWorktree] = React.useState(null);
       const [wtBusy, setWtBusy] = React.useState(false);
       const [verifyBusy, setVerifyBusy] = React.useState(false);
+      const [batchReviewBusy, setBatchReviewBusy] = React.useState(false);
+      const [auditBusy, setAuditBusy] = React.useState(false);
+      const startBatchReview = async () => {
+        const files = (snapshot.priorityFiles || []).slice(0, 3).map((entry) => entry.path).filter(Boolean);
+        if (files.length === 0) {
+          setMessage({ tone: 'bad', text: '没有优先文件可评审' });
+          return;
+        }
+        setBatchReviewBusy(true);
+        setMessage(null);
+        try {
+          const result = await request(`api/review-job/start-batch?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ files, lenses: ['correctness', 'errors'] }),
+          });
+          setMessage(result.ok
+            ? { tone: 'ok', text: `已启动 ${result.jobs.filter((job) => job.id).length} 个文件的多视角评审（${files.join(', ')}）` }
+            : { tone: 'bad', text: result.message || 'batch review failed' });
+          if (result.ok) onRefresh();
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setBatchReviewBusy(false);
+        }
+      };
+      const runAudit = async () => {
+        setAuditBusy(true);
+        setMessage(null);
+        try {
+          const result = await request(`api/review/audit?projectId=${encodeURIComponent(projectId)}`, { method: 'POST' });
+          setMessage(result.ok
+            ? { tone: 'ok', text: '完整性审计已启动（独立 Agent），完成后显示结论' }
+            : { tone: 'bad', text: result.message || 'audit failed' });
+          if (result.ok) onRefresh();
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setAuditBusy(false);
+        }
+      };
       const verifyProblem = async () => {
         if (!current) return;
         const firstCard = (current.cards || [])[0] ?? {};
@@ -1341,6 +1381,14 @@ window.__ModuleLoader__.load({
                         ? '独立验证：进行中…'
                         : `独立验证：${current.verification.verdict === 'confirmed' ? '已确认' : current.verification.verdict === 'rejected' ? '被反证（已折叠）' : '存疑'}${current.verification.reason ? ` — ${current.verification.reason}` : ''}`)
                   : null,
+                snapshot.audit
+                  ? h('div', { className: 'dr-muted', style: { marginBottom: '6px' } },
+                      snapshot.audit.status === 'running'
+                        ? '完整性审计：进行中…'
+                        : snapshot.audit.status === 'failed'
+                          ? `完整性审计失败：${snapshot.audit.error || ''}`
+                          : `完整性审计：${snapshot.audit.verdict === 'complete' ? '未发现明显遗漏' : `发现 ${snapshot.audit.gaps.length} 个缺口`}${snapshot.audit.notes ? ` — ${snapshot.audit.notes}` : ''}`)
+                  : null,
                 ...(current.cards || []).map((cardItem) =>
                   h('div', { key: cardItem.id, style: { borderTop: '1px dashed #23262d', paddingTop: '6px', marginTop: '6px' } },
                     h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
@@ -1395,6 +1443,8 @@ window.__ModuleLoader__.load({
                   }, '运行 gate'),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy || wtBusy, onClick: createWorktree }, wtBusy ? '…' : '创建审阅 worktree 并注释'),
                   h('button', { className: 'dr-btn', type: 'button', disabled: verifyBusy, onClick: verifyProblem }, verifyBusy ? '验证中…' : '独立 Agent 验证此问题'),
+                  h('button', { className: 'dr-btn', type: 'button', disabled: batchReviewBusy, onClick: startBatchReview }, batchReviewBusy ? '评审中…' : '优先文件多视角评审（前 3 个）'),
+                  h('button', { className: 'dr-btn', type: 'button', disabled: auditBusy, onClick: runAudit }, auditBusy ? '审计中…' : '完整性审计'),
                   h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'approved', current.cards) }, t('reviewCardsApproveBatch')),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'ignored') }, t('reviewCardsIgnoreBatch')))),
               worktree

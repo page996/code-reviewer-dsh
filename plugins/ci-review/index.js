@@ -2278,6 +2278,103 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  /* ------------------------------------------------- completeness audit */
+
+  function auditPath(root) {
+    return path.join(root, '.review', 'ci-review', 'audit.json');
+  }
+
+  function readAudit(root) {
+    const data = safeReadJson(auditPath(root));
+    return data && typeof data === 'object' ? data : null;
+  }
+
+  function writeAudit(root, audit) {
+    const dir = path.join(root, '.review', 'ci-review');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(auditPath(root), `${JSON.stringify(audit, null, 2)}\n`, 'utf8');
+    return audit;
+  }
+
+  function auditPrompt({ batches, files, findingsCount }) {
+    const summary = batches.map((batch) => ({
+      id: batch.problemId,
+      title: batch.title,
+      severity: batch.severity,
+      modules: batch.modules,
+      cards: (batch.cards || []).length,
+      files: [...new Set((batch.cards || []).map((card) => card.file))].slice(0, 10),
+    }));
+    return [
+      '你是推送前完整性审计子代理（独立上下文）。已有审阅批次摘要和仓库文件清单如下，请审计是否存在遗漏或覆盖不足。',
+      '',
+      `原始 findings 数量：${findingsCount}`,
+      '批次摘要（JSON）：',
+      JSON.stringify(summary, null, 2).slice(0, 12000),
+      '',
+      '仓库文件清单（部分）：',
+      JSON.stringify(files.slice(0, 120), null, 2).slice(0, 8000),
+      '',
+      '审计要求：',
+      '1. 判断：是否有明显未被任何批次覆盖的高风险文件/模块；是否有 findings 未进入批次；批次说明是否缺少关键牵涉面。',
+      '2. 只输出一个 JSON 对象（不要 markdown 围栏）：',
+      '{"verdict":"complete|gaps","gaps":[{"kind":"missing-files|uncovered-findings|weak-batches","detail":"中文说明","files":["..."]}],"notes":"一段中文总结"}',
+      '3. 不要修改任何文件；没有把握时用 gaps 并说明不确定点。',
+    ].join('\n');
+  }
+
+  async function startAudit({ project, parent, subagents }) {
+    const findings = [...agentJobFindings(project.root), ...readFindings(project.root)];
+    const batches = buildReviewProblems(project.root, findings);
+    const files = listProjectFiles(project.root, 400);
+    const record = {
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      verdict: null,
+      gaps: [],
+      notes: '',
+      batches: batches.length,
+      findings: findings.length,
+    };
+    writeAudit(project.root, record);
+    try {
+      const activation = await subagents.startActivation({
+        provider: 'spawn',
+        label: `audit ${project.name}`,
+        name: `audit-${String(project.id).slice(-6)}`,
+        prompt: [{ type: 'text', text: auditPrompt({ batches, files, findingsCount: findings.length }) }],
+        parent,
+        cwd: project.root,
+        signal: AbortSignal.timeout(15 * 60 * 1000),
+        delivery: 'caller',
+      });
+      activation.result
+        .then((result) => {
+          const report = parseAgentReport(result);
+          const verdict = report?.verdict === 'complete' ? 'complete' : 'gaps';
+          writeAudit(project.root, {
+            ...record,
+            status: 'completed',
+            verdict,
+            gaps: Array.isArray(report?.gaps) ? report.gaps.slice(0, 20) : [],
+            notes: String(report?.notes ?? '').slice(0, 3000),
+            finishedAt: new Date().toISOString(),
+          });
+          snapshotCache.delete(project.id);
+        })
+        .catch((error) => {
+          writeAudit(project.root, { ...record, status: 'failed', error: String(error?.message ?? error), finishedAt: new Date().toISOString() });
+          snapshotCache.delete(project.id);
+        });
+      snapshotCache.delete(project.id);
+      return { ok: true, audit: record };
+    } catch (error) {
+      writeAudit(project.root, { ...record, status: 'failed', error: String(error?.message ?? error), finishedAt: new Date().toISOString() });
+      return { ok: false, message: String(error?.message ?? error) };
+    }
+  }
+
   /* -------------------------------------------------------------- snapshot */
 
   async function buildSnapshot(project) {
@@ -2306,6 +2403,7 @@ export function apply(ctx, config = {}) {
       files,
       fixQueue: summary.exists ? readFixQueue(project.root) : [],
       reviewJobs,
+      audit: summary.exists ? readAudit(project.root) : null,
       reviewBatches: summary.exists ? buildReviewProblems(project.root, findings) : [],
       annotations,
       agentTasks: summary.exists ? readTasks(project.root) : [],
@@ -3255,6 +3353,39 @@ export function apply(ctx, config = {}) {
       if (!parent || !subagents) return sendJson(res, 200, { ok: false, message: '没有可用在线会话，无法启动自动修复' });
       const result = await startAutoFix({ project, problem, parent, subagents, source: 'manual' });
       return sendJson(res, 200, result);
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/review/audit`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const { parent, subagents } = await resolveVerificationParent(project);
+      if (!parent || !subagents) return sendJson(res, 200, { ok: false, message: '没有可用在线会话，无法启动完整性审计' });
+      const result = await startAudit({ project, parent, subagents });
+      return sendJson(res, 200, result);
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/review-job/start-batch`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const files = (Array.isArray(body?.files) ? body.files : [])
+        .map((file) => resolveInsideRoot(project.root, String(file)))
+        .filter(Boolean)
+        .slice(0, 5);
+      if (files.length === 0) return sendJson(res, 200, { ok: false, message: '没有可评审的文件' });
+      const allowed = ['intent', 'correctness', 'errors', 'security', 'concurrency', 'data', 'contract', 'tests'];
+      const lenses = (Array.isArray(body?.lenses) ? body.lenses : ['correctness', 'errors'])
+        .filter((lens) => allowed.includes(lens));
+      const { parent, subagents } = await resolveVerificationParent(project);
+      if (!parent || !subagents) return sendJson(res, 200, { ok: false, message: '没有可用在线会话，无法启动评审子代理' });
+      const jobs = [];
+      for (const file of files) {
+        try {
+          jobs.push(await startReviewJob({ project, file, lenses: lenses.length ? lenses : ['correctness'], parent, subagents }));
+        } catch (error) {
+          jobs.push({ file, error: String(error?.message ?? error) });
+        }
+      }
+      snapshotCache.delete(project.id);
+      return sendJson(res, 200, { ok: true, jobs });
     }
     return sendError(res, 404, 'unknown ci-review API route');
   }
