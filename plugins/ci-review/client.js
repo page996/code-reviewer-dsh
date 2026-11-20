@@ -592,7 +592,7 @@ window.__ModuleLoader__.load({
         data = { ok: false, error: text.slice(0, 300) };
       }
       if (response.status === 401) throw new Error('UNAUTHORIZED');
-      if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
+      if (!response.ok) throw new Error(data.error || data.message || `HTTP ${response.status}`);
       return data;
     }
 
@@ -1232,7 +1232,7 @@ window.__ModuleLoader__.load({
       const [batchReviewBusy, setBatchReviewBusy] = React.useState(false);
       const [auditBusy, setAuditBusy] = React.useState(false);
       const startBatchReview = async () => {
-        const files = (snapshot.priorityFiles || []).slice(0, 3).map((entry) => entry.path).filter(Boolean);
+        const files = (snapshot.files || []).slice(0, 3).map((entry) => entry.path).filter(Boolean);
         if (files.length === 0) {
           setMessage({ tone: 'bad', text: '没有优先文件可评审' });
           return;
@@ -1589,8 +1589,16 @@ window.__ModuleLoader__.load({
       const [error, setError] = React.useState('');
       const [prMessage, setPrMessage] = React.useState(null);
       const [editing, setEditing] = React.useState(false);
+      const [editTarget, setEditTarget] = React.useState('');
       const [draft, setDraft] = React.useState('');
       const [editMessage, setEditMessage] = React.useState(null);
+      React.useEffect(() => {
+        // Never let an in-progress draft follow the user to another file.
+        setEditing(false);
+        setEditTarget('');
+        setDraft('');
+        setEditMessage(null);
+      }, [selected]);
       const [reviewJobBusy, setReviewJobBusy] = React.useState(false);
       const selectedJobs = (snapshot.reviewJobs || []).filter((job) => job.file === selected);
       const startReviewJob = async () => {
@@ -1618,20 +1626,23 @@ window.__ModuleLoader__.load({
           return;
         }
         setDraft(file?.content ?? '');
+        setEditTarget(selected);
         setEditing(true);
         setEditMessage(null);
       };
       const saveEdit = async () => {
+        const target = editTarget || selected;
+        if (!target) return;
         setEditMessage({ tone: 'ok', text: '保存中…' });
         try {
           const result = await request(`api/file/save?projectId=${encodeURIComponent(projectId)}`, {
             method: 'POST',
-            body: JSON.stringify({ path: selected, content: draft, expectedHash: file?.hash ?? '' }),
+            body: JSON.stringify({ path: target, content: draft, expectedHash: file?.hash ?? '' }),
           });
           if (!result.ok) {
             setEditMessage({ tone: 'bad', text: result.message || '保存失败' });
             if (result.code === 'stale') {
-              const data = await request(`api/file?projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(selected)}`);
+              const data = await request(`api/file?projectId=${encodeURIComponent(projectId)}&path=${encodeURIComponent(target)}`);
               setFile(data.file);
               setDraft(data.file.content ?? '');
             }

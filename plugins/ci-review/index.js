@@ -13,7 +13,10 @@
  * read from GITHUB_TOKEN/GH_TOKEN or the host's `git credential` helper.
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -747,7 +750,12 @@ export function apply(ctx, config = {}) {
       mergeReady: Boolean(snapshot.mergeReady),
       mergeMethods: Array.isArray(snapshot.mergeMethods) ? snapshot.mergeMethods : [],
       branchUpdates: Array.isArray(snapshot.branchUpdates) ? snapshot.branchUpdates : [],
-      reviewDecision: snapshot.reviewDecision ?? 'none',
+      reviewDecision: (() => {
+        const value = snapshot.reviewDecision;
+        if (value === 'changes-requested' || value === 'CHANGES_REQUESTED') return 'changes_requested';
+        if (value === 'APPROVED') return 'approved';
+        return value ?? 'none';
+      })(),
       reviewers: reviewers.map((reviewer) => ({
         kind: reviewer.kind,
         login: reviewer.login,
@@ -1768,9 +1776,15 @@ export function apply(ctx, config = {}) {
     return { text: lines.join('\n'), inserted, unsupported: false };
   }
 
+  function projectWorktreeBase(project) {
+    return path.join(reviewWorktreeRoot(), safeSlug(project.id));
+  }
+
   function reviewWorktreePath(project, name) {
-    const base = safeSlug(project.name || path.basename(project.root));
-    return path.join(reviewWorktreeRoot(), base, safeSlug(name));
+    const base = path.resolve(projectWorktreeBase(project));
+    const dir = path.resolve(base, safeSlug(name));
+    if (dir !== base && !dir.startsWith(`${base}${path.sep}`)) throw new Error('非法的审阅 worktree 名称');
+    return dir;
   }
 
   async function createReviewWorktree({ project, name, cards }) {
@@ -1826,7 +1840,7 @@ export function apply(ctx, config = {}) {
   }
 
   function listReviewWorktrees(project) {
-    const base = path.join(reviewWorktreeRoot(), safeSlug(project.name || path.basename(project.root)));
+    const base = projectWorktreeBase(project);
     let entries = [];
     try {
       entries = fs.readdirSync(base, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
@@ -2256,7 +2270,7 @@ export function apply(ctx, config = {}) {
       const activation = await subagents.startActivation({
         provider: 'spawn',
         label: `autofix ${cardId}`,
-        name: `fix-${String(cardId).slice(-8)}`,
+        name: `fix-${String(cardId).slice(-6)}-${randomBytes(2).toString('hex')}`,
         prompt: [{ type: 'text', text: autoFixPrompt({
           id: cardId, file: problem.file, startLine: problem.startLine,
           severity: problem.severity ?? 'minor', title: problem.title, problem: problem.problem,
@@ -2363,7 +2377,7 @@ export function apply(ctx, config = {}) {
       const activation = await subagents.startActivation({
         provider: 'spawn',
         label: `audit ${project.name}`,
-        name: `audit-${String(project.id).slice(-6)}`,
+        name: `audit-${String(project.id).slice(-6)}-${randomBytes(2).toString('hex')}`,
         prompt: [{ type: 'text', text: auditPrompt({ batches, files, findingsCount: findings.length }) }],
         parent,
         cwd: project.root,
@@ -3018,7 +3032,7 @@ export function apply(ctx, config = {}) {
       for (const command of commands) {
         const started = Date.now();
         try {
-          const stdout = execFileSync(process.platform === 'win32' ? 'cmd' : 'sh', process.platform === 'win32' ? ['/c', command] : ['-lc', command], {
+          const { stdout } = await execFileAsync(process.platform === 'win32' ? 'cmd' : 'sh', process.platform === 'win32' ? ['/c', command] : ['-lc', command], {
             cwd: project.root, encoding: 'utf8', timeout: 120000, windowsHide: true,
             windowsVerbatimArguments: process.platform === 'win32',
             env: { ...process.env, CI: '1' },
@@ -3027,7 +3041,7 @@ export function apply(ctx, config = {}) {
         } catch (error) {
           results.push({
             command,
-            exitCode: Number.isInteger(error?.status) ? error.status : 1,
+            exitCode: Number.isInteger(error?.code) ? error.code : 1,
             durationMs: Date.now() - started,
             output: `${String(error?.stdout ?? '')}\n${String(error?.stderr ?? error?.message ?? '')}`.slice(-4000),
           });
@@ -3199,7 +3213,11 @@ export function apply(ctx, config = {}) {
       const project = findProject(url.searchParams.get('projectId') ?? '');
       if (!project) return sendError(res, 404, 'unknown project');
       const body = await readJsonBody(req);
-      const name = safeSlug(body?.name || 'review');
+      const requested = String(body?.name || 'review');
+      if (requested.includes('..') || requested !== safeSlug(requested)) {
+        return sendJson(res, 200, { ok: false, message: '非法的审阅 worktree 名称' });
+      }
+      const name = safeSlug(requested);
       const cards = Array.isArray(body?.cards) ? body.cards : [];
       try {
         const result = await createReviewWorktree({ project, name, cards });
@@ -3218,7 +3236,11 @@ export function apply(ctx, config = {}) {
       if (!project) return sendError(res, 404, 'unknown project');
       const body = await readJsonBody(req);
       try {
-        return sendJson(res, 200, removeReviewWorktree({ project, name: String(body?.name ?? '') }));
+        const name = String(body?.name ?? '');
+        if (!name || name.includes('..') || name !== safeSlug(name)) {
+          return sendJson(res, 200, { ok: false, message: '非法的审阅 worktree 名称' });
+        }
+        return sendJson(res, 200, removeReviewWorktree({ project, name }));
       } catch (error) {
         return sendJson(res, 200, { ok: false, message: String(error?.message ?? error).slice(0, 300) });
       }
