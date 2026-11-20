@@ -1436,6 +1436,7 @@ export function apply(ctx, config = {}) {
           suggestion: String(finding.suggestion ?? '').slice(0, 800),
           status: finding.status ?? 'real',
           runId: entry.name,
+          existingCode: String(finding.existing_code ?? '').slice(0, 2000),
         });
       }
     }
@@ -1458,7 +1459,6 @@ export function apply(ctx, config = {}) {
       }
       for (const entry of entries) {
         if (files.length >= limit) break;
-        if (entry.name.startsWith('.') && entry.name !== '.github') continue;
         const next = relative ? path.join(relative, entry.name) : entry.name;
         if (entry.isDirectory()) {
           if (SKIP_DIRS.has(entry.name)) continue;
@@ -1572,6 +1572,7 @@ export function apply(ctx, config = {}) {
           impact: finding.impact,
           suggestion: finding.suggestion,
           runId: finding.runId,
+          stale: !findingLineMatches(root, finding),
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
@@ -1610,6 +1611,20 @@ export function apply(ctx, config = {}) {
     security: 'security', contract: 'contract', intent: 'contract', tests: 'tests', style: 'style',
   };
 
+  function findingLineMatches(root, finding) {
+    const snippet = String(finding.existingCode ?? '').split('\n').map((line) => line.trim()).find((line) => line.length > 0);
+    if (!snippet) return true;
+    const probe = snippet.slice(0, 48);
+    try {
+      const content = fs.readFileSync(path.resolve(root, finding.file), 'utf8').split('\n');
+      const start = Math.max(0, (Number(finding.startLine) || 1) - 3);
+      const window = content.slice(start, start + 8).join('\n');
+      return window.includes(probe);
+    } catch {
+      return false;
+    }
+  }
+
   function buildReviewProblems(root, findings) {
     const decisions = readCardDecisions(root);
     const verifications = readVerifications(root);
@@ -1627,7 +1642,7 @@ export function apply(ctx, config = {}) {
         problem = {
           id: '', family, lastLine: finding.startLine || 1,
           files: [], modules: [], categories: [],
-          findings: [], severity: 'minor', title: finding.title,
+          findings: [], severity: 'minor', title: finding.title, titles: [],
           what: finding.problem, whyImportant: finding.impact, evidence: finding.evidence,
         };
         problems.push(problem);
@@ -1636,6 +1651,8 @@ export function apply(ctx, config = {}) {
       if (!problem.files.includes(finding.file)) problem.files.push(finding.file);
       if (!problem.categories.includes(finding.category)) problem.categories.push(finding.category);
       problem.findings.push(finding);
+      const findingTitle = String(finding.title ?? '').trim();
+      if (findingTitle && !problem.titles.includes(findingTitle)) problem.titles.push(findingTitle);
       if ((rank[finding.severity] ?? 2) < (rank[problem.severity] ?? 2)) {
         problem.severity = finding.severity;
         problem.title = finding.title;
@@ -1656,6 +1673,7 @@ export function apply(ctx, config = {}) {
           problem: finding.problem, evidence: finding.evidence,
           impact: finding.impact, suggestion: finding.suggestion,
           runId: finding.runId,
+          stale: !findingLineMatches(root, finding),
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
@@ -1675,12 +1693,15 @@ export function apply(ctx, config = {}) {
         index: index + 1,
         problemId: problem.id,
         phase: problem.modules.length > 1 ? 'cross-module' : 'core',
-        title: problem.title,
+        title: problem.titles.length > 1 ? `${problem.title}（含 ${problem.titles.length - 1} 个相关问题）` : problem.title,
+        titles: problem.titles,
+        stale: cards.some((card) => card.stale),
         severity: problem.severity,
         category: problem.categories[0] ?? '',
         explanation: {
           what: problem.what, whyImportant: problem.whyImportant,
           evidence: problem.evidence,
+          also: problem.titles.slice(1),
           uncertainty: problem.categories.includes('contract') ? '契约类问题需确认调用方与兼容策略' : '',
         },
         modules: problem.modules,

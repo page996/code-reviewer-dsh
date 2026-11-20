@@ -1369,10 +1369,15 @@ window.__ModuleLoader__.load({
                 h('div', { className: 'dr-card-head' },
                   h(Badge, { tone: current.severity === 'blocker' ? 'bad' : current.severity === 'major' ? 'warn' : 'run' }, current.severity),
                   h('span', { className: 'dr-card-title' }, current.title),
+                  current.stale ? h('span', { className: 'dr-muted', style: { color: '#e3b341' }, title: '该批次的问题来自旧代码，当前源码已不匹配，行号/片段可能漂移' }, '⚠ 基于旧代码') : null,
                   h('span', { className: 'dr-spacer' })),
                 current.explanation
                   ? h('div', { className: 'dr-muted', style: { whiteSpace: 'pre-wrap', marginBottom: '6px' } },
                       `发生了什么：${current.explanation.what || '-'}\n为什么重要：${current.explanation.whyImportant || '-'}\n证据：${current.explanation.evidence || '-'}${current.explanation.uncertainty ? `\n不确定点：${current.explanation.uncertainty}` : ''}`)
+                  : null,
+                current.titles && current.titles.length > 1
+                  ? h('div', { className: 'dr-muted', style: { marginBottom: '6px', whiteSpace: 'pre-wrap' } },
+                      `本批包含的独立问题：\n${current.titles.map((title, i) => `${i + 1}. ${title}`).join('\n')}`)
                   : null,
                 h('div', { className: 'dr-muted', style: { marginBottom: '6px' } }, `${t('reviewCardsModules')}: ${(current.modules || []).join(', ') || '-'} · ${t('reviewCardsCoverage').replace('{findings}', current.coverage?.findings ?? 0).replace('{files}', (current.coverage?.files || []).length).replace('{categories}', (current.coverage?.categories || []).join('/'))}`),
                 current.verification
@@ -1393,6 +1398,7 @@ window.__ModuleLoader__.load({
                   h('div', { key: cardItem.id, style: { borderTop: '1px dashed #23262d', paddingTop: '6px', marginTop: '6px' } },
                     h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
                       h('span', { className: 'dr-code' }, `${cardItem.file}:${cardItem.startLine}${cardItem.endLine && cardItem.endLine !== cardItem.startLine ? `-${cardItem.endLine}` : ''}`),
+                      cardItem.stale ? h('span', { className: 'dr-muted', style: { color: '#e3b341' } }, '源码已变化') : null,
                       h('span', { className: 'dr-muted' }, cardItem.decision === 'pending' ? '' : cardItem.decision)),
                     h('div', { style: { whiteSpace: 'pre-wrap', margin: '3px 0' } }, cardItem.problem || cardItem.title),
                     cardItem.suggestion ? h('div', { className: 'dr-muted' }, `建议：${cardItem.suggestion}`) : null,
