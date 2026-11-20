@@ -68,13 +68,12 @@ projects:
 
 ### Remaining gaps (explicit)
 
-- Voting-stage automatic fixing of minor findings is not automated yet (verified
-  minor problems still require an explicit agent task).
-- LSP *semantic* hover/definition/reference projection is not implemented; only
-  diagnostics are displayed.
 - Multi-lens review is triggered per file, not yet auto-expanded to the whole
   project; pre-push completeness audit is a coverage check, not an independent
   agent reverse-audit.
+- Voting-stage auto-fix covers confirmed minors (opt-in via
+  `"ciReview": { "autoFixMinor": true }` in `.review/config.json`); larger
+  refactors still need an explicit agent task.
 
 
 - Read-only snapshot: project/git state, PR state, review decision, mergeability,
