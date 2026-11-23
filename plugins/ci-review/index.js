@@ -1584,6 +1584,7 @@ export function apply(ctx, config = {}) {
           lens: finding.lens ?? '',
           revision: finding.revision ?? '',
           stale: findingIsStale(root, finding, currentHead),
+          linkedFiles: extractReferencedFiles(root, [finding.problem, finding.evidence, finding.impact, finding.suggestion]),
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
@@ -1635,6 +1636,24 @@ export function apply(ctx, config = {}) {
     } catch {
       return false;
     }
+  }
+
+  function extractReferencedFiles(root, texts) {
+    const found = new Set();
+    for (const text of texts) {
+      const matches = String(text ?? '').match(/[A-Za-z0-9_@./-]+\.(?:mjs|mts|js|jsx|ts|tsx|json|md|yml|yaml|toml)/g) ?? [];
+      for (const raw of matches) {
+        if (found.size >= 8) break;
+        const candidate = raw.replace(/\\/g, '/').replace(/^\.\//, '');
+        if (candidate.length < 3 || candidate.includes('..')) continue;
+        try {
+          if (fs.existsSync(path.resolve(root, candidate))) found.add(candidate);
+        } catch {
+          /* ignore invalid candidate */
+        }
+      }
+    }
+    return [...found];
   }
 
   function findingIsStale(root, finding, currentHead) {
@@ -1705,6 +1724,7 @@ export function apply(ctx, config = {}) {
           lens: finding.lens ?? '',
           revision: finding.revision ?? '',
           stale: findingIsStale(root, finding, currentHead),
+          linkedFiles: extractReferencedFiles(root, [finding.problem, finding.evidence, finding.impact, finding.suggestion]),
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
@@ -1743,6 +1763,7 @@ export function apply(ctx, config = {}) {
         modules: problem.modules,
         coverage: {
           files: problem.files, modules: problem.modules,
+          linkedFiles: [...new Set(cards.flatMap((card) => card.linkedFiles ?? []))].filter((file) => !problem.files.includes(file)),
           categories: problem.categories, findings: problem.findings.length,
           excluded: [], unknown: [],
         },
@@ -2391,6 +2412,7 @@ export function apply(ctx, config = {}) {
         verification: batch.verification?.verdict ?? null,
         collapsed: Boolean(batch.collapsed),
         files: [...new Set((batch.cards || []).map((card) => card.file))].slice(0, 10),
+        linkedFiles: (batch.coverage?.linkedFiles || []).slice(0, 10),
       };
     });
     return [
