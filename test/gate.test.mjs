@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { runGate, detectGateCommands } from '../lib/gate.mjs';
+import { runGate, detectGateCommands, sanitizeGateEnv } from '../lib/gate.mjs';
 import { installHooks, uninstallHooks, runHook, buildHookScript } from '../lib/hooks.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -389,8 +389,25 @@ test('hooks: buildHookScript is POSIX sh and invokes bin/review.mjs', () => {
   assert.throws(() => buildHookScript('post-commit', '/tmp'), (err) => err.code === 'USAGE');
 });
 
-test('hooks: install / uninstall in a temp git repo', (t) => {
-  const repo = initRepo(t);
+test('gate: sanitizeGateEnv removes workflow secrets before running PR code', () => {
+  const env = sanitizeGateEnv({
+    PATH: '/usr/bin',
+    CI: '0',
+    DEEPSEEK_API_KEY: 'sk-secret',
+    DSH_API_KEY: 'sk-secret-2',
+    GITHUB_TOKEN: 'ghs_secret',
+    MY_PASSWORD: 'pw',
+    NORMAL_VAR: 'ok',
+  });
+  assert.equal(env.PATH, '/usr/bin');
+  assert.equal(env.NORMAL_VAR, 'ok');
+  assert.equal(env.CI, '1');
+  for (const key of ['DEEPSEEK_API_KEY', 'DSH_API_KEY', 'GITHUB_TOKEN', 'MY_PASSWORD']) {
+    assert.equal(env[key], undefined, `${key} must not leak to gate commands`);
+  }
+});
+
+test('hooks: install / uninstall in a temp git repo', (t) => {  const repo = initRepo(t);
   const log = collectLog();
   const installed = installHooks({ cwd: repo, log });
   assert.equal(installed.installed, true);

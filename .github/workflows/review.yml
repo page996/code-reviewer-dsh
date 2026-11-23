@@ -57,6 +57,20 @@ jobs:
           node-version: 24
           # No cache input on purpose: zero-dependency project with no lockfile to key on.
 
+      # Fork PRs must not be able to modify the review tool or gate config and
+      # still pass the "authoritative" gate. The tool and its config are taken
+      # from the base branch; the PR checkout is only read as data (`--repo`).
+      - name: Checkout trusted review tool (base branch)
+        id: tool
+        run: |
+          set -eu
+          TOOL_ROOT="${RUNNER_TEMP}/dsh-review-tool"
+          rm -rf "$TOOL_ROOT"
+          git fetch --no-tags origin "${BASE_REF}"
+          git worktree add --detach "$TOOL_ROOT" "origin/${BASE_REF}"
+          echo "root=$TOOL_ROOT" >> "$GITHUB_OUTPUT"
+          echo "Trusted tool root: $TOOL_ROOT (base=${BASE_REF})"
+
       - name: Check API key presence
         id: key
         env:
@@ -80,9 +94,12 @@ jobs:
         if: always()
         run: |
           set -u
+          TOOL="${{ steps.tool.outputs.root }}"
+          CONFIG="$TOOL/.review/config.json"
+          if [ ! -f "$CONFIG" ]; then CONFIG="$(mktemp)"; echo '{}' > "$CONFIG"; fi
           mkdir -p "${ARTIFACT_DIR}"
-          echo "Review range: origin/${BASE_REF}...HEAD (mode=range, --no-llm)"
-          node bin/review.mjs all --mode range --base "origin/${BASE_REF}" --effort quick --no-llm --json \
+          echo "Review range: origin/${BASE_REF}...HEAD (mode=range, --no-llm, trusted tool)"
+          node "$TOOL/bin/review.mjs" all --repo "$GITHUB_WORKSPACE" --config "$CONFIG" --mode range --base "origin/${BASE_REF}" --effort quick --no-llm --json \
             > "${ARTIFACT_DIR}/deterministic.json" 2> "${ARTIFACT_DIR}/deterministic.stderr.log"
           gate_exit=$?
           echo "gate_exit=$gate_exit" >> "$GITHUB_OUTPUT"
@@ -132,8 +149,11 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DSH_API_KEY || secrets.DEEPSEEK_API_KEY }}
         run: |
           set -u
+          TOOL="${{ steps.tool.outputs.root }}"
+          CONFIG="$TOOL/.review/config.json"
+          if [ ! -f "$CONFIG" ]; then CONFIG="$(mktemp)"; echo '{}' > "$CONFIG"; fi
           mkdir -p "${ARTIFACT_DIR}"
-          node bin/review.mjs all --mode range --base "origin/${BASE_REF}" --effort standard --json \
+          node "$TOOL/bin/review.mjs" all --repo "$GITHUB_WORKSPACE" --config "$CONFIG" --mode range --base "origin/${BASE_REF}" --effort standard --json \
             > "${ARTIFACT_DIR}/review.json" 2> "${ARTIFACT_DIR}/review.stderr.log"
           llm_exit=$?
           echo "exit_code=$llm_exit" >> "$GITHUB_OUTPUT"
@@ -150,15 +170,34 @@ jobs:
         if: always()
         run: |
           set -u
+          TOOL="${{ steps.tool.outputs.root }}"
           mkdir -p "${ARTIFACT_DIR}"
-          node bin/review.mjs report --run latest --format json --out "${ARTIFACT_DIR}/report.json" || true
-          node bin/review.mjs report --run latest --format sarif --out "${ARTIFACT_DIR}/report.sarif" || true
-          node bin/review.mjs report --run latest --format md --out "${ARTIFACT_DIR}/report.md" || true
+          RUN_ID=""
+          if [ "${{ steps.llm.outputs.exit_code }}" = "0" ]; then
+            RUN_ID="$(jq -r '.runId // empty' "${ARTIFACT_DIR}/review.json" 2>/dev/null || true)"
+          fi
+          if [ -z "${RUN_ID}" ]; then
+            RUN_ID="$(jq -r '.runId // empty' "${ARTIFACT_DIR}/deterministic.json" 2>/dev/null || true)"
+          fi
+          RUN_ARG=""
+          if [ -n "${RUN_ID}" ]; then RUN_ARG="--run ${RUN_ID}"; fi
+          node "$TOOL/bin/review.mjs" report --repo "$GITHUB_WORKSPACE" $RUN_ARG --format json --out "${ARTIFACT_DIR}/report.json" || true
+          node "$TOOL/bin/review.mjs" report --repo "$GITHUB_WORKSPACE" $RUN_ARG --format sarif --out "${ARTIFACT_DIR}/report.sarif" || true
+          node "$TOOL/bin/review.mjs" report --repo "$GITHUB_WORKSPACE" $RUN_ARG --format md --out "${ARTIFACT_DIR}/report.md" || true
+          FINDINGS="$(jq -r '((.findings // .aggregate.findings // []) | length)' "${ARTIFACT_DIR}/report.json" 2>/dev/null || echo 0)"
+          echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+          if [ "${FINDINGS:-0}" -gt 0 ]; then
+            echo "upload=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=SARIF not uploaded::report has 0 findings; skipping upload so existing code-scanning alerts are not marked fixed."
+          fi
           ls -la "${ARTIFACT_DIR}" || true
 
       # Fork PRs get a read-only GITHUB_TOKEN, so `security-events: write` is not granted there.
+      # Empty SARIF uploads would mark existing alerts as fixed; require findings > 0.
       - name: Upload SARIF to GitHub code scanning
-        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && hashFiles('.review-ci/report.sarif') != ''
+        if: always() && steps.collect.outputs.upload == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && hashFiles('.review-ci/report.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: .review-ci/report.sarif
@@ -312,7 +351,9 @@ jobs:
               per_page: 100,
             });
             const previous = comments.find(
-              (comment) => typeof comment.body === 'string' && comment.body.includes(MARKER),
+              (comment) => typeof comment.body === 'string'
+                && comment.body.includes(MARKER)
+                && (comment.user?.type === 'Bot' || comment.user?.login === 'github-actions[bot]'),
             );
             if (previous) {
               await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body: safeBody });
