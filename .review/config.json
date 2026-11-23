@@ -1,4 +1,4 @@
-﻿{
+{
   "gate": {
     "commands": [
       "node --test",
