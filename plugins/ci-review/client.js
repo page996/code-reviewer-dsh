@@ -1370,6 +1370,7 @@ window.__ModuleLoader__.load({
                   h(Badge, { tone: current.severity === 'blocker' ? 'bad' : current.severity === 'major' ? 'warn' : 'run' }, current.severity),
                   h('span', { className: 'dr-card-title' }, current.title),
                   current.stale ? h('span', { className: 'dr-muted', style: { color: '#e3b341' }, title: '该批次的问题来自旧代码，当前源码已不匹配，行号/片段可能漂移' }, '⚠ 基于旧代码') : null,
+                  current.staleUnknown ? h('span', { className: 'dr-muted', style: { color: '#d29922' }, title: '旧评审任务没有记录 revision，无法判断该问题在当前离线代码上是否仍成立' }, '⚠ 出处未知') : null,
                   h('span', { className: 'dr-spacer' })),
                 current.explanation
                   ? h('div', { className: 'dr-muted', style: { whiteSpace: 'pre-wrap', marginBottom: '6px' } },
@@ -1381,7 +1382,7 @@ window.__ModuleLoader__.load({
                   : null,
                 h('div', { className: 'dr-muted', style: { marginBottom: '6px' } }, `${t('reviewCardsModules')}: ${(current.modules || []).join(', ') || '-'} · ${t('reviewCardsCoverage').replace('{findings}', current.coverage?.findings ?? 0).replace('{files}', (current.coverage?.files || []).length).replace('{categories}', (current.coverage?.categories || []).join('/'))}`),
                 h('div', { className: 'dr-muted', style: { marginBottom: '6px', fontSize: '11px' } },
-                  `视角: ${(current.lenses || []).join(', ') || '-'} · 修订: ${(current.revisions || []).map((sha) => sha.slice(0, 8)).join(', ') || '未知'} · 源码状态: ${current.stale ? '旧代码（可能漂移）' : '当前代码'}`),
+                  `视角: ${(current.lenses || []).join(', ') || '-'} · 修订: ${(current.revisions || []).map((sha) => sha.slice(0, 8)).join(', ') || '未知'} · 源码状态: ${current.stale ? '旧代码（可能漂移）' : current.staleUnknown ? '无法判断（旧任务无 revision）' : '当前代码'}`),
                 current.verification
                   ? h('div', { className: 'dr-muted', style: { marginBottom: '6px' } },
                       current.verification.status === 'running'

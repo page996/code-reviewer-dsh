@@ -1638,7 +1638,12 @@ export function apply(ctx, config = {}) {
   }
 
   function findingIsStale(root, finding, currentHead) {
-    if (finding.revision && currentHead && finding.revision !== currentHead) return true;
+    if (!finding.revision) {
+      // Old agent jobs (before headSha was recorded) and CLI runs without a
+      // revision cannot be proven current; report unknown instead of false.
+      return findingLineMatches(root, finding) ? null : true;
+    }
+    if (currentHead && finding.revision !== currentHead) return true;
     return !findingLineMatches(root, finding);
   }
 
@@ -1722,7 +1727,8 @@ export function apply(ctx, config = {}) {
         phase: problem.modules.length > 1 ? 'cross-module' : 'core',
         title: problem.titles.length > 1 ? `${problem.title}（含 ${problem.titles.length - 1} 个相关问题）` : problem.title,
         titles: problem.titles,
-        stale: cards.some((card) => card.stale),
+        stale: cards.some((card) => card.stale === true),
+        staleUnknown: cards.some((card) => card.stale === null),
         lenses: [...new Set(cards.map((card) => card.lens).filter(Boolean))],
         revisions: [...new Set(cards.map((card) => card.revision).filter(Boolean))],
         sources: [...new Set(cards.map((card) => card.runId).filter(Boolean))],
@@ -2369,27 +2375,33 @@ export function apply(ctx, config = {}) {
   }
 
   function auditPrompt({ batches, files, findingsCount }) {
-    const summary = batches.map((batch) => ({
-      id: batch.problemId,
-      title: batch.title,
-      titles: batch.titles,
-      severity: batch.severity,
-      modules: batch.modules,
-      lenses: batch.lenses,
-      revisions: batch.revisions,
-      stale: batch.stale,
-      cards: (batch.cards || []).length,
-      files: [...new Set((batch.cards || []).map((card) => card.file))].slice(0, 10),
-    }));
+    const summary = batches.map((batch) => {
+      const decisions = { pending: 0, approved: 0, 'needs-revision': 0, ignored: 0, resolved: 0 };
+      for (const card of batch.cards || []) decisions[card.decision] = (decisions[card.decision] || 0) + 1;
+      return {
+        id: batch.problemId,
+        title: String(batch.title ?? '').slice(0, 140),
+        severity: batch.severity,
+        stale: Boolean(batch.stale),
+        staleUnknown: Boolean(batch.staleUnknown),
+        lenses: batch.lenses,
+        revisions: (batch.revisions || []).map((sha) => String(sha).slice(0, 8)),
+        cards: (batch.cards || []).length,
+        decisions,
+        verification: batch.verification?.verdict ?? null,
+        collapsed: Boolean(batch.collapsed),
+        files: [...new Set((batch.cards || []).map((card) => card.file))].slice(0, 10),
+      };
+    });
     return [
       '你是推送前完整性审计子代理（独立上下文）。已有审阅批次摘要和仓库文件清单如下，请审计是否存在遗漏或覆盖不足。',
       '',
-      `原始 findings 数量：${findingsCount}`,
+      `原始 findings 数量：${findingsCount}；批次总数：${summary.length}（下方为全部批次，未截断批次列表）。`,
       '批次摘要（JSON）：',
-      JSON.stringify(summary, null, 2).slice(0, 12000),
+      JSON.stringify(summary),
       '',
       '仓库文件清单（部分）：',
-      JSON.stringify(files.slice(0, 120), null, 2).slice(0, 8000),
+      JSON.stringify(files.slice(0, 120)),
       '',
       '审计要求：',
       '1. 判断：是否有明显未被任何批次覆盖的高风险文件/模块；是否有 findings 未进入批次；批次说明是否缺少关键牵涉面。',
