@@ -1688,6 +1688,12 @@ export function apply(ctx, config = {}) {
         return '';
       }
     })();
+    const fileIndex = new Map();
+    for (const file of listProjectFiles(root, 2000)) {
+      const basename = file.split('/').pop();
+      if (!fileIndex.has(basename)) fileIndex.set(basename, []);
+      fileIndex.get(basename).push(file);
+    }
     const decisions = readCardDecisions(root);
     const verifications = readVerifications(root);
     const rank = { blocker: 0, major: 1, minor: 2 };
