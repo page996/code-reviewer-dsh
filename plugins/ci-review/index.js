@@ -1560,6 +1560,12 @@ export function apply(ctx, config = {}) {
 
   function buildReviewBatches(root, findings) {
     const decisions = readCardDecisions(root);
+    const fileIndex = new Map();
+    for (const file of listProjectFiles(root, 2000)) {
+      const basename = file.split('/').pop();
+      if (!fileIndex.has(basename)) fileIndex.set(basename, []);
+      fileIndex.get(basename).push(file);
+    }
     const rank = { blocker: 0, major: 1, minor: 2 };
     const sorted = [...findings].sort((a, b) =>
       (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2) || a.file.localeCompare(b.file) || (a.startLine || 1) - (b.startLine || 1));
@@ -1584,7 +1590,7 @@ export function apply(ctx, config = {}) {
           lens: finding.lens ?? '',
           revision: finding.revision ?? '',
           stale: findingIsStale(root, finding, currentHead),
-          linkedFiles: extractReferencedFiles(root, [finding.problem, finding.evidence, finding.impact, finding.suggestion]),
+          linkedFiles: extractReferencedFiles(root, [finding.problem, finding.evidence, finding.impact, finding.suggestion], fileIndex),
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
@@ -1638,7 +1644,7 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  function extractReferencedFiles(root, texts) {
+  function extractReferencedFiles(root, texts, fileIndex = new Map()) {
     const found = new Set();
     for (const text of texts) {
       const matches = String(text ?? '').match(/[A-Za-z0-9_@./-]+\.(?:mjs|mts|js|jsx|ts|tsx|json|md|yml|yaml|toml)/g) ?? [];
@@ -1647,10 +1653,18 @@ export function apply(ctx, config = {}) {
         const candidate = raw.replace(/\\/g, '/').replace(/^\.\//, '');
         if (candidate.length < 3 || candidate.includes('..')) continue;
         try {
-          if (fs.existsSync(path.resolve(root, candidate))) found.add(candidate);
+          if (fs.existsSync(path.resolve(root, candidate))) {
+            found.add(candidate);
+            continue;
+          }
         } catch {
-          /* ignore invalid candidate */
+          /* fall through to basename resolution */
         }
+        // Findings often mention only `index.js`/`client.js`; resolve the
+        // basename when it maps to exactly one real project file.
+        const basename = candidate.split('/').pop();
+        const hits = fileIndex.get(basename);
+        if (hits && hits.length === 1) found.add(hits[0]);
       }
     }
     return [...found];
@@ -1724,7 +1738,7 @@ export function apply(ctx, config = {}) {
           lens: finding.lens ?? '',
           revision: finding.revision ?? '',
           stale: findingIsStale(root, finding, currentHead),
-          linkedFiles: extractReferencedFiles(root, [finding.problem, finding.evidence, finding.impact, finding.suggestion]),
+          linkedFiles: extractReferencedFiles(root, [finding.problem, finding.evidence, finding.impact, finding.suggestion], fileIndex),
           excerpt: sourceExcerpt(root, finding.file, finding.startLine),
           decision: decisions[id]?.status === 'approved' ? 'approved'
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
@@ -2156,16 +2170,57 @@ export function apply(ctx, config = {}) {
     return job;
   }
 
+  function supersededPath(root) {
+    return path.join(root, '.review', 'ci-review', 'superseded.json');
+  }
+
+  function readSuperseded(root) {
+    const data = safeReadJson(supersededPath(root));
+    return data && typeof data.byJob === 'object' ? data.byJob : {};
+  }
+
+  function archiveSuperseded(root, jobs) {
+    if (!Array.isArray(jobs) || jobs.length === 0) return;
+    const byJob = readSuperseded(root);
+    let changed = false;
+    for (const job of jobs) {
+      if (!job?.id || byJob[job.id]) continue;
+      byJob[job.id] = {
+        jobId: job.id,
+        file: job.file,
+        headSha: job.headSha ?? '',
+        startedAt: job.startedAt ?? null,
+        findings: Object.values(job.results ?? {}).flatMap((result) =>
+          (Array.isArray(result?.findings) ? result.findings : []).map((finding) => ({
+            file: finding.file,
+            startLine: finding.startLine,
+            severity: finding.severity,
+            category: finding.category,
+            title: String(finding.title ?? '').slice(0, 200),
+          }))),
+        supersededAt: new Date().toISOString(),
+      };
+      changed = true;
+    }
+    if (!changed) return;
+    const dir = path.join(root, '.review', 'ci-review');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(supersededPath(root), `${JSON.stringify({ version: 1, byJob }, null, 2)}\n`, 'utf8');
+  }
+
   function agentJobFindings(root) {
     const jobs = readReviewJobs(root);
     // Only the newest completed job per file is authoritative; older jobs were
-    // reviewed against a previous revision and would otherwise stay as stale
-    // duplicate batches after a re-review.
+    // reviewed against a previous revision. Archive them so their evidence is
+    // still traceable instead of silently disappearing.
     const latestByFile = new Map();
+    const superseded = [];
     for (const job of jobs) {
       if (!job || job.status !== 'completed' || !job.results) continue;
       if (!latestByFile.has(job.file)) latestByFile.set(job.file, job);
+      else superseded.push(job);
     }
+    archiveSuperseded(root, superseded);
     const seen = new Set();
     const out = [];
     for (const job of latestByFile.values()) {
@@ -2513,6 +2568,14 @@ export function apply(ctx, config = {}) {
       files,
       fixQueue: summary.exists ? readFixQueue(project.root) : [],
       reviewJobs,
+      superseded: (() => {
+        const byJob = readSuperseded(project.root);
+        const jobs = Object.values(byJob);
+        return {
+          jobs: jobs.length,
+          findings: jobs.reduce((sum, job) => sum + (Array.isArray(job.findings) ? job.findings.length : 0), 0),
+        };
+      })(),
       audit: summary.exists ? readAudit(project.root) : null,
       reviewBatches: summary.exists ? buildReviewProblems(project.root, findings) : [],
       annotations,
