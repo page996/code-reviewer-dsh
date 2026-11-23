@@ -1,0 +1,12 @@
+﻿{
+  "gate": {
+    "commands": [
+      "node --test",
+      "node test/hooks.contract.mjs"
+    ]
+  },
+  "ciReview": {
+    "autoFixMinor": false
+  }
+}
+
