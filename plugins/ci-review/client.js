@@ -1207,13 +1207,13 @@ window.__ModuleLoader__.load({
       const [message, setMessage] = React.useState(null);
       const visible = batches.filter((batch) => showLow || !batch.collapsed);
       const current = visible[Math.min(index, Math.max(0, visible.length - 1))];
-      const decide = async (cardIds, status, cards) => {
+      const decide = async (cardIds, status, cards, reason) => {
         setBusy(true);
         setMessage(null);
         try {
           const result = await request(`api/review-cards/decide?projectId=${encodeURIComponent(projectId)}`, {
             method: 'POST',
-            body: JSON.stringify({ cardIds, status, cards: cards ?? undefined, problemId: current?.problemId }),
+            body: JSON.stringify({ cardIds, status, cards: cards ?? undefined, problemId: current?.problemId, reason: reason ?? undefined }),
           });
           if (!result.ok) setMessage({ tone: 'bad', text: result.message || 'failed' });
           else {
@@ -1405,7 +1405,10 @@ window.__ModuleLoader__.load({
                     h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
                       h('span', { className: 'dr-code' }, `${cardItem.file}:${cardItem.startLine}${cardItem.endLine && cardItem.endLine !== cardItem.startLine ? `-${cardItem.endLine}` : ''}`),
                       cardItem.stale ? h('span', { className: 'dr-muted', style: { color: '#e3b341' } }, '源码已变化') : null,
-                      h('span', { className: 'dr-muted' }, cardItem.decision === 'pending' ? '' : cardItem.decision)),
+                      h('span', { className: 'dr-muted' }, cardItem.decision === 'pending' ? '' : cardItem.decision),
+                      cardItem.decision === 'ignored' && cardItem.decisionReason
+                        ? h('span', { className: 'dr-muted', style: { fontSize: '11px' } }, `忽略理由：${cardItem.decisionReason}`)
+                        : null),
                     h('div', { style: { whiteSpace: 'pre-wrap', margin: '3px 0' } }, cardItem.problem || cardItem.title),
                     cardItem.suggestion ? h('div', { className: 'dr-muted' }, `建议：${cardItem.suggestion}`) : null,
                     (() => {
@@ -1434,7 +1437,7 @@ window.__ModuleLoader__.load({
                       h('button', { className: 'dr-btn', type: 'button', onClick: () => { try { const root = String(snapshot.project.root || '').replace(/\\/g, '/').replace(/\/$/, ''); window.open(`vscode://file/${root}/${cardItem.file}:${cardItem.startLine}:1`); } catch (cause) { setMessage({ tone: 'bad', text: String(cause?.message || cause) }); } } }, t('openInVscode')),
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'approved', [cardItem]) }, t('reviewCardsApprove')),
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'needs-revision') }, t('reviewCardsRevision')),
-                      h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide([cardItem.id], 'ignored') }, t('reviewCardsIgnore')),
+                      h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => { const reason = window.prompt('请填写忽略理由（必填，会记录在审阅决策中）'); if (!reason || !reason.trim()) { setMessage({ tone: 'bad', text: '忽略必须填写理由' }); return; } decide([cardItem.id], 'ignored', undefined, reason.trim()); } }, t('reviewCardsIgnore')),
                       h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => onAskAgentAt(cardItem.file, cardItem.startLine, { severity: cardItem.severity, title: cardItem.title, problem: cardItem.problem, evidence: cardItem.evidence, impact: cardItem.impact, suggestion: cardItem.suggestion }) }, t('askAgentHere'))))),
                 h('div', { className: 'dr-actions', style: { marginTop: '8px' } },
                   h('button', {
@@ -1461,7 +1464,7 @@ window.__ModuleLoader__.load({
                     ? h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'resolved') }, '标记旧批次已解决')
                     : null,
                   h('button', { className: 'dr-btn primary', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'approved', current.cards) }, t('reviewCardsApproveBatch')),
-                  h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => decide((current.cards || []).map((cardItem) => cardItem.id), 'ignored') }, t('reviewCardsIgnoreBatch')))),
+                  h('button', { className: 'dr-btn', type: 'button', disabled: busy, onClick: () => { const reason = window.prompt('请填写忽略本批的理由（必填，会记录在审阅决策中）'); if (!reason || !reason.trim()) { setMessage({ tone: 'bad', text: '忽略必须填写理由' }); return; } decide((current.cards || []).map((cardItem) => cardItem.id), 'ignored', undefined, reason.trim()); } }, t('reviewCardsIgnoreBatch')))),
               worktree
                 ? h('div', { className: 'dr-notice', style: { margin: '6px 0 0' } },
                     h('div', { className: 'dr-muted', style: { wordBreak: 'break-all' } }, `审阅工作区：${worktree.path}`),

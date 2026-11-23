@@ -41,7 +41,14 @@ jobs:
           # No cache input on purpose: zero-dependency project with no lockfile to key on.
 
       - name: Unit tests
-        run: npm test
+        run: |
+          set -eu
+          files=$(ls test/*.test.mjs 2>/dev/null | wc -l)
+          if [ "${files}" -lt 1 ]; then
+            echo "::error title=No tests found::test/*.test.mjs matched zero files; refusing to report a green run."
+            exit 1
+          fi
+          npm test
 
       # Real `git commit` in a throwaway repo: failing gate blocks, passing gate passes,
       # REVIEW_SKIP_HOOKS=1 bypasses. No secrets, no network.

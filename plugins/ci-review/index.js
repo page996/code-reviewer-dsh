@@ -1596,6 +1596,7 @@ export function apply(ctx, config = {}) {
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
               : decisions[id]?.status === 'ignored' ? 'ignored'
                 : decisions[id]?.status === 'resolved' ? 'resolved' : 'pending',
+          decisionReason: decisions[id]?.reason ?? '',
           decisionSurface: {
             risk: finding.severity,
             blastRadius: 'single file (verify callers before changing signatures)',
@@ -1750,6 +1751,7 @@ export function apply(ctx, config = {}) {
             : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
               : decisions[id]?.status === 'ignored' ? 'ignored'
                 : decisions[id]?.status === 'resolved' ? 'resolved' : 'pending',
+          decisionReason: decisions[id]?.reason ?? '',
           decisionSurface: {
             risk: finding.severity,
             blastRadius: 'verify callers of this location before changing behavior',
@@ -3135,11 +3137,15 @@ export function apply(ctx, config = {}) {
       if (!project) return sendError(res, 404, 'unknown project');
       const body = await readJsonBody(req);
       const status = ['approved', 'needs-revision', 'ignored', 'pending', 'resolved'].includes(body?.status) ? body.status : 'pending';
+      const reason = String(body?.reason ?? '').trim().slice(0, 1000);
+      if (status === 'ignored' && !reason) {
+        return sendJson(res, 200, { ok: false, message: '忽略必须填写理由（reason）' });
+      }
       const decisions = readCardDecisions(project.root);
       const ids = Array.isArray(body?.cardIds) ? body.cardIds.map(String) : [String(body?.cardId ?? '')];
       for (const id of ids.filter(Boolean)) {
         if (status === 'pending') delete decisions[id];
-        else decisions[id] = { status, at: new Date().toISOString() };
+        else decisions[id] = { status, at: new Date().toISOString(), ...(reason ? { reason } : {}) };
       }
       writeCardDecisions(project.root, decisions);
       if (status === 'approved' && Array.isArray(body?.cards)) {
