@@ -22,6 +22,28 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import {
+  aggregateVotes,
+  buildProjectCoverage,
+  coverageForBatch,
+  findingsSignature,
+  groupFindingsByAgent,
+  groupingPrompt,
+  keyFindings,
+  mergeDeclaredCoverage,
+  normalizeAgentGrouping,
+  normalizeConvergeMax,
+  normalizeVerificationRecord,
+  normalizeVerifierCount,
+  planReReview,
+  sanitizeVerifier,
+  SEVERITIES,
+  severityRank,
+  VERDICTS,
+  verifierPrompt,
+  verifierStances,
+} from './lib/review-model.mjs';
+
 export const name = 'dsh-ci-review';
 export const inject = ['webServer'];
 
@@ -1558,79 +1580,6 @@ export function apply(ctx, config = {}) {
     return { from, to, total: lines.length, lines: lines.slice(from - 1, to).map((text, index) => ({ n: from + index, text })) };
   }
 
-  function buildReviewBatches(root, findings) {
-    const decisions = readCardDecisions(root);
-    const fileIndex = new Map();
-    for (const file of listProjectFiles(root, 2000)) {
-      const basename = file.split('/').pop();
-      if (!fileIndex.has(basename)) fileIndex.set(basename, []);
-      fileIndex.get(basename).push(file);
-    }
-    const rank = { blocker: 0, major: 1, minor: 2 };
-    const sorted = [...findings].sort((a, b) =>
-      (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2) || a.file.localeCompare(b.file) || (a.startLine || 1) - (b.startLine || 1));
-    const size = 5;
-    const batches = [];
-    for (let start = 0; start < sorted.length; start += size) {
-      const cards = sorted.slice(start, start + size).map((finding) => {
-        const id = `${finding.file}#${finding.startLine}#${finding.category}`;
-        return {
-          id,
-          file: finding.file,
-          startLine: finding.startLine,
-          endLine: finding.endLine,
-          severity: finding.severity,
-          category: finding.category,
-          title: finding.title,
-          problem: finding.problem,
-          evidence: finding.evidence,
-          impact: finding.impact,
-          suggestion: finding.suggestion,
-          runId: finding.runId,
-          lens: finding.lens ?? '',
-          revision: finding.revision ?? '',
-          stale: findingIsStale(root, finding, currentHead),
-          linkedFiles: extractReferencedFiles(root, [finding.problem, finding.evidence, finding.impact, finding.suggestion], fileIndex),
-          excerpt: sourceExcerpt(root, finding.file, finding.startLine),
-          decision: decisions[id]?.status === 'approved' ? 'approved'
-            : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
-              : decisions[id]?.status === 'ignored' ? 'ignored'
-                : decisions[id]?.status === 'resolved' ? 'resolved' : 'pending',
-          decisionReason: decisions[id]?.reason ?? '',
-          decisionSurface: {
-            risk: finding.severity,
-            blastRadius: 'single file (verify callers before changing signatures)',
-            compatibility: finding.category === 'contract' ? 'public interface/format may change' : 'keep API/format stable',
-            tests: finding.category === 'tests' ? 'add/adjust regression coverage' : 'run project gate after the fix',
-            rollback: 'git diff / revert task files before commit',
-          },
-        };
-      });
-      const files = [...new Set(cards.map((card) => card.file))];
-      batches.push({
-        id: `batch-${batches.length + 1}`,
-        index: batches.length + 1,
-        cards,
-        coverage: {
-          files,
-          count: cards.length,
-          severities: cards.reduce((acc, card) => ({ ...acc, [card.severity]: (acc[card.severity] ?? 0) + 1 }), {}),
-          categories: [...new Set(cards.map((card) => card.category))],
-        },
-        progress: {
-          approved: cards.filter((card) => card.decision === 'approved').length,
-          pending: cards.filter((card) => card.decision === 'pending').length,
-        },
-      });
-    }
-    return batches;
-  }
-
-  const PROBLEM_FAMILY = {
-    correctness: 'logic', errors: 'logic', data: 'logic', concurrency: 'concurrency',
-    security: 'security', contract: 'contract', intent: 'contract', tests: 'tests', style: 'style',
-  };
-
   function findingLineMatches(root, finding) {
     const snippet = String(finding.existingCode ?? '').split('\n').map((line) => line.trim()).find((line) => line.length > 0);
     if (!snippet) return true;
@@ -1648,7 +1597,7 @@ export function apply(ctx, config = {}) {
   function extractReferencedFiles(root, texts, fileIndex = new Map()) {
     const found = new Set();
     for (const text of texts) {
-      const matches = String(text ?? '').match(/[A-Za-z0-9_@./-]+\.(?:mjs|mts|js|jsx|ts|tsx|json|md|yml|yaml|toml)/g) ?? [];
+      const matches = String(text ?? '').match(/[A-Za-z0-9_@./-]+\.(?:mjs|mts|jsx|tsx|json|js|ts|md|yml|yaml|toml)/g) ?? [];
       for (const raw of matches) {
         if (found.size >= 8) break;
         const candidate = raw.replace(/\\/g, '/').replace(/^\.\//, '');
@@ -1681,22 +1630,135 @@ export function apply(ctx, config = {}) {
     return !findingLineMatches(root, finding);
   }
 
-  function buildReviewProblems(root, findings) {
-    const currentHead = (() => {
-      try {
-        return tryGit(root, ['rev-parse', 'HEAD']);
-      } catch {
-        return '';
-      }
-    })();
-    const fileIndex = new Map();
-    for (const file of listProjectFiles(root, 2000)) {
-      const basename = file.split('/').pop();
-      if (!fileIndex.has(basename)) fileIndex.set(basename, []);
-      fileIndex.get(basename).push(file);
+  const PROBLEM_FAMILY = {
+    correctness: 'logic', errors: 'logic', data: 'logic', concurrency: 'concurrency',
+    security: 'security', contract: 'contract', intent: 'contract', tests: 'tests', style: 'style',
+  };
+
+  function problemKeyForCards(cards) {
+    const ids = (Array.isArray(cards) ? cards : []).map((card) => String(card?.id ?? '')).filter(Boolean).sort();
+    return createHash('sha256').update(ids.join('\n'), 'utf8').digest('hex').slice(0, 16);
+  }
+
+  /**
+   * Newest completed review job per file, with superseded jobs archived so their
+   * evidence stays traceable instead of silently disappearing.
+   */
+  function latestCompletedJobs(root) {
+    const jobs = readReviewJobs(root);
+    const latestByFile = new Map();
+    const superseded = [];
+    for (const job of jobs) {
+      if (!job || job.status !== 'completed' || !job.results) continue;
+      if (!latestByFile.has(job.file)) latestByFile.set(job.file, job);
+      else superseded.push(job);
     }
-    const decisions = readCardDecisions(root);
-    const verifications = readVerifications(root);
+    archiveSuperseded(root, superseded);
+    return { jobs, latestByFile, superseded };
+  }
+
+  /**
+   * Evidence used for real coverage: which files were reviewed at HEAD, the
+   * latest revision per reviewed file, and the files a recent review scope
+   * explicitly excluded (with the reason). Agent review jobs carry headSha;
+   * CLI runs cannot prove a revision and stay unknown.
+   */
+  function reviewEvidenceFor(root, headSha) {
+    const { latestByFile } = latestCompletedJobs(root);
+    const fresh = {};
+    const revisions = {};
+    for (const [file, job] of latestByFile.entries()) {
+      revisions[file] = job.headSha ? String(job.headSha) : '';
+      if (headSha && job.headSha && job.headSha === headSha) fresh[file] = true;
+    }
+    const excluded = {};
+    let scopeFiles = 0;
+    const classified = new Set();
+    try {
+      const base = path.join(root, '.review', 'runs');
+      const entries = fs.readdirSync(base, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => ({ name: entry.name, mtime: fs.statSync(path.join(base, entry.name)).mtimeMs }))
+        .sort((a, b) => b.mtime - a.mtime)
+        .slice(0, 8);
+      // Newest scope first: a file that a newer scope considers reviewable must
+      // not inherit an older scope's exclusion.
+      for (const entry of entries) {
+        const scope = safeReadJson(path.join(base, entry.name, 'scope.json'));
+        for (const file of Array.isArray(scope?.files) ? scope.files : []) {
+          scopeFiles += 1;
+          if (!file?.path) continue;
+          const relative = String(file.path).replace(/\\/g, '/');
+          if (classified.has(relative)) continue;
+          classified.add(relative);
+          if (file.reviewable === false && file.excludeReason) excluded[relative] = String(file.excludeReason);
+        }
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') log(`review scope evidence unavailable: ${error?.message ?? error}`);
+    }
+    return { fresh, revisions, excluded, scopeFiles, latestByFile };
+  }
+
+  /**
+   * CLI findings carry no revision. Once the same file has a completed review
+   * job at the current HEAD, the agent review is authoritative; keeping the old
+   * CLI finding would make the batch permanently "unknown" and block
+   * convergence. Superseded findings are counted (not silently dropped).
+   */
+  function effectiveFindings(findings, evidence) {
+    const fresh = evidence?.fresh && typeof evidence.fresh === 'object' ? evidence.fresh : {};
+    const active = [];
+    let superseded = 0;
+    for (const finding of Array.isArray(findings) ? findings : []) {
+      if (!finding || !finding.file) continue;
+      if (!finding.revision && fresh[finding.file] === true) {
+        superseded += 1;
+        continue;
+      }
+      active.push(finding);
+    }
+    return { findings: active, superseded };
+  }
+
+  function groupingsPath(root) {
+    return path.join(root, '.review', 'ci-review', 'groupings.json');
+  }
+
+  function readGroupings(root) {
+    const data = safeReadJson(groupingsPath(root));
+    return data && data.byRevision && typeof data.byRevision === 'object' && !Array.isArray(data.byRevision)
+      ? data.byRevision
+      : {};
+  }
+
+  function writeGroupings(root, byRevision) {
+    const dir = path.join(root, '.review', 'ci-review');
+    fs.mkdirSync(dir, { recursive: true });
+    // Keep the file bounded: newest records win, a handful of revisions is plenty.
+    const entries = Object.entries(byRevision ?? {})
+      .sort((a, b) => String(b[1]?.startedAt ?? b[1]?.generatedAt ?? '').localeCompare(String(a[1]?.startedAt ?? a[1]?.generatedAt ?? '')))
+      .slice(0, 8);
+    const temp = `${groupingsPath(root)}.tmp-${process.pid}-${Date.now()}`;
+    fs.writeFileSync(temp, `${JSON.stringify({ version: 2, byRevision: Object.fromEntries(entries) }, null, 2)}\n`, 'utf8');
+    fs.renameSync(temp, groupingsPath(root));
+    return Object.fromEntries(entries);
+  }
+
+  /** Latest grouping record for display (completed, running or failed; prefers an exact HEAD match). */
+  function currentGrouping(root, headSha) {
+    const entries = Object.values(readGroupings(root)).filter((entry) => entry && typeof entry === 'object' && !Array.isArray(entry));
+    if (entries.length === 0) return null;
+    const exact = entries.filter((entry) => entry.headSha && headSha && entry.headSha === headSha);
+    const pool = exact.length > 0 ? exact : entries;
+    return pool.sort((a, b) => String(b.startedAt ?? b.generatedAt ?? '').localeCompare(String(a.startedAt ?? a.generatedAt ?? '')))[0] ?? null;
+  }
+
+  /**
+   * Heuristic problem clustering, kept as the fallback when no usable agent
+   * grouping exists. Same root cause / same file / nearby lines merge.
+   */
+  function heuristicProblems(findings) {
     const rank = { blocker: 0, major: 1, minor: 2 };
     const sorted = [...findings].sort((a, b) =>
       (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2) || a.file.localeCompare(b.file) || (a.startLine || 1) - (b.startLine || 1));
@@ -1708,95 +1770,231 @@ export function apply(ctx, config = {}) {
         && item.files.includes(finding.file)
         && Math.abs(item.lastLine - (finding.startLine || 1)) <= 25);
       if (!problem) {
-        problem = {
-          id: '', family, lastLine: finding.startLine || 1,
-          files: [], modules: [], categories: [],
-          findings: [], severity: 'minor', title: finding.title, titles: [],
-          what: finding.problem, whyImportant: finding.impact, evidence: finding.evidence,
-        };
+        problem = { family, lastLine: finding.startLine || 1, files: [], findings: [], severity: 'minor', titles: [] };
         problems.push(problem);
       }
       problem.lastLine = Math.max(problem.lastLine, finding.endLine || finding.startLine || 1);
       if (!problem.files.includes(finding.file)) problem.files.push(finding.file);
-      if (!problem.categories.includes(finding.category)) problem.categories.push(finding.category);
       problem.findings.push(finding);
-      const findingTitle = String(finding.title ?? '').trim();
-      if (findingTitle && !problem.titles.includes(findingTitle)) problem.titles.push(findingTitle);
-      if ((rank[finding.severity] ?? 2) < (rank[problem.severity] ?? 2)) {
-        problem.severity = finding.severity;
-        problem.title = finding.title;
-        problem.what = finding.problem;
-        problem.whyImportant = finding.impact;
-        problem.evidence = finding.evidence;
-      }
+      const title = String(finding.title ?? '').trim();
+      if (title && !problem.titles.includes(title)) problem.titles.push(title);
+      if ((rank[finding.severity] ?? 2) < (rank[problem.severity] ?? 2)) problem.severity = finding.severity;
     }
-    for (const [index, problem] of problems.entries()) {
-      problem.id = `problem-${index + 1}-${problem.family}`;
-      problem.modules = [...new Set(problem.files.map((file) => file.split('/').slice(0, -1).join('/') || '.'))];
-      const cards = problem.findings.map((finding) => {
-        const id = `${finding.file}#${finding.startLine}#${finding.category}`;
-        return {
-          id, kind: 'defect',
-          file: finding.file, startLine: finding.startLine, endLine: finding.endLine,
-          severity: finding.severity, category: finding.category, title: finding.title,
-          problem: finding.problem, evidence: finding.evidence,
-          impact: finding.impact, suggestion: finding.suggestion,
-          runId: finding.runId,
-          lens: finding.lens ?? '',
-          revision: finding.revision ?? '',
-          stale: findingIsStale(root, finding, currentHead),
-          linkedFiles: extractReferencedFiles(root, [finding.problem, finding.evidence, finding.impact, finding.suggestion], fileIndex),
-          excerpt: sourceExcerpt(root, finding.file, finding.startLine),
-          decision: decisions[id]?.status === 'approved' ? 'approved'
-            : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
-              : decisions[id]?.status === 'ignored' ? 'ignored'
-                : decisions[id]?.status === 'resolved' ? 'resolved' : 'pending',
-          decisionReason: decisions[id]?.reason ?? '',
-          decisionSurface: {
-            risk: finding.severity,
-            blastRadius: 'verify callers of this location before changing behavior',
-            compatibility: finding.category === 'contract' ? 'public interface/format may change' : 'keep API/format stable',
-            tests: finding.category === 'tests' ? 'add/adjust regression coverage' : 'run project gate after the fix',
-            rollback: 'git diff / revert task files before commit',
-          },
-        };
-      });
-      const pending = cards.filter((card) => card.decision === 'pending').length;
-      problem.batch = {
-        id: problem.id,
-        index: index + 1,
-        problemId: problem.id,
-        phase: problem.modules.length > 1 ? 'cross-module' : 'core',
-        title: problem.titles.length > 1 ? `${problem.title}（含 ${problem.titles.length - 1} 个相关问题）` : problem.title,
-        titles: problem.titles,
+    for (const problem of problems) {
+      if (problem.titles.length === 0) problem.titles = [String(problem.findings[0]?.title ?? '')];
+    }
+    return problems;
+  }
+
+  function buildReviewProblems(root, findings) {
+    const currentHead = tryGit(root, ['rev-parse', 'HEAD']) || '';
+    const fileIndex = new Map();
+    for (const file of listProjectFiles(root, 2000)) {
+      const basename = file.split('/').pop();
+      if (!fileIndex.has(basename)) fileIndex.set(basename, []);
+      fileIndex.get(basename).push(file);
+    }
+    const decisions = readCardDecisions(root);
+    const verifications = readVerifications(root);
+    const evidence = reviewEvidenceFor(root, currentHead);
+    const groupingRecord = currentGrouping(root, currentHead);
+    const effective = effectiveFindings(findings, evidence);
+    const activeFindings = effective.findings;
+    const resolved = groupFindingsByAgent({ findings: activeFindings, grouping: groupingRecord, headSha: currentHead });
+
+    const cardFor = (finding) => {
+      const id = `${finding.file}#${finding.startLine}#${finding.category}`;
+      return {
+        id, kind: 'defect',
+        file: finding.file, startLine: finding.startLine, endLine: finding.endLine,
+        severity: finding.severity, category: finding.category, title: finding.title,
+        problem: finding.problem, evidence: finding.evidence,
+        impact: finding.impact, suggestion: finding.suggestion,
+        runId: finding.runId,
+        lens: finding.lens ?? '',
+        revision: finding.revision ?? '',
+        stale: findingIsStale(root, finding, currentHead),
+        linkedFiles: extractReferencedFiles(root, [finding.problem, finding.evidence, finding.impact, finding.suggestion], fileIndex),
+        excerpt: sourceExcerpt(root, finding.file, finding.startLine),
+        decision: decisions[id]?.status === 'approved' ? 'approved'
+          : decisions[id]?.status === 'needs-revision' ? 'needs-revision'
+            : decisions[id]?.status === 'ignored' ? 'ignored'
+              : decisions[id]?.status === 'resolved' ? 'resolved' : 'pending',
+        decisionReason: decisions[id]?.reason ?? '',
+        decisionSurface: {
+          risk: finding.severity,
+          blastRadius: 'verify callers of this location before changing behavior',
+          compatibility: finding.category === 'contract' ? 'public interface/format may change' : 'keep API/format stable',
+          tests: finding.category === 'tests' ? 'add/adjust regression coverage' : 'run project gate after the fix',
+          rollback: 'git diff / revert task files before commit',
+        },
+      };
+    };
+
+    const makeBatch = (items, meta = {}) => {
+      const cards = items.map(cardFor);
+      const files = [...new Set(items.map((finding) => finding.file))];
+      const modules = [...new Set(files.map((file) => file.split('/').slice(0, -1).join('/') || '.'))];
+      // The batch severity must never be lower than its most severe card; an
+      // agent grouping may escalate but not hide a blocker behind "minor".
+      const cardSeverity = [...items].sort((a, b) => severityRank(a.severity) - severityRank(b.severity))[0]?.severity ?? 'minor';
+      const groupSeverity = SEVERITIES.includes(meta.group?.severity) ? meta.group.severity : null;
+      const severity = groupSeverity && severityRank(groupSeverity) < severityRank(cardSeverity) ? groupSeverity : cardSeverity;
+      const titles = [...new Set(items.map((finding) => String(finding.title ?? '').trim()).filter(Boolean))];
+      const categories = [...new Set(items.map((finding) => finding.category))];
+      const linkedFiles = [...new Set(cards.flatMap((card) => card.linkedFiles ?? []))].filter((file) => !files.includes(file));
+      const baseCoverage = coverageForBatch({ files, linkedFiles, cards, evidence });
+      const declared = meta.group?.coverage;
+      const merged = mergeDeclaredCoverage({ excluded: baseCoverage.excluded, unknown: baseCoverage.unknown }, declared);
+      const declaredExcludedFiles = merged.excluded.filter((file) => !baseCoverage.excluded.includes(file));
+      const declaredUnknownFiles = merged.unknown.filter((file) => !baseCoverage.unknown.includes(file));
+      const primary = [...items].sort((a, b) => severityRank(a.severity) - severityRank(b.severity))[0] ?? {};
+      const titleList = titles.length > 0 ? titles : [String(primary.title ?? '')];
+      const explanation = meta.group?.explanation ?? {
+        what: primary.problem ?? '',
+        whyImportant: primary.impact ?? '',
+        evidence: primary.evidence ?? '',
+        uncertainty: categories.includes('contract') ? '契约类问题需确认调用方与兼容策略' : '',
+      };
+      const batch = {
+        id: meta.id ?? `problem-${meta.family ?? 'logic'}`,
+        problemId: '',
+        legacyId: meta.legacyId ?? '',
+        index: 0,
+        order: Math.max(0, Number(meta.order) || 0),
+        phase: meta.group?.phase ?? (meta.kind === 'heuristic' ? (modules.length > 1 ? 'impact' : 'core') : 'core'),
+        title: meta.title ?? meta.group?.title ?? (titleList.length > 1 ? `${titleList[0]}（含 ${titleList.length - 1} 个相关问题）` : (titleList[0] || '未命名问题')),
+        titles: titleList,
         stale: cards.some((card) => card.stale === true),
         staleUnknown: cards.some((card) => card.stale === null),
         lenses: [...new Set(cards.map((card) => card.lens).filter(Boolean))],
         revisions: [...new Set(cards.map((card) => card.revision).filter(Boolean))],
         sources: [...new Set(cards.map((card) => card.runId).filter(Boolean))],
-        severity: problem.severity,
-        category: problem.categories[0] ?? '',
-        explanation: {
-          what: problem.what, whyImportant: problem.whyImportant,
-          evidence: problem.evidence,
-          also: problem.titles.slice(1),
-          uncertainty: problem.categories.includes('contract') ? '契约类问题需确认调用方与兼容策略' : '',
+        severity,
+        category: categories[0] ?? '',
+        explanation: { ...explanation, also: titleList.slice(1) },
+        grouping: {
+          source: meta.source ?? 'heuristic',
+          groupId: meta.group?.id ?? null,
+          rationale: meta.group?.rationale ?? '',
+          decisionPrompt: meta.group?.decisionPrompt ?? '',
+          headSha: groupingRecord?.headSha ?? '',
+          stale: false,
+          ungrouped: meta.ungrouped === true,
         },
-        modules: problem.modules,
+        modules,
         coverage: {
-          files: problem.files, modules: problem.modules,
-          linkedFiles: [...new Set(cards.flatMap((card) => card.linkedFiles ?? []))].filter((file) => !problem.files.includes(file)),
-          categories: problem.categories, findings: problem.findings.length,
-          excluded: [], unknown: [],
+          files, modules, linkedFiles, categories, findings: items.length,
+          reviewed: baseCoverage.reviewed,
+          excluded: merged.excluded,
+          excludedDetails: [
+            ...baseCoverage.excludedDetails,
+            ...declaredExcludedFiles.map((file) => ({ file, reason: '分组 Agent 声明排除' })),
+          ],
+          unknown: merged.unknown,
+          unknownDetails: [
+            ...baseCoverage.unknownDetails,
+            ...declaredUnknownFiles.map((file) => ({ file, reason: '分组 Agent 声明未知' })),
+          ],
         },
         cards,
-        collapsed: (problem.severity === 'minor' && cards.length <= 2) || verifications[problem.id]?.verdict === 'rejected',
-        verification: verifications[problem.id] ?? null,
-        progress: { approved: cards.length - pending, pending },
+        collapsed: meta.group?.collapsed === true && severity === 'minor' && cards.every((card) => card.severity === 'minor'),
+        verification: null,
+        progress: { approved: 0, pending: 0 },
+      };
+      return batch;
+    };
+
+    const batches = [];
+    if (resolved.applied) {
+      for (const [index, group] of resolved.groups.entries()) {
+        batches.push(makeBatch(group.findings, {
+          id: `group:${groupingRecord?.id ?? 'g'}:${group.id}`,
+          source: 'agent', group, order: index,
+        }));
+      }
+      if (resolved.ungroupedFindings.length > 0) {
+        // Findings the grouping agent missed must not disappear: surface them as
+        // an explicit heuristic batch so the coverage gap stays visible.
+        for (const [index, problem] of heuristicProblems(resolved.ungroupedFindings).entries()) {
+          batches.push(makeBatch(problem.findings, {
+            id: `ungrouped:${problem.family}:${index + 1}`,
+            source: 'heuristic', ungrouped: true, kind: 'heuristic',
+            family: problem.family, order: resolved.groups.length + index,
+          }));
+        }
+      }
+    } else {
+      for (const [index, problem] of heuristicProblems(activeFindings).entries()) {
+        batches.push(makeBatch(problem.findings, {
+          id: `problem-${problem.family}-${index + 1}`,
+          source: 'heuristic', kind: 'heuristic', family: problem.family,
+          legacyId: `problem-${index + 1}-${problem.family}`,
+          order: index,
+        }));
+      }
+    }
+
+    for (const batch of batches) {
+      batch.problemId = problemKeyForCards(batch.cards);
+      const record = verifications[batch.problemId] ?? (batch.legacyId ? verifications[batch.legacyId] : null) ?? null;
+      batch.verification = normalizeVerificationRecord(record);
+      if (batch.verification?.verdict === 'rejected') batch.collapsed = true;
+      else if (batch.severity === 'minor' && batch.cards.length <= 2) batch.collapsed = true;
+      batch.progress = {
+        approved: batch.cards.filter((card) => card.decision === 'approved').length,
+        resolved: batch.cards.filter((card) => card.decision === 'resolved').length,
+        pending: batch.cards.filter((card) => card.decision === 'pending').length,
       };
     }
-    return problems.map((problem) => problem.batch).sort((a, b) =>
-      (rank[a.severity] ?? 2) - (rank[b.severity] ?? 2) || a.modules.join().localeCompare(b.modules.join()) || a.index - b.index);
+
+    const grouping = {
+      version: 2,
+      source: resolved.applied ? 'agent' : 'heuristic',
+      applied: resolved.applied,
+      status: groupingRecord?.status ?? 'none',
+      error: groupingRecord?.error ? String(groupingRecord.error).slice(0, 500) : null,
+      reason: resolved.reason,
+      stale: Boolean(groupingRecord && resolved.reason === 'findings-changed'),
+      hasGrouping: Boolean(groupingRecord),
+      headSha: currentHead,
+      groupingId: groupingRecord?.id ?? null,
+      groupingHeadSha: groupingRecord?.headSha ?? '',
+      generatedAt: groupingRecord?.generatedAt ?? null,
+      notes: groupingRecord?.notes ? String(groupingRecord.notes).slice(0, 1000) : '',
+      unknownKeys: Array.isArray(groupingRecord?.unknownKeys) ? groupingRecord.unknownKeys.slice(0, 20) : [],
+      signature: resolved.signature,
+      findings: findings.length,
+      activeFindings: activeFindings.length,
+      supersededCliFindings: effective.superseded,
+      groups: resolved.groups.length,
+      ungroupedFindings: resolved.ungroupedFindings.length,
+      batches: batches.length,
+    };
+    for (const batch of batches) batch.grouping.stale = grouping.stale;
+
+    batches.sort((a, b) =>
+      severityRank(a.severity) - severityRank(b.severity)
+      || a.order - b.order
+      || a.modules.join().localeCompare(b.modules.join())
+      || a.title.localeCompare(b.title));
+    for (const [index, batch] of batches.entries()) batch.index = index + 1;
+
+    const declaredCoverage = resolved.applied
+      ? resolved.declaredCoverage
+      : (groupingRecord?.coverage && typeof groupingRecord.coverage === 'object' ? groupingRecord.coverage : null);
+    const coverage = buildProjectCoverage({ batches, headSha: currentHead, evidence, declaredCoverage });
+    const convergence = planReReview({
+      batches,
+      jobs: [...evidence.latestByFile.values()],
+      headSha: currentHead,
+      maxFiles: normalizeConvergeMax(readCiReviewConfig(root).convergeMaxFiles, 3),
+    });
+    return {
+      batches,
+      grouping,
+      coverage: { ...coverage, grouping, convergence, findings: { total: findings.length, active: activeFindings.length, supersededCli: effective.superseded } },
+    };
   }
 
   const vscodeBridge = { connected: false, workspaceRoot: '', updatedAt: null, buffers: {} };
@@ -2014,105 +2212,167 @@ export function apply(ctx, config = {}) {
     const dir = path.join(root, '.review', 'ci-review');
     fs.mkdirSync(dir, { recursive: true });
     const temp = `${verificationsPath(root)}.tmp-${process.pid}-${Date.now()}`;
-    fs.writeFileSync(temp, `${JSON.stringify({ version: 1, byProblem }, null, 2)}\n`, 'utf8');
+    fs.writeFileSync(temp, `${JSON.stringify({ version: 2, byProblem }, null, 2)}\n`, 'utf8');
     fs.renameSync(temp, verificationsPath(root));
     return byProblem;
   }
 
-  function verificationPrompt(problem) {
-    return [
-      '你是独立问题验证子代理（另一个上下文，不是原始评审者）。请只读验证下面这个代码问题是否真实成立，不要修改任何文件。',
-      '',
-      '问题（JSON）：',
-      JSON.stringify({
-        file: problem.file,
-        startLine: problem.startLine,
-        severity: problem.severity,
-        category: problem.category,
-        title: problem.title,
-        problem: problem.problem,
-        evidence: problem.evidence,
-      }, null, 2),
-      '',
-      '验证要求：',
-      '1. 打开该文件与相关调用方，确认问题是否可复现；检查是否有反证（上游校验、调用约束、测试覆盖）。',
-      '2. 只输出一个 JSON 对象（不要 markdown 围栏），字段：',
-      '{"verdict":"confirmed|rejected|uncertain","reason":"中文理由","evidenceFor":["..."],"evidenceAgainst":["..."],"callSites":["file:line"],"confidence":"low|medium|high"}',
-      '3. rejected 必须给出明确反证；uncertain 必须说明缺什么信息。',
-    ].join('\n');
-  }
-
+  /**
+   * Multi-verifier verification: N independent-context verifiers with different
+   * stances vote on the problem. A 3-verifier run needs 2 matching votes; the
+   * record also carries per-verifier evidence and a severity vote.
+   */
   async function startVerification({ project, problem, parent, subagents }) {
+    const key = String(problem.problemKey ?? problem.problemId ?? problem.id ?? '');
+    if (!key) return { ok: false, message: '缺少问题标识' };
+    const config = readCiReviewConfig(project.root);
+    // The verifier count is a server-side policy; a client must not be able to
+    // downgrade "multi-verifier voting" to a single vote via the request body.
+    const count = normalizeVerifierCount(config.verifiers, 3);
+    const stances = verifierStances(count);
+    const minVotes = Math.min(2, count);
     const taskId = `verify-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomBytes(3).toString('hex')}`;
-    const record = {
-      id: taskId,
-      problemId: String(problem.id ?? ''),
+    const byProblem = readVerifications(project.root);
+    const previous = normalizeVerificationRecord(byProblem[key]);
+    if (previous?.status === 'running') {
+      return { ok: false, message: '该问题已有验证在运行，请等待完成后再试' };
+    }
+    const verifierEntries = stances.map((stance, index) => ({
+      id: `${taskId}-v${index + 1}`,
+      runId: taskId,
+      stance: stance.id,
       status: 'running',
       verdict: null,
-      reason: null,
+      severity: null,
+      reason: '',
+      confidence: null,
       startedAt: new Date().toISOString(),
       finishedAt: null,
       childId: null,
+    }));
+    const startedAt = new Date().toISOString();
+    const record = {
+      version: 2,
+      id: taskId,
+      problemId: key,
+      status: 'running',
+      verdict: null,
+      confidence: 'low',
+      gradedSeverity: SEVERITIES.includes(problem.severity) ? problem.severity : null,
+      votes: { confirmed: 0, rejected: 0, uncertain: 0, pending: count, failed: 0, total: count },
+      verifiers: verifierEntries,
+      startedAt,
+      finishedAt: null,
+      childId: null,
+      history: [...(previous?.history ?? []), { id: taskId, startedAt, verifiers: count }],
     };
-    const byProblem = readVerifications(project.root);
-    byProblem[record.problemId] = { ...record, history: [...(byProblem[record.problemId]?.history ?? []), record] };
+    byProblem[key] = record;
     writeVerifications(project.root, byProblem);
-    try {
-      const activation = await subagents.startActivation({
-        provider: 'spawn',
-        label: `verify ${taskId}`,
-        name: `verify-${taskId.slice(-6)}`,
-        prompt: [{ type: 'text', text: verificationPrompt(problem) }],
-        parent,
-        cwd: project.root,
-        signal: AbortSignal.timeout(15 * 60 * 1000),
-        delivery: 'caller',
-      });
-      byProblem[record.problemId] = { ...byProblem[record.problemId], childId: activation.childId };
-      writeVerifications(project.root, byProblem);
-      activation.result
-        .then((result) => {
-          const report = parseAgentReport(result);
-          const entry = {
-            ...byProblem[record.problemId],
-            status: 'completed',
-            verdict: ['confirmed', 'rejected', 'uncertain'].includes(report?.verdict) ? report.verdict : 'uncertain',
-            reason: String(report?.reason ?? report?.summary ?? '').slice(0, 2000),
-            evidenceFor: report?.evidenceFor ?? [],
-            evidenceAgainst: report?.evidenceAgainst ?? [],
-            callSites: report?.callSites ?? [],
-            confidence: report?.confidence ?? null,
-            finishedAt: new Date().toISOString(),
-          };
-          const latest = readVerifications(project.root);
-          latest[record.problemId] = entry;
-          writeVerifications(project.root, latest);
-          snapshotCache.delete(project.id);
-          if (entry.verdict === 'confirmed' && problem.severity === 'minor'
-            && readCiReviewConfig(project.root).autoFixMinor === true) {
-            void startAutoFix({
-              project, parent, subagents, source: 'verification',
-              problem: {
-                id: problem.id, problemId: problem.id, file: problem.file, startLine: problem.startLine,
-                severity: problem.severity, title: problem.title, problem: problem.problem,
-              },
-            });
-          }
-        })
-        .catch((error) => {
-          const latest = readVerifications(project.root);
-          latest[record.problemId] = { ...latest[record.problemId], status: 'failed', error: String(error?.message ?? error), finishedAt: new Date().toISOString() };
-          writeVerifications(project.root, latest);
-          snapshotCache.delete(project.id);
-        });
-      snapshotCache.delete(project.id);
-      return { ok: true, verification: byProblem[record.problemId] };
-    } catch (error) {
+    snapshotCache.delete(project.id);
+
+    const updateVerifier = (index, patch) => {
       const latest = readVerifications(project.root);
-      latest[record.problemId] = { ...latest[record.problemId], status: 'failed', error: String(error?.message ?? error) };
+      const current = latest[key];
+      // A newer verification run may have replaced this record while our
+      // verifiers were running; stale results must not leak into the new run.
+      if (!current || current.id !== taskId) return normalizeVerificationRecord(current ?? record);
+      const verifiers = Array.isArray(current.verifiers) ? [...current.verifiers] : [];
+      verifiers[index] = sanitizeVerifier({ ...(verifiers[index] ?? verifierEntries[index]), ...patch });
+      const settled = verifiers.every((verifier) => verifier && verifier.status !== 'running');
+      const allFailed = verifiers.length > 0 && verifiers.every((verifier) => verifier && verifier.status === 'failed');
+      const aggregate = aggregateVotes(verifiers, { minVotes, fallbackSeverity: problem.severity });
+      const next = {
+        ...current,
+        verifiers,
+        votes: aggregate.votes,
+        verdict: aggregate.verdict,
+        confidence: aggregate.confidence,
+        gradedSeverity: aggregate.gradedSeverity,
+        agreement: aggregate.agreement,
+        quorum: aggregate.quorum,
+        reason: aggregate.reason,
+        status: settled ? (allFailed ? 'failed' : 'completed') : 'running',
+        finishedAt: settled ? new Date().toISOString() : null,
+      };
+      latest[key] = next;
       writeVerifications(project.root, latest);
-      return { ok: false, message: String(error?.message ?? error) };
+      snapshotCache.delete(project.id);
+      return next;
+    };
+
+    const maybeAutoFix = async (verification) => {
+      if (!verification || verification.status !== 'completed' || verification.verdict !== 'confirmed') return;
+      if (problem.severity !== 'minor' || !problem.file) return;
+      if (config.autoFixMinor !== true) return;
+      const latest = readVerifications(project.root);
+      const current = latest[key];
+      if (!current || current.id !== taskId || current.autoFixTriggered) return;
+      const result = await startAutoFix({
+        project, parent, subagents, source: 'verification',
+        problem: {
+          id: problem.id, problemId: problem.problemId ?? key, file: problem.file, startLine: problem.startLine,
+          severity: problem.severity, title: problem.title, problem: problem.problem,
+        },
+      });
+      if (!result?.ok) return;
+      const after = readVerifications(project.root);
+      if (after[key] && after[key].id === taskId) {
+        after[key] = { ...after[key], autoFixTriggered: true };
+        writeVerifications(project.root, after);
+      }
+    };
+
+    for (const [index, stance] of stances.entries()) {
+      try {
+        const activation = await subagents.startActivation({
+          provider: 'spawn',
+          label: `verify v${index + 1}/${count} ${problem.file}`,
+          name: `verify-${taskId.slice(-6)}-${stance.id.slice(0, 6)}`,
+          prompt: [{ type: 'text', text: verifierPrompt(problem, stance, index + 1, count) }],
+          parent,
+          cwd: project.root,
+          signal: AbortSignal.timeout(15 * 60 * 1000),
+          delivery: 'caller',
+        });
+        updateVerifier(index, { childId: activation.childId });
+        activation.result
+          .then((result) => {
+            const report = parseAgentReport(result);
+            const next = updateVerifier(index, {
+              status: 'completed',
+              verdict: VERDICTS.includes(report?.verdict) ? report.verdict : 'uncertain',
+              severity: report?.severity,
+              reason: String(report?.reason ?? report?.summary ?? '').slice(0, 2000),
+              evidenceFor: report?.evidenceFor,
+              evidenceAgainst: report?.evidenceAgainst,
+              callSites: report?.callSites,
+              confidence: report?.confidence,
+              finishedAt: new Date().toISOString(),
+            });
+            void maybeAutoFix(next);
+          })
+          .catch((error) => {
+            updateVerifier(index, {
+              status: 'failed',
+              error: String(error?.message ?? error),
+              reason: '验证子代理失败',
+              finishedAt: new Date().toISOString(),
+            });
+          });
+      } catch (error) {
+        updateVerifier(index, {
+          status: 'failed',
+          error: String(error?.message ?? error),
+          reason: '验证子代理启动失败',
+          finishedAt: new Date().toISOString(),
+        });
+      }
     }
+    const stored = normalizeVerificationRecord(readVerifications(project.root)[key] ?? record) ?? record;
+    if (stored.status === 'failed') {
+      return { ok: false, message: stored.reason || '所有验证者均失败，可重试', verification: stored, verifiers: count };
+    }
+    return { ok: true, verification: stored, verifiers: count, votes: stored.votes ?? record.votes };
   }
 
   async function resolveVerificationParent(project) {
@@ -2217,18 +2477,10 @@ export function apply(ctx, config = {}) {
   }
 
   function agentJobFindings(root) {
-    const jobs = readReviewJobs(root);
     // Only the newest completed job per file is authoritative; older jobs were
     // reviewed against a previous revision. Archive them so their evidence is
     // still traceable instead of silently disappearing.
-    const latestByFile = new Map();
-    const superseded = [];
-    for (const job of jobs) {
-      if (!job || job.status !== 'completed' || !job.results) continue;
-      if (!latestByFile.has(job.file)) latestByFile.set(job.file, job);
-      else superseded.push(job);
-    }
-    archiveSuperseded(root, superseded);
+    const { latestByFile } = latestCompletedJobs(root);
     const seen = new Set();
     const out = [];
     for (const job of latestByFile.values()) {
@@ -2259,6 +2511,129 @@ export function apply(ctx, config = {}) {
       }
     }
     return out.slice(0, 300);
+  }
+
+  /**
+   * Start the grouping subagent: it decides how many logical review stages the
+   * current findings form (instead of a fixed-size heuristic). The result is
+   * stored per HEAD in groupings.json and consumed by buildReviewProblems.
+   */
+  const GROUPING_TIMEOUT_MS = 8 * 60 * 1000;
+
+  async function startGrouping({ project, findings, parent, subagents, force = false }) {
+    const headSha = tryGit(project.root, ['rev-parse', 'HEAD']) || '';
+    const key = headSha || 'unknown';
+    const existing = readGroupings(project.root)[key];
+    if (existing?.status === 'running') {
+      const age = Date.now() - Date.parse(existing.startedAt ?? '');
+      if (!force && Number.isFinite(age) && age < GROUPING_TIMEOUT_MS) {
+        return { ok: false, message: `该 HEAD 的分组子代理仍在运行（已 ${Math.round(age / 1000)}s），请等待完成或稍后强制重新分组` };
+      }
+      // A crashed/restarted Host or an over-long prompt leaves a stale running
+      // record; mark it failed so the panel can retry instead of looking "connected".
+      writeGroupings(project.root, {
+        ...readGroupings(project.root),
+        [key]: {
+          ...existing,
+          status: 'failed',
+          error: existing.childId ? '分组子代理超时或连接中断，可重新分组' : '分组子代理启动中断，可重新分组',
+          finishedAt: new Date().toISOString(),
+        },
+      });
+    }
+    const taskId = `grouping-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomBytes(3).toString('hex')}`;
+    const record = {
+      id: taskId,
+      version: 2,
+      headSha,
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      generatedAt: null,
+      finishedAt: null,
+      findings: findings.length,
+      signature: findingsSignature(findings),
+      groups: [],
+      coverage: { excluded: [], unknown: [] },
+      notes: '',
+      childId: null,
+    };
+    writeGroupings(project.root, { ...readGroupings(project.root), [key]: record });
+    const files = listProjectFiles(project.root, 400);
+    const modules = [...new Set(findings.map((finding) => String(finding.file ?? '').split('/').slice(0, -1).join('/') || '.'))];
+    try {
+      const activation = await subagents.startActivation({
+        provider: 'spawn',
+        label: `group ${project.name}`,
+        name: `group-${String(taskId).slice(-6)}`,
+        prompt: [{ type: 'text', text: groupingPrompt({ findings, files, modules, headSha }) }],
+        parent,
+        cwd: project.root,
+        signal: AbortSignal.timeout(GROUPING_TIMEOUT_MS),
+        delivery: 'caller',
+      });
+      const withChild = { ...record, childId: activation.childId };
+      // Re-read before writing: another grouping/HEAD may have been recorded
+      // while startActivation was awaiting.
+      writeGroupings(project.root, { ...readGroupings(project.root), [key]: withChild });
+      activation.result
+        .then((result) => {
+          const latest = readGroupings(project.root);
+          // A forced/retried grouping may have replaced this record; never let
+          // the older child overwrite the newer one.
+          if (latest[key]?.id !== withChild.id) return;
+          const report = parseAgentReport(result);
+          const normalized = normalizeAgentGrouping(report, {
+            findingKeys: new Set(keyFindings(findings).map((entry) => entry.key)),
+          });
+          if (!Array.isArray(normalized.groups) || normalized.groups.length === 0) {
+            writeGroupings(project.root, {
+              ...latest,
+              [key]: {
+                ...withChild,
+                status: 'failed',
+                error: '分组子代理返回空/无法解析的结果（已回退启发式分组），请重试',
+                finishedAt: new Date().toISOString(),
+              },
+            });
+            snapshotCache.delete(project.id);
+            return;
+          }
+          const done = {
+            ...withChild,
+            status: 'completed',
+            generatedAt: new Date().toISOString(),
+            finishedAt: new Date().toISOString(),
+            groups: normalized.groups,
+            coverage: normalized.coverage,
+            notes: normalized.notes,
+            unknownKeys: normalized.unknownKeys.slice(0, 50),
+            signature: findingsSignature(findings),
+            findings: findings.length,
+          };
+          writeGroupings(project.root, { ...latest, [key]: done });
+          snapshotCache.delete(project.id);
+        })
+        .catch((error) => {
+          const latest = readGroupings(project.root);
+          if (latest[key]?.id !== withChild.id) return;
+          writeGroupings(project.root, {
+            ...latest,
+            [key]: {
+              ...(latest[key] ?? withChild),
+              status: 'failed',
+              error: String(error?.message ?? error),
+              finishedAt: new Date().toISOString(),
+            },
+          });
+          snapshotCache.delete(project.id);
+        });
+      snapshotCache.delete(project.id);
+      return { ok: true, grouping: withChild };
+    } catch (error) {
+      const latest = readGroupings(project.root);
+      writeGroupings(project.root, { ...latest, [key]: { ...record, status: 'failed', error: String(error?.message ?? error) } });
+      return { ok: false, message: String(error?.message ?? error) };
+    }
   }
 
   function reviewLensPrompt(file, lens) {
@@ -2334,6 +2709,44 @@ export function apply(ctx, config = {}) {
     }
     snapshotCache.delete(project.id);
     return job;
+  }
+
+  /**
+   * Convergence loop: find the stale/unknown batches, order their files by
+   * severity and re-review the first N files at HEAD. Freshness is proven only
+   * by a completed review job whose headSha equals the current HEAD.
+   */
+  async function startConvergence({ project, findings, parent, subagents, maxFiles, lenses, dryRun = false }) {
+    const headSha = tryGit(project.root, ['rev-parse', 'HEAD']) || '';
+    const config = readCiReviewConfig(project.root);
+    const problems = buildReviewProblems(project.root, findings);
+    const configuredMax = normalizeConvergeMax(config.convergeMaxFiles, 3);
+    // The client may request fewer files but never more than the configured cap.
+    const effectiveMax = Math.max(1, Math.min(normalizeConvergeMax(maxFiles, configuredMax), configuredMax, 10));
+    const plan = planReReview({
+      batches: problems.batches,
+      jobs: [...reviewEvidenceFor(project.root, headSha).latestByFile.values()],
+      headSha,
+      maxFiles: effectiveMax,
+    });
+    const base = { ok: true, plan, grouping: problems.grouping };
+    if (dryRun || plan.files.length === 0) return { ...base, started: false, jobs: [] };
+    const allowed = ['intent', 'correctness', 'errors', 'security', 'concurrency', 'data', 'contract', 'tests'];
+    const requested = Array.isArray(lenses) && lenses.length > 0
+      ? lenses
+      : (Array.isArray(config.convergeLenses) ? config.convergeLenses : ['correctness', 'errors', 'security']);
+    const selected = requested.filter((lens) => allowed.includes(lens)).slice(0, 5);
+    const lensList = selected.length > 0 ? selected : ['correctness', 'errors'];
+    const jobs = [];
+    for (const entry of plan.files) {
+      try {
+        jobs.push(await startReviewJob({ project, file: entry.file, lenses: lensList, parent, subagents }));
+      } catch (error) {
+        jobs.push({ file: entry.file, error: String(error?.message ?? error) });
+      }
+    }
+    snapshotCache.delete(project.id);
+    return { ...base, started: true, jobs, lenses: lensList };
   }
 
   function readCiReviewConfig(root) {
@@ -2458,7 +2871,7 @@ export function apply(ctx, config = {}) {
     return audit;
   }
 
-  function auditPrompt({ batches, files, findingsCount }) {
+  function auditPrompt({ batches, files, findingsCount, grouping = null, coverage = null }) {
     const summary = batches.map((batch) => {
       const decisions = { pending: 0, approved: 0, 'needs-revision': 0, ignored: 0, resolved: 0 };
       for (const card of batch.cards || []) decisions[card.decision] = (decisions[card.decision] || 0) + 1;
@@ -2466,6 +2879,7 @@ export function apply(ctx, config = {}) {
         id: batch.problemId,
         title: String(batch.title ?? '').slice(0, 140),
         severity: batch.severity,
+        phase: batch.phase,
         stale: Boolean(batch.stale),
         staleUnknown: Boolean(batch.staleUnknown),
         lenses: batch.lenses,
@@ -2473,15 +2887,21 @@ export function apply(ctx, config = {}) {
         cards: (batch.cards || []).length,
         decisions,
         verification: batch.verification?.verdict ?? null,
+        votes: batch.verification?.votes ?? null,
         collapsed: Boolean(batch.collapsed),
+        groupingSource: batch.grouping?.source ?? 'heuristic',
         files: [...new Set((batch.cards || []).map((card) => card.file))].slice(0, 10),
         linkedFiles: (batch.coverage?.linkedFiles || []).slice(0, 10),
+        excluded: (batch.coverage?.excluded || []).slice(0, 5),
+        unknown: (batch.coverage?.unknown || []).slice(0, 5),
       };
     });
     return [
       '你是推送前完整性审计子代理（独立上下文）。已有审阅批次摘要和仓库文件清单如下，请审计是否存在遗漏或覆盖不足。',
       '',
       `原始 findings 数量：${findingsCount}；批次总数：${summary.length}（下方为全部批次，未截断批次列表）。`,
+      `分组来源：${grouping?.source ?? 'heuristic'}（${grouping?.source === 'agent' ? 'Agent 逻辑阶段' : '启发式回退'}）；批次阶段分布由 phase 字段给出。`,
+      `覆盖概况：stale=${coverage?.staleBatches ?? '?'} / unknown=${coverage?.staleUnknownBatches ?? '?'} / excluded=${coverage?.excludedFiles ?? '?'} / unknownFiles=${coverage?.unknownFiles ?? '?'}。`,
       '批次摘要（JSON）：',
       JSON.stringify(summary),
       '',
@@ -2489,17 +2909,28 @@ export function apply(ctx, config = {}) {
       JSON.stringify(files.slice(0, 120)),
       '',
       '审计要求：',
-      '1. 判断：是否有明显未被任何批次覆盖的高风险文件/模块；是否有 findings 未进入批次；批次说明是否缺少关键牵涉面。',
+      '1. 判断：是否有明显未被任何批次覆盖的高风险文件/模块；是否有 findings 未进入批次；批次说明是否缺少关键牵涉面；coverage.excluded/unknown 是否还有遗漏。',
       '2. 只输出一个 JSON 对象（不要 markdown 围栏）：',
-      '{"verdict":"complete|gaps","gaps":[{"kind":"missing-files|uncovered-findings|weak-batches","detail":"中文说明","files":["..."]}],"notes":"一段中文总结"}',
+      '{"verdict":"complete|gaps","gaps":[{"kind":"missing-files|uncovered-findings|weak-batches|coverage-holes","detail":"中文说明","files":["..."]}],"notes":"一段中文总结"}',
       '3. 不要修改任何文件；没有把握时用 gaps 并说明不确定点。',
     ].join('\n');
   }
 
   async function startAudit({ project, parent, subagents }) {
     const findings = [...agentJobFindings(project.root), ...readFindings(project.root)];
-    const batches = buildReviewProblems(project.root, findings);
+    const problems = buildReviewProblems(project.root, findings);
+    const activeFindingsCount = problems.coverage.findings?.active ?? findings.length;
+    const batches = problems.batches;
     const files = listProjectFiles(project.root, 400);
+    const coverageSummary = {
+      headSha: problems.coverage.headSha,
+      freshBatches: problems.coverage.freshBatches,
+      staleBatches: problems.coverage.staleBatches,
+      staleUnknownBatches: problems.coverage.staleUnknownBatches,
+      excludedFiles: problems.coverage.excludedFiles,
+      unknownFiles: problems.coverage.unknownFiles,
+      supersededCliFindings: problems.coverage.findings?.supersededCli ?? 0,
+    };
     const record = {
       status: 'running',
       startedAt: new Date().toISOString(),
@@ -2508,7 +2939,9 @@ export function apply(ctx, config = {}) {
       gaps: [],
       notes: '',
       batches: batches.length,
-      findings: findings.length,
+      findings: activeFindingsCount,
+      grouping: problems.grouping,
+      coverage: coverageSummary,
     };
     writeAudit(project.root, record);
     try {
@@ -2516,7 +2949,7 @@ export function apply(ctx, config = {}) {
         provider: 'spawn',
         label: `audit ${project.name}`,
         name: `audit-${String(project.id).slice(-6)}-${randomBytes(2).toString('hex')}`,
-        prompt: [{ type: 'text', text: auditPrompt({ batches, files, findingsCount: findings.length }) }],
+        prompt: [{ type: 'text', text: auditPrompt({ batches, files, findingsCount: activeFindingsCount, grouping: problems.grouping, coverage: coverageSummary }) }],
         parent,
         cwd: project.root,
         signal: AbortSignal.timeout(15 * 60 * 1000),
@@ -2564,6 +2997,9 @@ export function apply(ctx, config = {}) {
     const changedPaths = Array.isArray(github.pr?.files) ? github.pr.files : [];
     const files = summary.exists ? priorityFiles(project.root, findings, annotations, changedPaths) : [];
     const repoUrl = summary.repo ? `https://github.com/${summary.repo}` : null;
+    const problems = summary.exists
+      ? buildReviewProblems(project.root, findings)
+      : { batches: [], grouping: null, coverage: null };
     return {
       ok: true,
       generatedAt: new Date().toISOString(),
@@ -2585,7 +3021,9 @@ export function apply(ctx, config = {}) {
         };
       })(),
       audit: summary.exists ? readAudit(project.root) : null,
-      reviewBatches: summary.exists ? buildReviewProblems(project.root, findings) : [],
+      reviewBatches: problems.batches,
+      reviewGrouping: problems.grouping,
+      reviewCoverage: problems.coverage,
       annotations,
       agentTasks: summary.exists ? readTasks(project.root) : [],
       capabilities: {
@@ -2601,6 +3039,7 @@ export function apply(ctx, config = {}) {
         prNumber: github.pr?.number ?? null,
         headSha: github.pr?.headSha ?? null,
         actions: github.actions ?? null,
+        verifiers: normalizeVerifierCount(readCiReviewConfig(project.root).verifiers, 3),
       },
       links: { base: ROUTE },
     };
@@ -3473,11 +3912,61 @@ export function apply(ctx, config = {}) {
       if (!project) return sendError(res, 404, 'unknown project');
       const body = await readJsonBody(req);
       const problem = body?.problem;
-      if (!problem || !problem.id || !problem.file) return sendJson(res, 200, { ok: false, message: '缺少 problem 信息' });
+      const problemKey = String(problem?.problemKey ?? problem?.problemId ?? problem?.id ?? '');
+      if (!problem || !problemKey || !problem.file) return sendJson(res, 200, { ok: false, message: '缺少 problem 信息' });
       const { parent, subagents } = await resolveVerificationParent(project);
       if (!parent || !subagents) return sendJson(res, 200, { ok: false, message: '没有可用在线会话，无法启动验证子代理' });
-      const result = await startVerification({ project, problem, parent, subagents });
-      return sendJson(res, 200, result);
+      try {
+        const result = await startVerification({
+          project,
+          problem: { ...problem, problemKey },
+          parent,
+          subagents,
+        });
+        return sendJson(res, 200, result);
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: String(error?.message ?? error) });
+      }
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/review-problems/group`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      // Read the body before any await: request bodies are single-shot streams.
+      const body = await readJsonBody(req);
+      const rawFindings = [...agentJobFindings(project.root), ...readFindings(project.root)];
+      const headSha = tryGit(project.root, ['rev-parse', 'HEAD']) || '';
+      const effective = effectiveFindings(rawFindings, reviewEvidenceFor(project.root, headSha));
+      if (effective.findings.length === 0) return sendJson(res, 200, { ok: false, message: '还没有候选 findings 可分组：先做多视角评审' });
+      const { parent, subagents } = await resolveVerificationParent(project);
+      if (!parent || !subagents) return sendJson(res, 200, { ok: false, message: '没有可用在线会话，无法启动分组子代理' });
+      try {
+        const result = await startGrouping({ project, findings: effective.findings, parent, subagents, force: Boolean(body?.force) });
+        return sendJson(res, 200, result);
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: String(error?.message ?? error) });
+      }
+    }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/review-job/converge`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const body = await readJsonBody(req);
+      const findings = [...agentJobFindings(project.root), ...readFindings(project.root)];
+      const dryRun = body?.start === false;
+      if (dryRun) {
+        const plan = await startConvergence({ project, findings, parent: null, subagents: null, maxFiles: body?.maxFiles, dryRun: true });
+        return sendJson(res, 200, plan);
+      }
+      const { parent, subagents } = await resolveVerificationParent(project);
+      if (!parent || !subagents) return sendJson(res, 200, { ok: false, message: '没有可用在线会话，无法启动重审子代理' });
+      try {
+        const result = await startConvergence({
+          project, findings, parent, subagents,
+          maxFiles: body?.maxFiles, lenses: body?.lenses, dryRun: false,
+        });
+        return sendJson(res, 200, result);
+      } catch (error) {
+        return sendJson(res, 200, { ok: false, message: String(error?.message ?? error) });
+      }
     }
     if (req.method === 'POST' && url.pathname === `${ROUTE}/api/review-job/start`) {
       const project = findProject(url.searchParams.get('projectId') ?? '');

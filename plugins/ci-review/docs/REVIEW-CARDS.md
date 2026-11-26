@@ -40,36 +40,51 @@ ReviewProblem（值得用户决策的问题）
 Decision：approve（→ 待修复队列）/ needs-revision（→ Agent 任务）/ ignore（必须写理由）
 ```
 
-数据（v2 初版）：
+数据（v2，2026-11-23 收口；实现于 `plugins/ci-review/lib/review-model.mjs` + `index.js`）：
 
 ```json
 ReviewProblem {
-  id, title, severity, category,
+  id, title, severity, gradedSeverity, category,
   explanation: { what, whyImportant, evidence, unaffected, uncertainty },
-  votes: { real, reject, human }, lenses: [], confidence,
+  votes: { confirmed, rejected, uncertain, pending, total }, lenses: [], confidence,
+  verifiers: [{ id, stance, verdict, severity, confidence, reason, evidenceFor[], evidenceAgainst[], callSites[] }],
   modules: ["lib", "client"], blastRadius: { files, callers, behavior, compatibility },
   autoFixable: bool, state: 'user-decision'|'queued-for-fix'|'fixed'|'ignored'
 }
 ReviewBatch { id, problemId, phase: 'core'|'impact'|'verification'|'contract',
-  title, explanation, decisionPrompt, cards: [Card], coverage: {modules, files, excluded, unknown}, collapsed: bool }
+  title, explanation, decisionPrompt, rationale, grouping: {source:'agent'|'heuristic'},
+  cards: [Card],
+  coverage: { modules, files, reviewed[], excluded[], excludedDetails[], unknown[], unknownDetails[], linkedFiles[] },
+  collapsed: bool }
 ReviewCard { id, kind, location:{file,startLine,endLine}, excerpt:{from,to,lines,whySufficient},
   claim, evidence, impact, decisionOptions[], boundaries, confidence, links }
 Decision { problemId/batchId/cardId, status, reason, decidedAt }
 ```
 
+**投票规则**：N 个独立验证者（默认 3，`ciReview.verifiers` 1–5，**服务端策略**，请求体不能降级），不同立场（反证/调用方与测试/证据复现/回归历史/影响分级）。只有 `status=completed` 且带有效 verdict 的验证者计票；`running`/`failed` 进 `pending`/`failed`，不会提前产生结论。多数票（> N/2）决定 `confirmed|rejected`；全部 settled 且无多数才算 `uncertain`；置信度 high=全票、medium=多数、low=单票或分歧。`gradedSeverity` 只在 confirmed 时按确认者的 severity 票取多数（同票取更严重）。同一问题已有验证在运行时，重复请求被拒绝；迟到的旧 run 结果按 runId 丢弃；全部失败记 `status=failed`（可重试），不伪装成 completed。
+
+**分组规则**：Agent 分组子代理接收全部 findings（稳定 key）+ 文件清单，输出逻辑审阅阶段（phase）与每批 `findingKeys`；批次数量由 Agent 决定。分组按「当前 findings 内容签名」与 HEAD 持久化，findings 集合变化时分组标记过期并回退启发式；未被任何分组覆盖的 findings 进入显式「未分组回退」批次，不会丢失。
+
+**覆盖规则**：`reviewed` 仅认「已完成且 headSha === 当前 HEAD」的评审任务；`excluded` 来自最近 review scope 的 `excludeReason`（binary/unsupported/too_large/secret/...）或分组 Agent 声明；`unknown` 是相关文件没有 HEAD 证据（旧 revision、无 revision 的 CLI run、牵涉文件未验证）。三者互斥（reviewed 的文件不会再记为 unknown）。项目级摘要额外给出 fresh/excluded/unknown 文件数与 stale/staleUnknown 批次数。**CLI findings 没有 revision**：同一文件一旦有 HEAD 的完成评审任务，旧的 CLI findings 视为被取代（计数 `supersededCliFindings`），不再制造永久 unknown。
+
+**收敛规则**：只有当前 HEAD 的评审任务算新鲜。`convergence` 给出总批次/旧代码/出处未知/新鲜/待重审文件（按严重度、stale 卡片数排序；单次上限取 `ciReview.convergeMaxFiles` 与请求值的较小者，硬上限 10），一键启动后台重审；新任务完成后最新任务覆盖旧任务，旧任务归档到 `superseded.json`。非 git/无法证明 HEAD 时 `plan.reason='no-head'`、不启动任务，面板显示「无法证明当前 HEAD」。
+
+**批次定级约束**：批次 severity 取「Agent 声明」与「本批最严重卡片」中更严重者；`collapsed=true` 仅在全部卡片均为 minor 时生效——Agent 输出不能把 blocker 藏在折叠的 minor 批次里。
+
+**分组状态**：`groupings.json` 按 HEAD 保存 `running|completed|failed`；running 时面板禁用重复启动，failed 暴露 error 并回退启发式；findings 集合变化（签名失配）→ `stale=true` 回退启发式并提示重新分组；未分组 findings 进入显式「未分组回退」批次。
+
+
 ## 3. Agent 侧流程
 
 1. **多视角独立评审**：按 lens 起独立上下文 reviewer，互不可见地产出候选（位置/证据/影响/置信度）。
 2. **独立验证（反驳）**：每个候选起独立 verifier，检查调用方、复现路径、测试、契约，给出成立/不成立/需人工。
-3. **投票与定级**：votes 决定 severity/confidence；分歧大→“需人工判断”问题。
+3. **多验证者独立投票与定级**：每个候选起 N（默认 3）个独立上下文验证者（不同立场：反证 / 调用方与测试 / 证据复现 / 回归历史 / 影响分级），各自给出 `confirmed|rejected|uncertain` + 证据 + 建议 severity；多数票决定结论与置信度，severity 票决定 `gradedSeverity`；分歧大/未达多数→“需人工判断”问题。
 4. **自动修复小问题**：可自动修复的 minor 直接进入修复任务（统一 diff + gate），不推给用户；用户只看突出问题和关键决策。
 5. **聚类成 Problem**：同一根因跨位置/视角合并；记录来源 lens、票数、finding 指纹、原始 run。
-6. **写卡（数量由 Agent 决定）**：
-   - 每卡必须有精确位置、最小必要源码上下文（说明为什么这段就够）、证据、决策选项与后果、**明确边界**、置信度；
-   - evidence/counter-evidence 卡必须包含反证与未知，不得只呈现支持结论的信息。
+6. **Agent 决定批次 + 写卡**：写卡前由分组子代理把全部 findings 组织成逻辑审阅阶段（`phase`），批次数量由 Agent 决定，不做物理分页；未被分组覆盖的 findings 必有回退批次。每卡必须有精确位置、最小必要源码上下文（说明为什么这段就够）、证据、决策选项与后果、**明确边界**、置信度；evidence/counter-evidence 卡必须包含反证与未知，不得只呈现支持结论的信息。
 7. **批次**：一个 Problem 可有多批（core/impact/verification/contract），批次必须标注**跨模块**与覆盖/排除/未知；低优先级 minor 进折叠批次。
-8. **完整性审计（推送前）**：独立上下文 reverse-check：原始 findings/diff/CI 是否存在被遗漏或隐藏反证的值得决策问题；不通过→补卡或生成“未解决批次”。
-9. **排序**：不做固定顺序；队列按“最突出/最需决策”展示，并显示影响模块。
+8. **完整性审计（推送前）**：独立上下文 reverse-check：原始 findings/diff/CI 是否存在被遗漏或隐藏反证的值得决策问题；审计输入包含分组来源与 coverage 摘要（stale/excluded/unknown）；不通过→补卡或生成“未解决批次”。
+9. **收敛**：批次新鲜度只认「当前 HEAD 的已完成评审」；`convergence` 指标 + 一键按严重度批量重审，直到 stale/unknown 收敛。
 
 ## 4. 用户侧流程（GUI）
 
@@ -103,3 +118,27 @@ Decision { problemId/batchId/cardId, status, reason, decidedAt }
 4. L3 VS Code 扩展实时缓冲区 + LSP 语义投影（首批），gate 集成（config + 面板覆盖）；
 5. 「通过→待修复队列」与自动修复 minor、多文件统一 diff、批次复核；
 6. PR 行内评论 + review + merge。
+
+## 7. 残余风险收口（2026-11-23，v2.1）
+
+四项 MVP 残余风险的实现位置、配置与验证方式：
+
+| 项 | 实现 | 配置 | HTTP API | 验证 |
+| --- | --- | --- | --- | --- |
+| 多验证者投票 | `lib/review-model.mjs::aggregateVotes/normalizeVerificationRecord/verifierPrompt`；`index.js::startVerification` | `ciReview.verifiers`（默认 3，1–5；服务端策略，请求体不可降级） | `POST /dsh-ci-review/api/review-problems/verify` | 单元测试 + 面板「多验证者投票（N 票）」 |
+| Agent 决定批次 | `groupings.json`（按 HEAD + findings 签名持久化）、`startGrouping`、`buildReviewProblems` 优先 Agent 分组、启发式回退 | 无（Agent 输出决定数量） | `POST /dsh-ci-review/api/review-problems/group` | 单元测试 + 面板「Agent 逻辑分组/重新分组」 |
+| coverage.excluded/unknown | `reviewEvidenceFor` + `coverageForBatch/buildProjectCoverage`；快照 `reviewCoverage` | 无 | 随 `GET /api/snapshot` 返回 | 单元测试 + 面板覆盖率行 |
+| HEAD 收敛 | `planReReview` + `startConvergence`；任务完成即覆盖旧任务并归档 | `ciReview.convergeMaxFiles`（默认 3，硬上限 10）、`ciReview.convergeLenses`（默认 correctness/errors/security） | `POST /dsh-ci-review/api/review-job/converge`（`start:false` 只出计划） | 单元测试 + 面板「按 HEAD 重审收敛」 |
+
+数据文件（均在 `<repo>/.review/ci-review/`，默认 gitignore）：
+- `groupings.json`：`{version:2, byRevision:{<headSha>:{id,headSha,status,signature,groups[],coverage,generatedAt}}}`；findings 变化后签名失配→自动回退并提示重新分组。
+- `verifications.json`：`{version:2, byProblem:{<problemKey>:{status,votes,verifiers[],verdict,confidence,gradedSeverity,history[]}}}`；旧的单验证者记录读取时归一化为 1 票 legacy 验证者。
+- `review-jobs/*.json`：新增任务带 `headSha`；最新完成的任务按文件覆盖旧任务，旧的进入 `superseded.json`。
+
+**仍未覆盖/已知限制**（不阻断 MVP）：
+- 验证者之间仍是「同一模型的不同立场」，不是异构模型投票；票数上限 5，默认 3。
+- Agent 分组依赖 LLM 输出质量；输出不合法/缺 key 时按启发式回退并把未覆盖 findings 放进显式回退批次，面板会显示分组来源与过期状态。
+- Agent 分组切换后，旧版「位置式 problem id」的单验证者记录无法映射到新批次（仅启发式回退批次可按 legacy id 读回）；这类问题需要重新验证，不会伪造结论。
+- 收敛是手动/一键触发（不自动 infinite loop），`convergeMaxFiles` 限制单次启动数量；修复后 HEAD 前进仍会重新产生 stale，需继续收敛（这是评审系统的正常循环，不是功能缺陷）。非 git/无 HEAD 时不启动重审。
+- CLI run（`lib/`）的 findings 没有 revision，无法证明新鲜度：coverage 会如实标 unknown；同一文件有 HEAD 完成任务后旧 CLI findings 视为被取代并计数，不再制造永久 unknown。
+

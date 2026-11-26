@@ -182,6 +182,48 @@ window.__ModuleLoader__.load({
         reviewCardsHideLow: '收起低优先级批次',
         reviewCardsExcerpt: '源码片段',
         reviewCardsUncertainty: '不确定点',
+        reviewGrouping: '分组',
+        reviewGroupingAgent: 'Agent 逻辑阶段',
+        reviewGroupingHeuristic: '启发式回退',
+        reviewGroupingStale: '分组已过期（findings 已变化，请重新分组）',
+        reviewGroupingNone: '尚未做 Agent 逻辑分组（当前为启发式回退）',
+        reviewGroupButton: 'Agent 逻辑分组',
+        reviewRegroupButton: 'Agent 重新分组',
+        reviewGroupingBusy: '分组中…',
+        reviewPhase: '阶段',
+        reviewDecisionPrompt: '决策提示',
+        reviewGroupingRationale: '分组理由',
+        reviewVerificationVotes: '多验证者投票：确认 {confirmed} / 反证 {rejected} / 存疑 {uncertain} · 置信度 {confidence}',
+        reviewVerificationRunning: '多验证者投票：进行中（{pending} / {total} 票未回）',
+        reviewVerificationStance: '{stance}：{verdict} · {confidence}',
+        reviewVerificationLegacy: '独立验证（旧版单验证者记录）：{verdict}',
+        reviewCoverageExcluded: '排除 {count}',
+        reviewCoverageUnknown: '未知 {count}',
+        reviewCoverageExcludedFiles: '排除文件：{files}',
+        reviewCoverageUnknownFiles: '未验证文件：{files}',
+        reviewConvergence: '收敛：{total} 批 · 旧代码 {stale} · 出处未知 {unknown} · 待重审文件 {candidates}',
+        reviewConvergeButton: '按 HEAD 重审收敛（前 {count} 个文件）',
+        reviewConvergeNone: '所有批次都已基于当前 HEAD',
+        reviewConvergeBusy: '启动重审…',
+        reviewConvergeStarted: '已启动 {count} 个文件的重审：{files}',
+        reviewConvergeNoFiles: '没有可自动重审的批次文件（仍有牵涉文件未验证）',
+        reviewConvergeNoHead: '无法证明当前 HEAD（非 Git 仓库），不会自动重审',
+        reviewGroupingRunning: '分组中（Agent 运行中）…',
+        reviewGroupingFailed: '分组失败：{error}',
+        reviewVerifyStarted: '已启动 {count} 个独立验证者投票，完成后自动刷新结果',
+        reviewVerifyFailed: '验证失败：{error}',
+        reviewVerdictConfirmed: '确认',
+        reviewVerdictRejected: '反证',
+        reviewVerdictUncertain: '存疑',
+        reviewVerdictLegacyConfirmed: '已确认',
+        reviewVerdictLegacyRejected: '被反证（已折叠）',
+        reviewGraded: '分级 {severity}',
+        reviewVerifierFailed: '验证失败',
+        stanceContradict: '反证检查',
+        stanceContext: '调用方与测试',
+        stanceEvidence: '证据与复现',
+        stanceHistory: '回归与历史',
+        stanceImpact: '影响与分级',
         fixQueue: '待修复队列',
         fixQueueNone: '还没有进入待修复队列的问题。审阅卡点「通过」后会出现在这里。',
         fixQueueStatusQueued: '待修复',
@@ -410,6 +452,48 @@ window.__ModuleLoader__.load({
         reviewCardsHideLow: 'Hide low-priority batches',
         reviewCardsExcerpt: 'Source excerpt',
         reviewCardsUncertainty: 'Uncertainty',
+        reviewGrouping: 'Grouping',
+        reviewGroupingAgent: 'Agent logical stages',
+        reviewGroupingHeuristic: 'Heuristic fallback',
+        reviewGroupingStale: 'Grouping is stale (findings changed, regroup required)',
+        reviewGroupingNone: 'No agent grouping yet (using heuristic fallback)',
+        reviewGroupButton: 'Agent grouping',
+        reviewRegroupButton: 'Regroup with agent',
+        reviewGroupingBusy: 'Grouping…',
+        reviewPhase: 'Phase',
+        reviewDecisionPrompt: 'Decision prompt',
+        reviewGroupingRationale: 'Grouping rationale',
+        reviewVerificationVotes: 'Multi-verifier votes: confirmed {confirmed} / rejected {rejected} / uncertain {uncertain} · confidence {confidence}',
+        reviewVerificationRunning: 'Multi-verifier votes: running ({pending} / {total} pending)',
+        reviewVerificationStance: '{stance}: {verdict} · {confidence}',
+        reviewVerificationLegacy: 'Independent verification (legacy single-verifier record): {verdict}',
+        reviewCoverageExcluded: '{count} excluded',
+        reviewCoverageUnknown: '{count} unknown',
+        reviewCoverageExcludedFiles: 'Excluded files: {files}',
+        reviewCoverageUnknownFiles: 'Unverified files: {files}',
+        reviewConvergence: 'Convergence: {total} batches · stale {stale} · unknown {unknown} · files to re-review {candidates}',
+        reviewConvergeButton: 'Re-review at HEAD (first {count} files)',
+        reviewConvergeNone: 'Every batch is based on the current HEAD',
+        reviewConvergeBusy: 'Starting re-review…',
+        reviewConvergeStarted: 'Started re-review for {count} file(s): {files}',
+        reviewConvergeNoFiles: 'No batch file can be auto re-reviewed (some linked files are still unverified)',
+        reviewConvergeNoHead: 'Cannot prove the current HEAD (not a Git checkout); auto re-review is disabled',
+        reviewGroupingRunning: 'Grouping (agent running)…',
+        reviewGroupingFailed: 'Grouping failed: {error}',
+        reviewVerifyStarted: 'Started {count} independent verifiers; results refresh automatically',
+        reviewVerifyFailed: 'Verification failed: {error}',
+        reviewVerdictConfirmed: 'confirmed',
+        reviewVerdictRejected: 'rejected',
+        reviewVerdictUncertain: 'uncertain',
+        reviewVerdictLegacyConfirmed: 'confirmed',
+        reviewVerdictLegacyRejected: 'rejected (collapsed)',
+        reviewGraded: 'graded {severity}',
+        reviewVerifierFailed: 'verification failed',
+        stanceContradict: 'Contradiction check',
+        stanceContext: 'Callers and tests',
+        stanceEvidence: 'Evidence and reproduction',
+        stanceHistory: 'Regression and history',
+        stanceImpact: 'Impact and grading',
         fixQueue: 'Fix queue',
         fixQueueNone: 'No approved problem queued yet. Approve a review card to add it here.',
         fixQueueStatusQueued: 'queued',
@@ -1188,6 +1272,14 @@ window.__ModuleLoader__.load({
 
     function ReviewCardsCard({ snapshot, t, projectId, onRefresh, onAskAgentAt }) {
       const batches = snapshot.reviewBatches || [];
+      const stanceLabel = (stance) => {
+        const key = `stance${String(stance || '').replace(/^./, (match) => match.toUpperCase())}`;
+        const label = t(key);
+        return label === key ? (stance || '-') : label;
+      };
+      const verdictLabel = (verdict) => (verdict === 'confirmed'
+        ? t('reviewVerdictConfirmed')
+        : verdict === 'rejected' ? t('reviewVerdictRejected') : t('reviewVerdictUncertain'));
       const [showLow, setShowLow] = React.useState(false);
       const [index, setIndex] = React.useState(() => {
         try {
@@ -1231,6 +1323,8 @@ window.__ModuleLoader__.load({
       const [verifyBusy, setVerifyBusy] = React.useState(false);
       const [batchReviewBusy, setBatchReviewBusy] = React.useState(false);
       const [auditBusy, setAuditBusy] = React.useState(false);
+      const [groupBusy, setGroupBusy] = React.useState(false);
+      const [convergeBusy, setConvergeBusy] = React.useState(false);
       const startBatchReview = async () => {
         const files = (snapshot.files || []).slice(0, 3).map((entry) => entry.path).filter(Boolean);
         if (files.length === 0) {
@@ -1278,28 +1372,85 @@ window.__ModuleLoader__.load({
           const result = await request(`api/review-problems/verify?projectId=${encodeURIComponent(projectId)}`, {
             method: 'POST',
             body: JSON.stringify({
+              verifiers: snapshot.capabilities?.verifiers ?? 3,
               problem: {
                 id: current.problemId ?? current.id,
+                problemKey: current.problemId ?? current.id,
+                problemId: current.problemId ?? current.id,
                 file: firstCard.file,
                 startLine: firstCard.startLine,
+                endLine: firstCard.endLine,
                 severity: current.severity,
                 category: current.category,
                 title: current.title,
                 problem: current.explanation?.what ?? '',
                 evidence: current.explanation?.evidence ?? '',
+                impact: current.explanation?.whyImportant ?? '',
               },
             }),
           });
           if (result.ok) {
-            setMessage({ tone: 'ok', text: '已启动独立 Agent 验证，完成后自动刷新结果' });
+            const count = result.verifiers ?? (snapshot.capabilities?.verifiers ?? 3);
+            setMessage({ tone: 'ok', text: t('reviewVerifyStarted').replace('{count}', String(count)) });
             onRefresh();
           } else {
-            setMessage({ tone: 'bad', text: result.message || 'verify failed' });
+            setMessage({ tone: 'bad', text: t('reviewVerifyFailed').replace('{error}', result.message || 'verify failed') });
           }
         } catch (cause) {
           setMessage({ tone: 'bad', text: String(cause?.message || cause) });
         } finally {
           setVerifyBusy(false);
+        }
+      };
+      const groupProblems = async (force = false) => {
+        setGroupBusy(true);
+        setMessage(null);
+        try {
+          const result = await request(`api/review-problems/group?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ force }),
+          });
+          if (result.ok) {
+            setMessage({ tone: 'ok', text: t('reviewGroupingRunning') });
+            onRefresh();
+          } else {
+            setMessage({ tone: 'bad', text: t('reviewGroupingFailed').replace('{error}', result.message || 'grouping failed') });
+          }
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setGroupBusy(false);
+        }
+      };
+      const convergeAtHead = async () => {
+        const plan = snapshot.reviewCoverage?.convergence;
+        const count = plan?.files?.length ?? 0;
+        const staleOrUnknown = (plan?.totals?.stale ?? 0) + (plan?.totals?.unknown ?? 0);
+        if (count === 0) {
+          const text = plan?.reason === 'no-head'
+            ? t('reviewConvergeNoHead')
+            : (staleOrUnknown > 0 ? t('reviewConvergeNoFiles') : t('reviewConvergeNone'));
+          setMessage({ tone: 'ok', text });
+          return;
+        }
+        setConvergeBusy(true);
+        setMessage(null);
+        try {
+          const result = await request(`api/review-job/converge?projectId=${encodeURIComponent(projectId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ maxFiles: count }),
+          });
+          const startedJobs = (result.jobs || []).filter((job) => job && job.id);
+          setMessage(result.ok
+            ? { tone: 'ok', text: t('reviewConvergeStarted')
+                .replace('{count}', String(startedJobs.length))
+                .replace('{files}', startedJobs.map((job) => job.file).join(', ') || '-') }
+            : { tone: 'bad', text: result.message || 'converge failed' });
+          if (result.ok) onRefresh();
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setConvergeBusy(false);
         }
       };
       const createWorktree = async () => {
@@ -1354,7 +1505,33 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dr-card-head' },
           h('h3', { className: 'dr-card-title' }, t('reviewCards')),
           h('span', { className: 'dr-card-title-sub' }, `${batches.length} 批`),
+          snapshot.reviewGrouping
+            ? h(Badge, { tone: snapshot.reviewGrouping.source === 'agent' ? 'ok' : 'idle' },
+                snapshot.reviewGrouping.source === 'agent' ? t('reviewGroupingAgent') : t('reviewGroupingHeuristic'))
+            : h('span', { className: 'dr-muted', style: { fontSize: '11px' } }, t('reviewGroupingNone')),
+          snapshot.reviewGrouping?.status === 'running'
+            ? h('span', { className: 'dr-muted', style: { color: '#58a6ff' } },
+                `${t('reviewGroupingRunning')}${snapshot.reviewGrouping.startedAt ? ` · 已运行 ${Math.max(0, Math.round((Date.now() - Date.parse(snapshot.reviewGrouping.startedAt)) / 1000))}s` : ''}`)
+            : null,
+          snapshot.reviewGrouping?.status === 'running'
+            ? h('button', { className: 'dr-btn', type: 'button', disabled: groupBusy, onClick: () => groupProblems(true) }, '强制重新分组')
+            : null,
+          snapshot.reviewGrouping?.status === 'failed'
+            ? h('span', { className: 'dr-muted', style: { color: '#ff9b95' }, title: snapshot.reviewGrouping.error || '' },
+                t('reviewGroupingFailed').replace('{error}', String(snapshot.reviewGrouping.error || '').slice(0, 80)))
+            : null,
+          snapshot.reviewGrouping?.stale
+            ? h('span', { className: 'dr-muted', style: { color: '#d29922' }, title: t('reviewGroupingStale') }, `⚠ ${t('reviewGroupingStale')}`)
+            : null,
           h('span', { className: 'dr-spacer' }),
+          h('button', {
+            className: 'dr-btn',
+            type: 'button',
+            disabled: groupBusy || snapshot.reviewGrouping?.status === 'running',
+            onClick: groupProblems,
+          }, groupBusy || snapshot.reviewGrouping?.status === 'running'
+            ? t('reviewGroupingBusy')
+            : (snapshot.reviewGrouping?.source === 'agent' ? t('reviewRegroupButton') : t('reviewGroupButton'))),
           h('button', { className: 'dr-btn', type: 'button', onClick: () => setShowLow(!showLow) }, showLow ? t('reviewCardsHideLow') : t('reviewCardsShowLow'))),
         visible.length === 0
           ? h('p', { className: 'dr-muted' }, t('reviewCardsNone'))
@@ -1365,10 +1542,37 @@ window.__ModuleLoader__.load({
                 h('button', { className: 'dr-btn', type: 'button', disabled: index <= 0, onClick: () => setIndex(index - 1) }, '←'),
                 h('button', { className: 'dr-btn', type: 'button', disabled: index >= visible.length - 1, onClick: () => setIndex(index + 1) }, '→'),
                 h('span', { className: 'dr-muted' }, `第 ${current.index} / ${visible.length} 批`)),
+              snapshot.reviewCoverage
+                ? h('div', { className: 'dr-muted', style: { marginBottom: '8px', fontSize: '11px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+                    h('span', null,
+                      t('reviewConvergence')
+                        .replace('{total}', String(snapshot.reviewCoverage.convergence?.totals?.batches ?? batches.length))
+                        .replace('{stale}', String(snapshot.reviewCoverage.convergence?.totals?.stale ?? 0))
+                        .replace('{unknown}', String(snapshot.reviewCoverage.convergence?.totals?.unknown ?? 0))
+                        .replace('{candidates}', String(snapshot.reviewCoverage.convergence?.candidates ?? 0))
+                      + (snapshot.reviewCoverage.excludedFiles ? ` · ${t('reviewCoverageExcluded').replace('{count}', String(snapshot.reviewCoverage.excludedFiles))}` : '')
+                      + (snapshot.reviewCoverage.unknownFiles ? ` · ${t('reviewCoverageUnknown').replace('{count}', String(snapshot.reviewCoverage.unknownFiles))}` : '')),
+                    h('button', {
+                      className: 'dr-btn',
+                      type: 'button',
+                      disabled: convergeBusy || (snapshot.reviewCoverage.convergence?.files?.length ?? 0) === 0,
+                      onClick: convergeAtHead,
+                    }, convergeBusy
+                      ? t('reviewConvergeBusy')
+                      : (() => {
+                        const plan = snapshot.reviewCoverage.convergence;
+                        const count = plan?.files?.length ?? 0;
+                        if (count > 0) return t('reviewConvergeButton').replace('{count}', String(count));
+                        if (plan?.reason === 'no-head') return t('reviewConvergeNoHead');
+                        if ((plan?.totals?.stale ?? 0) + (plan?.totals?.unknown ?? 0) > 0) return t('reviewConvergeNoFiles');
+                        return t('reviewConvergeNone');
+                      })()))
+                : null,
               h('div', { className: 'dr-card', style: { borderColor: '#3a4150', marginBottom: '8px' } },
                 h('div', { className: 'dr-card-head' },
                   h(Badge, { tone: current.severity === 'blocker' ? 'bad' : current.severity === 'major' ? 'warn' : 'run' }, current.severity),
                   h('span', { className: 'dr-card-title' }, current.title),
+                  current.phase ? h('span', { className: 'dr-muted', style: { fontSize: '11px' } }, `${t('reviewPhase')}: ${current.phase}`) : null,
                   current.stale ? h('span', { className: 'dr-muted', style: { color: '#e3b341' }, title: '该批次的问题来自旧代码，当前源码已不匹配，行号/片段可能漂移' }, '⚠ 基于旧代码') : null,
                   current.staleUnknown ? h('span', { className: 'dr-muted', style: { color: '#d29922' }, title: '旧评审任务没有记录 revision，无法判断该问题在当前离线代码上是否仍成立' }, '⚠ 出处未知') : null,
                   h('span', { className: 'dr-spacer' })),
@@ -1381,16 +1585,56 @@ window.__ModuleLoader__.load({
                       `本批包含的独立问题：\n${current.titles.map((title, i) => `${i + 1}. ${title}`).join('\n')}`)
                   : null,
                 h('div', { className: 'dr-muted', style: { marginBottom: '6px' } }, `${t('reviewCardsModules')}: ${(current.modules || []).join(', ') || '-'} · ${t('reviewCardsCoverage').replace('{findings}', current.coverage?.findings ?? 0).replace('{files}', (current.coverage?.files || []).length).replace('{categories}', (current.coverage?.categories || []).join('/'))}`),
+                current.grouping
+                  ? h('div', { className: 'dr-muted', style: { marginBottom: '6px', fontSize: '11px', whiteSpace: 'pre-wrap' } },
+                      `${t('reviewGrouping')}: ${current.grouping.source === 'agent' ? t('reviewGroupingAgent') : t('reviewGroupingHeuristic')}${current.grouping.ungrouped ? '（未分组 findings 回退批次）' : ''}${current.grouping.rationale ? ` · ${t('reviewGroupingRationale')}：${current.grouping.rationale}` : ''}`)
+                  : null,
+                current.grouping?.decisionPrompt
+                  ? h('div', { className: 'dr-muted', style: { marginBottom: '6px', fontSize: '11px', whiteSpace: 'pre-wrap' } }, `${t('reviewDecisionPrompt')}: ${current.grouping.decisionPrompt}`)
+                  : null,
                 h('div', { className: 'dr-muted', style: { marginBottom: '6px', fontSize: '11px' } },
                   `视角: ${(current.lenses || []).join(', ') || '-'} · 修订: ${(current.revisions || []).map((sha) => sha.slice(0, 8)).join(', ') || '未知'} · 源码状态: ${current.stale ? '旧代码（可能漂移）' : current.staleUnknown ? '无法判断（旧任务无 revision）' : '当前代码'}`),
                 (current.coverage?.linkedFiles || []).length
                   ? h('div', { className: 'dr-muted', style: { marginBottom: '6px', fontSize: '11px' } }, `牵涉文件: ${current.coverage.linkedFiles.join(', ')}`)
                   : null,
+                (current.coverage?.excluded || []).length
+                  ? h('div', { className: 'dr-muted', style: { marginBottom: '6px', fontSize: '11px', color: '#d29922' } },
+                      t('reviewCoverageExcludedFiles').replace('{files}', current.coverage.excluded.slice(0, 8).join(', ')))
+                  : null,
+                (current.coverage?.unknown || []).length
+                  ? h('div', { className: 'dr-muted', style: { marginBottom: '6px', fontSize: '11px', color: '#d29922' } },
+                      t('reviewCoverageUnknownFiles').replace('{files}', current.coverage.unknown.slice(0, 8).join(', ')))
+                  : null,
                 current.verification
-                  ? h('div', { className: 'dr-muted', style: { marginBottom: '6px' } },
-                      current.verification.status === 'running'
-                        ? '独立验证：进行中…'
-                        : `独立验证：${current.verification.verdict === 'confirmed' ? '已确认' : current.verification.verdict === 'rejected' ? '被反证（已折叠）' : '存疑'}${current.verification.reason ? ` — ${current.verification.reason}` : ''}`)
+                  ? h('div', { className: 'dr-muted', style: { marginBottom: '6px', whiteSpace: 'pre-wrap' } },
+                      (() => {
+                        const verification = current.verification;
+                        if (verification.status === 'running') {
+                          return t('reviewVerificationRunning')
+                            .replace('{pending}', String(verification.votes?.pending ?? 0))
+                            .replace('{total}', String(verification.votes?.total ?? 0));
+                        }
+                        if (verification.status === 'failed') {
+                          return t('reviewVerifyFailed').replace('{error}', verification.reason || t('reviewVerifierFailed'));
+                        }
+                        if (verification.legacy) {
+                          const legacyVerdict = verification.verdict === 'confirmed'
+                            ? t('reviewVerdictLegacyConfirmed')
+                            : verification.verdict === 'rejected' ? t('reviewVerdictLegacyRejected') : t('reviewVerdictUncertain');
+                          return `${t('reviewVerificationLegacy').replace('{verdict}', legacyVerdict)}${verification.reason ? ` — ${verification.reason}` : ''}`;
+                        }
+                        const head = t('reviewVerificationVotes')
+                          .replace('{confirmed}', String(verification.votes?.confirmed ?? 0))
+                          .replace('{rejected}', String(verification.votes?.rejected ?? 0))
+                          .replace('{uncertain}', String(verification.votes?.uncertain ?? 0))
+                          .replace('{confidence}', verification.confidence ?? '-');
+                        const graded = verification.gradedSeverity ? ` · ${t('reviewGraded').replace('{severity}', verification.gradedSeverity)}` : '';
+                        const lines = (verification.verifiers || []).map((verifier) => t('reviewVerificationStance')
+                          .replace('{stance}', stanceLabel(verifier.stance))
+                          .replace('{verdict}', verifier.status === 'failed' ? t('reviewVerifierFailed') : verdictLabel(verifier.verdict))
+                          .replace('{confidence}', verifier.confidence || '-'));
+                        return `${head}${graded}${verification.reason ? `\n${verification.reason}` : ''}${lines.length ? `\n${lines.join('\n')}` : ''}`;
+                      })())
                   : null,
                 snapshot.audit
                   ? h('div', { className: 'dr-muted', style: { marginBottom: '6px' } },
@@ -1457,7 +1701,10 @@ window.__ModuleLoader__.load({
                     },
                   }, '运行 gate'),
                   h('button', { className: 'dr-btn', type: 'button', disabled: busy || wtBusy, onClick: createWorktree }, wtBusy ? '…' : '创建审阅 worktree 并注释'),
-                  h('button', { className: 'dr-btn', type: 'button', disabled: verifyBusy, onClick: verifyProblem }, verifyBusy ? '验证中…' : '独立 Agent 验证此问题'),
+                  h('button', { className: 'dr-btn', type: 'button', disabled: verifyBusy || current.verification?.status === 'running', onClick: verifyProblem },
+                    verifyBusy || current.verification?.status === 'running'
+                      ? '投票中…'
+                      : `多验证者投票（${snapshot.capabilities?.verifiers ?? 3} 票）`),
                   h('button', { className: 'dr-btn', type: 'button', disabled: batchReviewBusy, onClick: startBatchReview }, batchReviewBusy ? '评审中…' : '优先文件多视角评审（前 3 个）'),
                   h('button', { className: 'dr-btn', type: 'button', disabled: auditBusy, onClick: runAudit }, auditBusy ? '审计中…' : '完整性审计'),
                   current.stale

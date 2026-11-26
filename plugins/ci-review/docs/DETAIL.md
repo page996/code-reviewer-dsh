@@ -38,14 +38,28 @@ projects:
     root: 'C:/work/my-service'
 ```
 
-## Current status (v0.4, review-cards v2 MVP)
+## Current status (v0.5, review-cards v2.1 residual-risk closure)
 
 - **Review cards**: problems clustered from local review runs + multi-lens agent
-  review jobs; batches are logical problem stages (agent/related findings decide
-  the grouping), each with modules, coverage, structured explanation and
-  decision surface; low-priority batches are collapsed; per-card and per-batch
-  decisions; independent verification subagent can confirm/reject each problem
-  with evidence (rejected problems collapse).
+  review jobs. Batch grouping is now **decided by an agent** (grouping subagent
+  returns logical stages with phase/title/decision prompt/rationale); the panel
+  shows the grouping source and flags stale groupings. `phase` ∈
+  `core|impact|verification|contract`; low-priority batches are collapsed;
+  per-card and per-batch decisions; ignored requires a reason.
+- **Multi-verifier voting**: verifying a problem starts N independent verifiers
+  (default 3, `ciReview.verifiers`, different stances: contradiction, callers and
+  tests, evidence/reproduction, regression history, impact grading). Each vote is
+  stored with evidence; majority decides `confirmed|rejected|uncertain`,
+  confidence and `gradedSeverity`. Legacy single-verifier records still render.
+- **Real coverage**: each batch reports `reviewed`, `excluded` (review-scope
+  exclude reasons or agent-declared exclusions) and `unknown` (files without
+  review evidence at the current HEAD); the snapshot adds a project-level
+  `reviewCoverage` summary (fresh/excluded/unknown files, stale batch counts).
+- **HEAD convergence**: `convergence` in the snapshot reports total/stale/unknown/
+  fresh batches and the files that need re-review (ordered by severity). One click
+  starts background re-review jobs for the next `ciReview.convergeMaxFiles`
+  (default 3) files; a completed job at HEAD supersedes the old one and archives
+  it in `superseded.json`.
 - **Multi-lens independent review**: one independent subagent per lens reviews a
   selected file and returns structured findings; findings merge into problem
   batches automatically.
@@ -66,14 +80,53 @@ projects:
 - **Persistence**: panel selection/language/batch/file are remembered; snapshots
   are cached on disk for instant re-entry.
 
-### Remaining gaps (explicit)
+### Grouping / voting / convergence configuration
 
+```jsonc
+// <repo>/.review/config.json
+{
+  "ciReview": {
+    "autoFixMinor": false,
+    "verifiers": 3,                 // 1..5 verifiers per problem (server-side policy)
+    "convergeMaxFiles": 3,          // max files re-reviewed per convergence click (hard cap 10)
+    "convergeLenses": ["correctness", "errors", "security"]
+  }
+}
+```
+
+Notes: the verifier count is enforced by the Host (a request body cannot
+downgrade it); a verification already running blocks a second start; all-failed
+verifications are reported as `failed` (retryable), not `completed`. Convergence
+requires a provable HEAD: on a non-git checkout the panel disables auto
+re-review. A CLI finding is superseded once the same file has a completed review
+job at HEAD (`supersededCliFindings`), otherwise batches would stay "unknown"
+forever.
+
+API additions (same-origin, authenticated like the rest of the panel):
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /dsh-ci-review/api/review-problems/verify` | multi-verifier vote (`problem`, optional `verifiers`) |
+| `POST /dsh-ci-review/api/review-problems/group` | start the grouping subagent |
+| `POST /dsh-ci-review/api/review-job/converge` | plan (`start:false`) or start HEAD re-review |
+
+### Remaining gaps (explicit, post-v2.1)
+
+- Verifiers are independent contexts of the same model, not a heterogeneous
+  model ensemble; the vote cap is 5.
+- Agent grouping quality depends on the model output; invalid/partial output falls
+  back to the heuristic and surfaces an explicit "ungrouped" batch plus a stale
+  grouping badge.
+- Convergence is user-triggered and capped per click; new commits make batches
+  stale again by design, so the loop continues as part of normal review.
 - Multi-lens review is triggered per file, not yet auto-expanded to the whole
-  project; pre-push completeness audit is a coverage check, not an independent
-  agent reverse-audit.
+  project; the completeness audit is an independent agent reverse-audit whose
+  quality still depends on the audit prompt.
 - Voting-stage auto-fix covers confirmed minors (opt-in via
-  `"ciReview": { "autoFixMinor": true }` in `.review/config.json`); larger
-  refactors still need an explicit agent task.
+  `"ciReview": { "autoFixMinor": true }`); larger refactors still need an explicit
+  agent task.
+
+
 
 
 - Read-only snapshot: project/git state, PR state, review decision, mergeability,
