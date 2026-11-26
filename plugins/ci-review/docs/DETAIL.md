@@ -80,6 +80,44 @@ projects:
 - **Persistence**: panel selection/language/batch/file are remembered; snapshots
   are cached on disk for instant re-entry.
 
+### Agent job supervision (the "it hangs forever" guardrail)
+
+Every model-driven job (grouping, verification votes, review lenses, audit,
+autofix) goes through one supervisor, `lib/agent-jobs.mjs` + `startSupervisedJob`
+in `index.js`. The contract exists because a single unbounded call used to look
+like "the CI model disconnected": a ~200 KB grouping prompt stalled for 20
+minutes, and a Host restart left a persisted `running` record that blocked every
+retry.
+
+Rules (each enforced by a unit test in `test/ci-review-jobs.test.mjs`):
+
+| Rule | Behaviour |
+| --- | --- |
+| Prompt budget | per-kind byte budget (group 120 KiB, review 64 KiB, verify 40 KiB, audit 120 KiB, autofix 24 KiB); larger prompts are truncated with an explicit `[ci-review] 提示词超出预算已截断…丢弃 N bytes` marker so the model can answer "insufficient info" instead of hallucinating |
+| Deadline | every job stores `timeoutMs` + `deadlineAt` (group 8 min, verify/review 10 min, autofix 12 min, hard cap 30 min) |
+| Watchdog | a 20 s interval marks overdue `running` jobs `failed` / `errorCode: timeout` |
+| Restart sweep | on `apply()` every persisted `running` job becomes `failed` / `errorCode: interrupted`, so the UI offers retry instead of waiting |
+| Dedupe | at most one `running` job per logical `key` (e.g. `group:<head>`, `verify:<problem>:<stance>`, `review:<file>:<lens>`); a second request returns `already-running` |
+| Guarded writes | `applyJobUpdate` rejects writes from superseded jobs and from terminal states, so a late callback cannot revive or overwrite the current record |
+| Visibility | snapshot `agentJobs` = `{ running, overdue, failed, oldestRunningSeconds, byKind, recentFailures, activeKeys }`; the review-card header shows `子代理：运行 N（最久 Xs）· 失败 M` and a 「清理超时任务」 button calling `POST /api/agent-jobs/reconcile` |
+
+Tuning (all optional):
+
+```jsonc
+// <repo>/.review/config.json
+{
+  "ciReview": {
+    "jobTimeoutMs": { "group": 480000, "review": 600000 },
+    "promptBudgetBytes": { "group": 122880 }
+  }
+}
+```
+
+Deliberate exception: the user-facing background agent task (`/api/agent-task`)
+keeps its own 40-minute AbortController, durable task file and cancel endpoint
+because it is parent-delivered and resumable; it is not a "fire-and-forget
+review job".
+
 ### Grouping / voting / convergence configuration
 
 ```jsonc

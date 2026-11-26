@@ -43,6 +43,17 @@ import {
   verifierPrompt,
   verifierStances,
 } from './lib/review-model.mjs';
+import {
+  applyJobUpdate,
+  classifyFailure,
+  MAX_JOB_TIMEOUT_MS,
+  promptBudgetFor,
+  summarizeJobs,
+  sweepInterrupted,
+  sweepOverdue,
+  timeoutFor,
+  truncatePrompt,
+} from './lib/agent-jobs.mjs';
 
 export const name = 'dsh-ci-review';
 export const inject = ['webServer'];
@@ -281,6 +292,174 @@ export function apply(ctx, config = {}) {
     } catch {
       /* logging is best effort */
     }
+  }
+
+  /* --------------------------------------------------------- agent job supervision */
+  /**
+   * Every subagent call goes through `startSupervisedJob`. The contract (see
+   * lib/agent-jobs.mjs) is what prevents the failure mode where a large prompt,
+   * a crashed Host or a lost callback leaves a job "running" forever: the panel
+   * then looks stuck/disconnected instead of reporting a retryable failure.
+   */
+
+  const agentJobRoots = new Set();
+  const JOB_WATCHDOG_MS = 20 * 1000;
+
+  function agentJobsPath(root) {
+    return path.join(root, '.review', 'ci-review', 'agent-jobs.json');
+  }
+
+  function readAgentJobs(root) {
+    const data = safeReadJson(agentJobsPath(root));
+    const jobs = data?.jobs;
+    return jobs && typeof jobs === 'object' && !Array.isArray(jobs) ? jobs : {};
+  }
+
+  function writeAgentJobs(root, jobs) {
+    try {
+      const dir = path.join(root, '.review', 'ci-review');
+      fs.mkdirSync(dir, { recursive: true });
+      const file = agentJobsPath(root);
+      const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
+      fs.writeFileSync(temp, `${JSON.stringify({ version: 1, jobs }, null, 2)}\n`, 'utf8');
+      fs.renameSync(temp, file);
+    } catch (error) {
+      log(`agent jobs persistence failed: ${String(error?.message ?? error)}`);
+    }
+  }
+
+  function updateAgentJob(root, id, patch, options = {}) {
+    const jobs = readAgentJobs(root);
+    const result = applyJobUpdate(jobs, id, patch, options);
+    if (result.applied) writeAgentJobs(root, result.jobs);
+    return result;
+  }
+
+  function reconcileProjectJobs(root, { mode = 'overdue', now = Date.now() } = {}) {
+    const jobs = readAgentJobs(root);
+    const result = mode === 'interrupted'
+      ? sweepInterrupted(jobs, { now })
+      : sweepOverdue(jobs, { now });
+    const changed = mode === 'interrupted' ? result.interrupted : result.swept;
+    if (changed.length > 0) {
+      writeAgentJobs(root, result.jobs);
+      log(`agent jobs: ${changed.length} ${mode === 'interrupted' ? 'interrupted (host restart)' : 'overdue'} job(s) marked failed in ${root}`);
+    }
+    return { jobs: result.jobs, changed };
+  }
+
+  async function startSupervisedJob({
+    project, kind, key, label, name, promptParts, parent, subagents,
+    timeoutMs, delivery = 'caller', meta = null,
+  }) {
+    const now = Date.now();
+    const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? Math.min(Math.round(timeoutMs), MAX_JOB_TIMEOUT_MS)
+      : timeoutFor(kind, config);
+    const prepared = truncatePrompt(promptParts, promptBudgetFor(kind, config));
+
+    let jobs = readAgentJobs(project.root);
+    const swept = sweepOverdue(jobs, { now });
+    jobs = swept.jobs;
+    if (swept.swept.length > 0) writeAgentJobs(project.root, jobs);
+
+    if (key) {
+      const running = Object.values(jobs).find((job) => job && job.key === key && job.status === 'running');
+      if (running) {
+        return {
+          ok: false,
+          code: 'already-running',
+          message: `同类任务仍在运行（已 ${Math.max(0, Math.round((now - (Date.parse(running.startedAt ?? '') || now)) / 1000))}s，超时后会自动回收）`,
+          job: running,
+        };
+      }
+    }
+
+    const id = `${kind}-${new Date(now).toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomBytes(3).toString('hex')}`;
+    const record = {
+      id,
+      kind,
+      key: key ?? null,
+      projectId: project.id,
+      label: String(label ?? kind),
+      name: String(name ?? id),
+      status: 'running',
+      startedAt: new Date(now).toISOString(),
+      deadlineAt: now + timeout,
+      timeoutMs: timeout,
+      promptBytes: prepared.bytes,
+      promptOriginalBytes: prepared.originalBytes,
+      promptTruncated: prepared.truncated,
+      childId: null,
+      error: null,
+      errorCode: null,
+      finishedAt: null,
+      meta: meta && typeof meta === 'object' ? meta : null,
+    };
+    jobs[id] = record;
+    writeAgentJobs(project.root, jobs);
+    agentJobRoots.add(project.root);
+    if (prepared.truncated) {
+      log(`agent job ${id} (${kind}): prompt truncated ${prepared.originalBytes} -> ${prepared.bytes} bytes`);
+    }
+
+    try {
+      const activation = await subagents.startActivation({
+        provider: 'spawn',
+        label: record.label,
+        name: record.name,
+        prompt: prepared.parts,
+        parent,
+        cwd: project.root,
+        signal: AbortSignal.timeout(timeout),
+        delivery,
+      });
+      updateAgentJob(project.root, id, { childId: activation.childId ?? null });
+      // Lifecycle only: the caller may later override a semantic failure (e.g.
+      // an unparsable grouping) by writing status failed without `onlyStatuses`.
+      activation.result
+        .then(() => {
+          updateAgentJob(project.root, id, { status: 'completed', finishedAt: new Date().toISOString() }, { onlyStatuses: ['running'] });
+          snapshotCache.delete(project.id);
+        })
+        .catch((error) => {
+          const classified = classifyFailure(error);
+          updateAgentJob(project.root, id, {
+            status: 'failed',
+            error: classified.message,
+            errorCode: classified.code,
+            finishedAt: new Date().toISOString(),
+          }, { onlyStatuses: ['running'] });
+          snapshotCache.delete(project.id);
+        });
+      snapshotCache.delete(project.id);
+      return { ok: true, id, activation, record: { ...record, childId: activation.childId ?? null }, prompt: prepared };
+    } catch (error) {
+      const classified = classifyFailure(error);
+      updateAgentJob(project.root, id, {
+        status: 'failed',
+        error: classified.message,
+        errorCode: classified.code,
+        finishedAt: new Date().toISOString(),
+      }, { onlyStatuses: ['running'] });
+      snapshotCache.delete(project.id);
+      return { ok: false, code: classified.code, message: classified.message, job: readAgentJobs(project.root)[id] ?? record };
+    }
+  }
+
+  function agentJobHealth(root) {
+    const jobs = readAgentJobs(root);
+    const summary = summarizeJobs(jobs, { now: Date.now() });
+    const activeKeys = Object.values(jobs)
+      .filter((job) => job && job.status === 'running')
+      .map((job) => ({ id: job.id, kind: job.kind, key: job.key, startedAt: job.startedAt, label: job.label }));
+    return { ...summary, activeKeys };
+  }
+
+  /** Snapshot-facing project state; also keeps the watchdog scope up to date. */
+  function snapshotAgentJobHealth(project) {
+    agentJobRoots.add(project.root);
+    return agentJobHealth(project.root);
   }
 
   /* ------------------------------------------------------------ credentials */
@@ -2324,16 +2503,22 @@ export function apply(ctx, config = {}) {
 
     for (const [index, stance] of stances.entries()) {
       try {
-        const activation = await subagents.startActivation({
-          provider: 'spawn',
+        const started = await startSupervisedJob({
+          project,
+          kind: 'verify',
+          key: `verify:${key}:${stance.id}`,
           label: `verify v${index + 1}/${count} ${problem.file}`,
           name: `verify-${taskId.slice(-6)}-${stance.id.slice(0, 6)}`,
-          prompt: [{ type: 'text', text: verifierPrompt(problem, stance, index + 1, count) }],
+          promptParts: [{ type: 'text', text: verifierPrompt(problem, stance, index + 1, count) }],
           parent,
-          cwd: project.root,
-          signal: AbortSignal.timeout(15 * 60 * 1000),
-          delivery: 'caller',
+          subagents,
+          meta: { problemId: key, verifier: stance.id, index },
         });
+        if (!started.ok) {
+          updateVerifier(index, { status: 'failed', error: started.message, errorCode: started.code ?? null });
+          continue;
+        }
+        const activation = started.activation;
         updateVerifier(index, { childId: activation.childId });
         activation.result
           .then((result) => {
@@ -2518,7 +2703,10 @@ export function apply(ctx, config = {}) {
    * current findings form (instead of a fixed-size heuristic). The result is
    * stored per HEAD in groupings.json and consumed by buildReviewProblems.
    */
-  const GROUPING_TIMEOUT_MS = 8 * 60 * 1000;
+  // Grouping liveness now comes from the supervised-job contract: deadline from
+  // `ciReview.jobTimeoutMs.group`, watchdog + startup sweep. Keep the legacy
+  // record check for grouping files written by older versions.
+  const GROUPING_TIMEOUT_MS = timeoutFor('group', config);
 
   async function startGrouping({ project, findings, parent, subagents, force = false }) {
     const headSha = tryGit(project.root, ['rev-parse', 'HEAD']) || '';
@@ -2561,17 +2749,33 @@ export function apply(ctx, config = {}) {
     const files = listProjectFiles(project.root, 400);
     const modules = [...new Set(findings.map((finding) => String(finding.file ?? '').split('/').slice(0, -1).join('/') || '.'))];
     try {
-      const activation = await subagents.startActivation({
-        provider: 'spawn',
+      const started = await startSupervisedJob({
+        project,
+        kind: 'group',
+        key: `group:${headSha || 'unknown'}`,
         label: `group ${project.name}`,
         name: `group-${String(taskId).slice(-6)}`,
-        prompt: [{ type: 'text', text: groupingPrompt({ findings, files, modules, headSha }) }],
+        promptParts: [{ type: 'text', text: groupingPrompt({ findings, files, modules, headSha }) }],
         parent,
-        cwd: project.root,
-        signal: AbortSignal.timeout(GROUPING_TIMEOUT_MS),
-        delivery: 'caller',
+        subagents,
+        meta: { headSha, findings: findings.length },
       });
-      const withChild = { ...record, childId: activation.childId };
+      if (!started.ok) {
+        writeGroupings(project.root, {
+          ...readGroupings(project.root),
+          [key]: {
+            ...record,
+            status: 'failed',
+            error: started.message,
+            errorCode: started.code ?? null,
+            finishedAt: new Date().toISOString(),
+          },
+        });
+        snapshotCache.delete(project.id);
+        return { ok: false, message: started.message, code: started.code ?? null };
+      }
+      const activation = started.activation;
+      const withChild = { ...record, childId: activation.childId, jobId: started.id };
       // Re-read before writing: another grouping/HEAD may have been recorded
       // while startActivation was awaiting.
       writeGroupings(project.root, { ...readGroupings(project.root), [key]: withChild });
@@ -2678,16 +2882,24 @@ export function apply(ctx, config = {}) {
     };
     for (const lens of lenses) {
       try {
-        const activation = await subagents.startActivation({
-          provider: 'spawn',
+        const started = await startSupervisedJob({
+          project,
+          kind: 'review',
+          key: `review:${file}:${lens}`,
           label: `review-${lens} ${file}`,
           name: `rev-${jobId.slice(-6)}-${lens.slice(0, 6)}`,
-          prompt: [{ type: 'text', text: reviewLensPrompt(file, lens) }],
+          promptParts: [{ type: 'text', text: reviewLensPrompt(file, lens) }],
           parent,
-          cwd: project.root,
-          signal: AbortSignal.timeout(20 * 60 * 1000),
-          delivery: 'caller',
+          subagents,
+          meta: { jobId, file, lens },
         });
+        if (!started.ok) {
+          update((current) => {
+            current.results[lens] = { status: 'failed', error: started.message, findings: [] };
+          });
+          continue;
+        }
+        const activation = started.activation;
         activation.result
           .then((result) => {
             const report = parseAgentReport(result);
@@ -2807,19 +3019,26 @@ export function apply(ctx, config = {}) {
       startedAt: new Date().toISOString(),
     });
     try {
-      const activation = await subagents.startActivation({
-        provider: 'spawn',
+      const started = await startSupervisedJob({
+        project,
+        kind: 'autofix',
+        key: `autofix:${cardId}`,
         label: `autofix ${cardId}`,
         name: `fix-${String(cardId).slice(-6)}-${randomBytes(2).toString('hex')}`,
-        prompt: [{ type: 'text', text: autoFixPrompt({
+        promptParts: [{ type: 'text', text: autoFixPrompt({
           id: cardId, file: problem.file, startLine: problem.startLine,
           severity: problem.severity ?? 'minor', title: problem.title, problem: problem.problem,
         }, gateCommands) }],
         parent,
-        cwd: project.root,
-        signal: AbortSignal.timeout(20 * 60 * 1000),
-        delivery: 'caller',
+        subagents,
+        meta: { cardId, file: problem.file, source },
       });
+      if (!started.ok) {
+        autoFixRunning.delete(cardId);
+        updateFixItem(project.root, cardId, { status: 'queued', autoError: started.message });
+        return { ok: false, message: started.message };
+      }
+      const activation = started.activation;
       updateFixItem(project.root, cardId, { taskId: activation.childId });
       activation.result
         .then((result) => {
@@ -2945,16 +3164,29 @@ export function apply(ctx, config = {}) {
     };
     writeAudit(project.root, record);
     try {
-      const activation = await subagents.startActivation({
-        provider: 'spawn',
+      const started = await startSupervisedJob({
+        project,
+        kind: 'audit',
+        key: `audit:${problems.coverage.headSha || 'unknown'}`,
         label: `audit ${project.name}`,
         name: `audit-${String(project.id).slice(-6)}-${randomBytes(2).toString('hex')}`,
-        prompt: [{ type: 'text', text: auditPrompt({ batches, files, findingsCount: activeFindingsCount, grouping: problems.grouping, coverage: coverageSummary }) }],
+        promptParts: [{ type: 'text', text: auditPrompt({ batches, files, findingsCount: activeFindingsCount, grouping: problems.grouping, coverage: coverageSummary }) }],
         parent,
-        cwd: project.root,
-        signal: AbortSignal.timeout(15 * 60 * 1000),
-        delivery: 'caller',
+        subagents,
+        meta: { headSha: problems.coverage.headSha, batches: batches.length },
       });
+      if (!started.ok) {
+        writeAudit(project.root, {
+          ...record,
+          status: 'failed',
+          error: started.message,
+          errorCode: started.code ?? null,
+          finishedAt: new Date().toISOString(),
+        });
+        snapshotCache.delete(project.id);
+        return { ok: false, message: started.message, code: started.code ?? null };
+      }
+      const activation = started.activation;
       activation.result
         .then((result) => {
           const report = parseAgentReport(result);
@@ -3021,6 +3253,7 @@ export function apply(ctx, config = {}) {
         };
       })(),
       audit: summary.exists ? readAudit(project.root) : null,
+      agentJobs: snapshotAgentJobHealth(project),
       reviewBatches: problems.batches,
       reviewGrouping: problems.grouping,
       reviewCoverage: problems.coverage,
@@ -3968,6 +4201,17 @@ export function apply(ctx, config = {}) {
         return sendJson(res, 200, { ok: false, message: String(error?.message ?? error) });
       }
     }
+    if (req.method === 'POST' && url.pathname === `${ROUTE}/api/agent-jobs/reconcile`) {
+      const project = findProject(url.searchParams.get('projectId') ?? '');
+      if (!project) return sendError(res, 404, 'unknown project');
+      const result = reconcileProjectJobs(project.root, { mode: 'overdue' });
+      snapshotCache.delete(project.id);
+      return sendJson(res, 200, {
+        ok: true,
+        changed: result.changed,
+        agentJobs: agentJobHealth(project.root),
+      });
+    }
     if (req.method === 'POST' && url.pathname === `${ROUTE}/api/review-job/start`) {
       const project = findProject(url.searchParams.get('projectId') ?? '');
       if (!project) return sendError(res, 404, 'unknown project');
@@ -4132,6 +4376,42 @@ export function apply(ctx, config = {}) {
     },
     'ci-review forge watches',
   );
+
+  ctx.effect(
+    () => {
+      const timer = setInterval(() => {
+        for (const root of agentJobRoots) {
+          try {
+            reconcileProjectJobs(root, { mode: 'overdue' });
+          } catch (error) {
+            log(`agent job watchdog failed for ${root}: ${String(error?.message ?? error)}`);
+          }
+        }
+      }, JOB_WATCHDOG_MS);
+      timer.unref?.();
+      return () => clearInterval(timer);
+    },
+    'ci-review agent job watchdog',
+  );
+
+  // A Host restart cannot resume an in-process subagent call: any job persisted
+  // as `running` would otherwise block its kind forever (the "CI model
+  // disconnected" symptom). Sweep them once at startup so retry is possible.
+  try {
+    for (const project of discoverProjects()) {
+      agentJobRoots.add(project.root);
+      try {
+        const { changed } = reconcileProjectJobs(project.root, { mode: 'interrupted' });
+        if (changed.length > 0) {
+          log(`agent jobs: recovered ${changed.length} interrupted job(s) in ${project.name} after restart`);
+        }
+      } catch (error) {
+        log(`agent jobs: startup sweep failed for ${project.root}: ${String(error?.message ?? error)}`);
+      }
+    }
+  } catch (error) {
+    log(`agent jobs: startup sweep skipped: ${String(error?.message ?? error)}`);
+  }
 
   log(`mounted at ${ROUTE} (workspaces: ${registryProjects().length}, configured: ${configuredProjects().length})`);
   writeBridgeDiscovery();

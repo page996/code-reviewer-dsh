@@ -668,3 +668,70 @@ test('all verifiers failing marks the verification failed (not completed)', asyn
   assert.equal(failed.verdict, null);
   assert.match(failed.reason, /失败/);
 });
+
+test('agent jobs: a second start for the same logical key is refused while running', async (t) => {
+  const { root } = makeProject(t);
+  const harness = createHarness({ projectRoot: root });
+  harness.state.holdResults = true;
+  const url = `/api/review-problems/group?projectId=${encodeURIComponent(harness.projectId)}`;
+  const first = await harness.call('POST', url, { force: true });
+  assert.equal(first.json.ok, true);
+  const second = await harness.call('POST', url, { force: true });
+  assert.equal(second.json.ok, false);
+  assert.match(second.json.message, /同类任务仍在运行/);
+
+  const registry = JSON.parse(fs.readFileSync(path.join(root, '.review', 'ci-review', 'agent-jobs.json'), 'utf8'));
+  const running = Object.values(registry.jobs).filter((job) => job.status === 'running' && job.kind === 'group');
+  assert.equal(running.length, 1, 'exactly one running job per logical key');
+  assert.ok(running[0].promptBytes > 0, 'prompt size is measured so oversize is visible');
+  assert.ok(running[0].timeoutMs >= 60_000, 'every job carries a deadline');
+});
+
+test('agent jobs: reconcile sweeps an overdue running job so retry becomes possible', async (t) => {
+  const { root } = makeProject(t);
+  const harness = createHarness({ projectRoot: root });
+  harness.state.holdResults = true;
+  const url = `/api/review-problems/group?projectId=${encodeURIComponent(harness.projectId)}`;
+  await harness.call('POST', url, { force: true });
+
+  // Simulate a job that never reported back (old behaviour: stuck "running").
+  const file = path.join(root, '.review', 'ci-review', 'agent-jobs.json');
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  for (const job of Object.values(data.jobs)) {
+    if (job.status === 'running') {
+      job.startedAt = new Date(Date.now() - 3_600_000).toISOString();
+      job.deadlineAt = Date.now() - 60_000;
+    }
+  }
+  fs.writeFileSync(file, `${JSON.stringify(data)}\n`, 'utf8');
+
+  const swept = await harness.call('POST', `/api/agent-jobs/reconcile?projectId=${encodeURIComponent(harness.projectId)}`, {});
+  assert.equal(swept.json.ok, true);
+  assert.equal(swept.json.changed.length, 1);
+  const snapshot = await harness.snapshot();
+  assert.ok(snapshot.agentJobs.failed >= 1, 'the zombie is visible as failed');
+  assert.equal(snapshot.agentJobs.overdue, 0);
+
+  harness.state.holdResults = false;
+  const retry = await harness.call('POST', url, { force: true });
+  assert.equal(retry.json.ok, true, 'a swept job must not block a retry');
+});
+
+test('agent jobs: persisted running jobs become interrupted on host restart', async (t) => {
+  const { root } = makeProject(t);
+  const harness = createHarness({ projectRoot: root });
+  harness.state.holdResults = true;
+  await harness.call('POST', `/api/review-problems/group?projectId=${encodeURIComponent(harness.projectId)}`, { force: true });
+
+  const file = path.join(root, '.review', 'ci-review', 'agent-jobs.json');
+  const before = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(Object.values(before.jobs).filter((job) => job.status === 'running').length, 1);
+
+  // A second apply() models a Host restart: no in-process result can arrive.
+  createHarness({ projectRoot: root });
+  const after = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const interrupted = Object.values(after.jobs).filter((job) => job.errorCode === 'interrupted');
+  assert.equal(interrupted.length, 1);
+  assert.equal(interrupted[0].status, 'failed');
+  assert.match(interrupted[0].error, /重启|中断/);
+});

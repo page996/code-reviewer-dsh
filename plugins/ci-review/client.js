@@ -1422,6 +1422,20 @@ window.__ModuleLoader__.load({
           setGroupBusy(false);
         }
       };
+      const reconcileJobs = async () => {
+        setGroupBusy(true);
+        try {
+          const result = await request(`api/agent-jobs/reconcile?projectId=${encodeURIComponent(projectId)}`, { method: 'POST', body: '{}' });
+          setMessage(result.ok
+            ? { tone: 'ok', text: `已清理 ${(result.changed || []).length} 个超时子代理任务` }
+            : { tone: 'bad', text: result.message || 'reconcile failed' });
+          if (result.ok) onRefresh();
+        } catch (cause) {
+          setMessage({ tone: 'bad', text: String(cause?.message || cause) });
+        } finally {
+          setGroupBusy(false);
+        }
+      };
       const convergeAtHead = async () => {
         const plan = snapshot.reviewCoverage?.convergence;
         const count = plan?.files?.length ?? 0;
@@ -1522,6 +1536,19 @@ window.__ModuleLoader__.load({
             : null,
           snapshot.reviewGrouping?.stale
             ? h('span', { className: 'dr-muted', style: { color: '#d29922' }, title: t('reviewGroupingStale') }, `⚠ ${t('reviewGroupingStale')}`)
+            : null,
+          snapshot.agentJobs
+            ? h('span', {
+                className: 'dr-muted',
+                style: {
+                  fontSize: '11px',
+                  color: snapshot.agentJobs.overdue > 0 || snapshot.agentJobs.failed > 0 ? '#d29922' : '#8b949e',
+                },
+                title: (snapshot.agentJobs.recentFailures || []).map((failure) => `${failure.kind}: ${failure.error}`).join('\n') || '子代理任务看门狗',
+              }, `子代理：运行 ${snapshot.agentJobs.running}${snapshot.agentJobs.oldestRunningSeconds ? `（最久 ${snapshot.agentJobs.oldestRunningSeconds}s）` : ''} · 失败 ${snapshot.agentJobs.failed}${snapshot.agentJobs.overdue ? ` · 超时待清理 ${snapshot.agentJobs.overdue}` : ''}`)
+            : null,
+          snapshot.agentJobs?.overdue > 0
+            ? h('button', { className: 'dr-btn', type: 'button', disabled: groupBusy, onClick: reconcileJobs }, '清理超时任务')
             : null,
           h('span', { className: 'dr-spacer' }),
           h('button', {
