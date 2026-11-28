@@ -58,7 +58,8 @@ DSH 专属 code review 工具链：确定性的评审核心 + 双宿主（DSH Ho
 | DSH Host 插件 | `install_bundle` 成功；6 个 `review_*` 工具 + `/review` 命令实机可用（含 `repo` 参数、输出 schema 清洗、单文件切分） |
 | skill v2 | 已装到项目 `.dsh/skills/` 与全局 `~/.dsh/skills/`，技能目录已刷新 |
 | 样例仓库真实评审 | `dsh-paper-translator-v8`：**31 个批次 / 489 条 findings（485 accepted，含 1 blocker + 11 major）**，覆盖 lib / index.js / client.js / assets / python；`review eval` 全部 **missed 0 / noise 0** |
-| 经验沉淀 | 20 条规则库更新（JS/TS、Python、安全、错误、数据、契约、并发）+ prompt 4 处 + case lessons R/P/E 台账；每个规则改动可追溯到 case |
+| 经验沉淀 | 20 条规则库更新（JS/TS、Python、安全、错误、数据、契约、并发）+ prompt 3 处（P-1/P-2/P-4）+ 流程口径 1 处（P-3 待批次契约）+ case lessons R/P/E 台账；每个规则改动可追溯到 case。已知缺口：batch-26/28/30 有 48 条聚合 findings 因 max-comments 上限丢弃、未入基线（见 case README 诚实记录）；core-data/core-contract 规则包曾因 frontmatter 不绑定 .js 而失效，已修复并生效 |
+| 插件本体自评审（2026-11-27） | 引擎 scan 覆盖 client/docs 单元（3 major + 37 minor）+ 两个独立上下文逐行扫描覆盖 Host/Client/dsh 全部源文件（4.4k/2.9k/2.3k 行）：确认 26 处真实缺陷全部修复（含 opencode 路由 sessionId、scan 门禁 scopeMode 丢失、CI pending 假绿、/api 环回校验、fire-and-forget 崩溃链、prompt 注入面），修复后 diff 经引擎 range 评审 + 全量单测（138+）回归 |
 
 已知未做（不在本仓库范围）：PR #1 合并留待人工；DSH 内 UI 面板 / 硬门禁 / OCR delegate 适配器为 P4 可选项。
 
@@ -80,15 +81,38 @@ node --test "test/**/*.test.mjs"
 
 ### 2. DSH 插件 + skill
 
+**方式 A：插件市场直装（推荐，可自动更新）**
+
+本仓库自带一个 DSH 插件市场索引（format 1，`market/index.json`，由 `bin/market-index.mjs` 生成并钉住发布 commit）：
+
 ```text
-# 1) 插件：用 plugin_manager 安装本地 bundle（target 用 plugins/dsh 的绝对路径）
-# 2) 新开 DSH 会话 → 获得 review_scope / review_plan / review_run / review_gate /
+https://raw.githubusercontent.com/page996/code-reviewer-dsh/main/market/index.json
+```
+
+1. 在 DSH Web 的 **插件 / Discover** 页面（或插件设置）添加上面的索引 URL；
+2. 从索引安装两个 bundle：`@local/dsh-code-review`（评审工具）与 `@local/dsh-ci-review`（CI 评审工作台面板）；
+3. 之后每次本仓库发布新版本并更新索引，Discover 页会对已安装副本显示 **update available**，一键即可同步更新（git 安装的副本就地更新；本地目录安装的副本按 DSH 提示重装）。面板页脚会显示当前 `plugin v<版本>`，便于和市场版本对比。
+
+**方式 B：本地目录安装（开发用）**
+
+```text
+# plugin_manager install_bundle，target 用 plugins/dsh 与 plugins/ci-review 的绝对路径；
+# 新开 DSH 会话 → 获得 review_scope / review_plan / review_run / review_gate /
 #    review_report / review_ledger 工具与 /review 命令
-# 3) skill：把 skills/ai-code-review 复制到项目的 .dsh/skills/ 或全局 ~/.dsh/skills/
+# skill：把 skills/ai-code-review 复制到项目的 .dsh/skills/ 或全局 ~/.dsh/skills/
 ```
 
 ```powershell
 Copy-Item -Recurse -Force <repo>\skills\ai-code-review .dsh\skills\ai-code-review
+```
+
+**发版与同步更新（维护者 SOP）**
+
+```powershell
+# 1) bump plugins/<name>/package.json 版本 → 提交（测试全绿）
+# 2) node bin/market-index.mjs        # 把发布 commit 钉进 market/index.json
+# 3) 提交索引变更并 push；用户的 Discover 页随即看到 update available
+node bin/market-index.mjs --check     # 校验索引结构（format-1 规则自检）
 ```
 
 ### 3. GitHub Actions
