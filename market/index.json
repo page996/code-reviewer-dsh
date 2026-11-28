@@ -1,0 +1,117 @@
+{
+  "format": 1,
+  "title": {
+    "en": "DSH code-reviewer plugin index",
+    "zh": "DSH code-reviewer 插件索引"
+  },
+  "description": {
+    "en": "Installable DSH bundles from the code-reviewer-dsh repository: the CI review workbench panel and the review tools plugin.",
+    "zh": "code-reviewer-dsh 仓库的可安装 DSH bundle：CI 评审工作台面板与评审工具插件。"
+  },
+  "metadata": {
+    "categories": {
+      "dev-tools": {
+        "title": {
+          "en": "Developer tools",
+          "zh": "开发者工具"
+        }
+      }
+    },
+    "labels": {
+      "agent-verified": {
+        "title": {
+          "en": "Verified by agent review",
+          "zh": "经 Agent 评审验证"
+        }
+      }
+    },
+    "sortKeys": {}
+  },
+  "plugins": [
+    {
+      "name": "@local/dsh-ci-review",
+      "title": {
+        "en": "CI review workbench",
+        "zh": "CI 评审工作台"
+      },
+      "description": {
+        "en": "One DSH panel for code review and CI: PR/checks/Actions state, local review runs and sessions, review cards with multi-verifier voting, background fix agents, and a VS Code bridge.",
+        "zh": "一个 DSH 面板看清代码评审与 CI：PR/检查/Actions 状态、本地评审运行与会话、按问题分批的审阅卡与多验证者投票、后台修复 Agent、VS Code 桥接。"
+      },
+      "icon": "https://raw.githubusercontent.com/page996/code-reviewer-dsh/9cd679f4891eee4b97568d3dfd56f307d20105fc/plugins/ci-review/icon.svg",
+      "author": "page996",
+      "homepage": "https://github.com/page996/code-reviewer-dsh",
+      "repository": {
+        "url": "https://github.com/page996/code-reviewer-dsh",
+        "directory": "plugins/ci-review"
+      },
+      "metadata": {
+        "category": "dev-tools",
+        "keywords": [
+          "code-review",
+          "ci",
+          "github",
+          "review-cards",
+          "workbench"
+        ],
+        "labels": [
+          "agent-verified"
+        ]
+      },
+      "versions": [
+        {
+          "version": "0.6.0",
+          "publishTimestamp": 1795847569,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/page996/code-reviewer-dsh",
+            "commit": "9cd679f4891eee4b97568d3dfd56f307d20105fc",
+            "path": "plugins/ci-review"
+          }
+        }
+      ]
+    },
+    {
+      "name": "@local/dsh-code-review",
+      "title": {
+        "en": "DSH code review tools",
+        "zh": "DSH 代码评审工具"
+      },
+      "description": {
+        "en": "Model-facing review tools inside DSH: review_scope / review_plan / review_run / review_gate / review_report / review_ledger plus the /review command — deterministic scope, multi-lens model review, aggregation and a reproducible gate.",
+        "zh": "DSH 内的模型评审工具：review_scope / review_plan / review_run / review_gate / review_report / review_ledger 与 /review 命令——确定性选型、多视角模型评审、聚合与可复现门禁。"
+      },
+      "icon": "https://raw.githubusercontent.com/page996/code-reviewer-dsh/9cd679f4891eee4b97568d3dfd56f307d20105fc/plugins/dsh/icon.svg",
+      "author": "page996",
+      "homepage": "https://github.com/page996/code-reviewer-dsh",
+      "repository": {
+        "url": "https://github.com/page996/code-reviewer-dsh",
+        "directory": "plugins/dsh"
+      },
+      "metadata": {
+        "category": "dev-tools",
+        "keywords": [
+          "code-review",
+          "review",
+          "gate",
+          "sarif"
+        ],
+        "labels": [
+          "agent-verified"
+        ]
+      },
+      "versions": [
+        {
+          "version": "0.2.0",
+          "publishTimestamp": 1795847569,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/page996/code-reviewer-dsh",
+            "commit": "9cd679f4891eee4b97568d3dfd56f307d20105fc",
+            "path": "plugins/dsh"
+          }
+        }
+      ]
+    }
+  ]
+}
