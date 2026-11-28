@@ -1,11 +1,13 @@
 ---
 id: core-data
 title: 数据一致性与迁移
-paths: ["**/*.sql","**/migrations/**","**/migration/**","**/schema/**","**/schemas/**","**/models/**","**/model/**","**/repositories/**","**/repository/**","**/dao/**","**/db/**","**/database/**","**/storage/**","**/*.prisma","**/schema.prisma","**/*.graphql","**/*.gql"]
+paths: ["**/*.sql","**/migrations/**","**/migration/**","**/schema/**","**/schemas/**","**/models/**","**/model/**","**/repositories/**","**/repository/**","**/dao/**","**/db/**","**/database/**","**/storage/**","**/*.prisma","**/schema.prisma","**/*.graphql","**/*.gql","**/*.js","**/*.mjs","**/*.cjs","**/*.ts","**/*.tsx","**/*.jsx"]
 severityHint: blocker
 alwaysApply: false
 ---
 # 数据一致性与迁移
+
+> 路径说明：除数据库/Schema 文件外，本包同样适用于 JS/TS 中的持久化逻辑（状态文件、JSON 存储、缓存、软删除计数）。case paper-translator 的 lessons（墓碑计入配额、unknown vs 空、持久化顺序）正是从 `lib/*-store.js`/`lib/viewer-state.js` 一类文件学到的；若本包不绑定 .js，这些规则永远不会生效。
 
 目标：数据层改动不得造成不可恢复的不一致、锁表或回滚失败。
 

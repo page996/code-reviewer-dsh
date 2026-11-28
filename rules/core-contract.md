@@ -1,11 +1,13 @@
 ---
 id: core-contract
 title: 接口契约与兼容性
-paths: ["**/*.proto","**/*.graphql","**/*.gql","**/*.avsc","**/openapi/**","**/swagger/**","**/api/**","**/apis/**","**/routes/**","**/router/**","**/handlers/**","**/controllers/**","**/sdk/**","**/types/**","**/*.d.ts","**/schemas/**","**/contracts/**"]
+paths: ["**/*.proto","**/*.graphql","**/*.gql","**/*.avsc","**/openapi/**","**/swagger/**","**/api/**","**/apis/**","**/routes/**","**/router/**","**/handlers/**","**/controllers/**","**/sdk/**","**/types/**","**/*.d.ts","**/schemas/**","**/contracts/**","**/*.js","**/*.mjs","**/*.cjs","**/*.ts","**/*.tsx","**/*.jsx"]
 severityHint: major
 alwaysApply: false
 ---
 # 接口契约与兼容性
+
+> 路径说明：契约问题大量出现在实现文件本身（状态码与文档不符、响应形状不稳定、内部模块签名变更），case paper-translator 的 R-12/R-22 正是从 `index.js`/`lib/*.js` 学到的；只绑定 proto/openapi 目录会让这些规则对实现代码永远不生效。
 
 目标：发现会让调用方/旧客户端/其他服务出错的接口变更。
 

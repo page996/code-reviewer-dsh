@@ -2,7 +2,7 @@
 
 ## 仓库
 
-- 路径：`C:\Users\Siyu_Zhu\Documents\deepseek-harness\default-workspace\dsh-paper-translator-v8`
+- 路径：DSH 默认工作区 `default-workspace/dsh-paper-translator-v8`（`@local/dsh-paper-translator` 1.8.0；本机绝对路径含用户名，不写入公开文档——复跑 `eval` 时替换为你本地的实际 checkout 路径）。
 - 形态：DSH Web UI 插件（bundle，`@local/dsh-paper-translator` 1.8.0），Host 半区 `index.js` + `lib/`，Client 半区 `client.js` + `assets/`，Python 抽取/渲染器 `python/`。
 - 规模（实测约 100 个文件）：`index.js` 5,045 行；`lib/*.js` 19 个模块约 15.3k 行；`python/*.py` 6 个文件约 13.8k 行；`client.js` 4,871 行；`assets/*.js` 含 3 个大 UI 文件与 vendored KaTeX。
 - 测试资产：`tools/test_*.mjs` 13 个测试脚本 + `tools/verify_*.py`；`package.json` **没有** `scripts.lint/typecheck/test`。
@@ -13,7 +13,7 @@
 | 批次 | 对象 | 视角/强度 | runId | 结果 |
 |---|---|---|---|---|
 | batch-1 | `lib/util.js` | quick（intent/correctness） | `run-20261116-190955-746b` | 6 minor，全部 accepted |
-| batch-2 | `lib/gateway.js` | standard（intent/correctness/errors/security/contract；scan 模式跳过 tests 视角） | `run-20261116-193909-9bc6` | 首轮 17 minor（13 accepted + 4 判为 unit-scope 测试噪声 rejected），复评后 13/13 accepted 全命中、0 漏报；3 条 major 为新增 |
+| batch-2 | `lib/gateway.js` | standard（intent/correctness/errors/security/contract；scan 模式跳过 tests 视角） | `run-20261116-193909-9bc6` | 首轮 17 minor（13 accepted + 4 判为 unit-scope 测试噪声 rejected），复评后 13/13 accepted 全命中、0 漏报。⚠️ 该 runId 的磁盘记录后来被 batch-2b 复评覆盖：首轮 17 条 findings 仅存于本 case 导出（findings.json/dispositions.json），磁盘上已无原始 aggregate 可对账 |
 | batch-3 | `lib/pipeline.js` | standard（同 batch-2 lenses） | `run-20261116-203528-92c0` | 14 minor，全部 accepted；`review eval`：matched 14 / missed 0 / noise 0 / notEvaluated 23 → **pass** |
 | batch-4 | `index.js`（Host：工具注册、HTTP API、任务队列） | standard（同 lenses，单文件 ~5k 行） | `run-20261116-204833-fc82` | 19 minor，全部 accepted；`review eval`：matched 19 / missed 0 / noise 0 → **pass** |
 | batch-5 | `lib/library.js` | standard（同 lenses） | `run-20261116-205830-6e9b` | 2 major + 10 minor，全部 accepted；`review eval`：matched 12 / missed 0 / noise 0 → **pass**（修了 scan 模式把既有问题当阻断的门禁 bug） |
@@ -37,12 +37,12 @@
 | batch-23 | `lib/skills.js` | standard（同 lenses） | `run-20261116-231724-694b` | 9 minor，全部 accepted；`review eval`：matched 9 / missed 0 → **pass** |
 | batch-24 | `lib/skill-store.js` | standard（同 lenses） | `run-20261116-232159-73ce` | **1 blocker** + 16 minor，全部 accepted；`review eval`：matched 17 / missed 0 → **pass**（scan 语义下 blocker 不阻断 gate） |
 | batch-25 | `lib/note-sessions.js` | standard（同 lenses） | `run-20261116-232552-70cc` | 16 minor，全部 accepted；首轮 1 视角传输失败，重跑成功；`review eval`：matched 16 / missed 0 → **pass** |
-| batch-26 | `lib/graph.js`（2,041 行，首次启用单文件切分：2 个 1200 行单元） | standard（同 lenses） | `run-20261116-233634-8ec3` | 3 major + 27 minor（另有 3 条 style/docs minor 被聚合丢弃，不入基线）；`review eval`：matched 30 / missed 0 → **pass** |
+| batch-26 | `lib/graph.js`（2,041 行，首次启用单文件切分：2 个 1200 行单元） | standard（同 lenses） | `run-20261116-233634-8ec3` | 3 major + 27 minor 入基线；聚合实际产出 33 条，3 条因 **max-comments 上限**被丢弃（并非 style/docs：实为 security 1 条 + intent 1 条 + correctness 1 条），未做 disposition、不入基线；`review eval`：matched 30 / missed 0 → **pass** |
 | batch-27 | `lib/katex-verify.js`（1,345 行 → 2 单元：1200+145） | standard，DSH 重启后新 lib（scan 跳过 tests、temperature=0、自动切分） | `run-20261117-180202-d659` | 1 major + 18 minor，全部 accepted；`review eval`：matched 19 / missed 0 → **pass** |
-| batch-2b | `lib/gateway.js` 复评（新 lib 验证） | standard（新 lib：temperature=0 + scan lens + 去重） | `run-20261116-193909-9bc6` | 15 minor；对旧基线 eval：matched 13/13、noise 0，新增 5 条并入基线；再次 eval **pass 28/28** |
-| batch-28 | `python/extract_paper.py`（4,889 行 → 5 单元） | standard（新 lib，自动切分） | `run-20261117-182124-660a` | 30 minor（另有 30 条 style/docs 丢弃）；`review eval`：matched 30 / missed 0 / new 0 → **pass** |
+| batch-2b | `lib/gateway.js` 复评（新 lib 验证） | standard（新 lib：temperature=0 + scan lens + 去重） | `run-20261116-193909-9bc6` | 15 minor；对旧基线 eval：matched 13/13、noise 0。15 条全部并入基线（其中约 10 条与旧 13 条语义近重复——措辞差异大未被去重合并），gateway 基线合计 28 条；再次 eval **pass 28/28** |
+| batch-28 | `python/extract_paper.py`（4,889 行 → 5 单元） | standard（新 lib，自动切分） | `run-20261117-182124-660a` | 30 minor 入基线；聚合实际产出 60 条，30 条因 **max-comments 上限**被丢弃（并非 style/docs：含 contract 6 / correctness 8 / errors 9 / security 3 / data 1 / intent 3，其中有不可信 PDF 文本的 ReDoS 与 katex_safe 契约违背），未做 disposition、不入基线；`review eval`：matched 30 / missed 0 / new 0 → **pass** |
 | batch-29 | `python/pages_to_png.py` | standard（新 lib） | `run-20261117-184744-bc51` | 8 minor，全部 accepted；`review eval`：matched 8 / missed 0 → **pass** |
-| batch-30 | `lib/llm.js`（3,657 行 → 4 单元） | standard（新 lib） | `run-20261117-185223-98fd` | 30 minor，全部 accepted；两次运行（首轮 1 视角 schema 失败，重跑完整）；`review eval`：matched 30 / missed 0 → **pass** |
+| batch-30 | `lib/llm.js`（3,657 行 → 4 单元） | standard（新 lib） | `run-20261117-185223-98fd` | 30 minor 入基线，全部 accepted；两次运行（首轮 1 视角 schema 失败，重跑完整）。聚合实际产出 45 条，15 条因 **max-comments 上限**被丢弃（含 1 条 security：translatePaper 把 provider 原始错误写进交付物 warnings——同类问题在其他文件是被 accepted 的），未做 disposition、不入基线；`review eval`：matched 30 / missed 0 → **pass** |
 
 排除：`assets/katex/**`（vendored）、`python/__pycache__/**`、`*.pyc`、`locale/*.json`。
 

@@ -1,7 +1,6 @@
 # lessons — paper-translator
 
-> 已评审：batch-1（`lib/util.js`，quick）与 batch-2（`lib/gateway.js`，standard）。
-> 每条 lesson 必须落到具体文件（规则 / prompt / 回归用例 / 项目口径），否则不算沉淀。
+> 覆盖范围：batch-1 … batch-30（含 batch-2b 复评）。每条 lesson 必须落到具体文件（规则 / prompt / 回归用例 / 项目口径），否则不算沉淀。
 
 ## 1. 规则缺口（→ `rules/*.md`）
 
@@ -77,7 +76,7 @@
 | E-342…E-357 | batch-25 的 16 条 note-sessions.js 缺陷（accepted） | 仍被报出；batch-25 run 的 eval：matched 16 / missed 0 | `findings.json` |
 | E-358…E-387 | batch-26 的 30 条 graph.js 缺陷（3 major + 27 minor，accepted） | 仍被报出；batch-26 run 的 eval：matched 30 / missed 0 | `findings.json` |
 | E-388…E-406 | batch-27 的 19 条 katex-verify.js 缺陷（1 major + 18 minor，accepted） | 仍被报出；batch-27 run 的 eval：matched 19 / missed 0 | `findings.json` |
-| E-407…E-421 | batch-2b 的 15 条 gateway.js 复评 findings（5 条新增并入基线） | 仍被报出；重启后 eval matched 28/28（含旧 13 accepted + 新增 5 + 其他批次 notEvaluated） | `findings.json` |
+| E-407…E-421 | batch-2b 的 15 条 gateway.js 复评 findings（15 条全部并入基线，其中约 10 条与旧 13 条语义近重复、措辞差异大未被去重合并） | 仍被报出；重启后 eval matched 28/28（含旧 13 accepted + 2b 并入的 15；其他批次 notEvaluated） | `findings.json` |
 | E-422…E-451 | batch-28 的 30 条 extract_paper.py 缺陷（accepted） | 仍被报出；batch-28 run 的 eval：matched 30 / missed 0 / new 0 | `findings.json` |
 | E-452…E-459 | batch-29 的 8 条 pages_to_png.py 缺陷（accepted） | 仍被报出；batch-29 run 的 eval：matched 8 / missed 0 | `findings.json` |
 | E-460…E-489 | batch-30 的 30 条 llm.js 缺陷（accepted） | 仍被报出；batch-30 run 的 eval：matched 30 / missed 0 | `findings.json` |
@@ -148,4 +147,6 @@ node bin/review.mjs eval --repo <paper-translator> --case cases/paper-translator
 - 编排/机制修复：R-8 传输重试、R-9 temperature=0、R-13 scan preexisting/门禁语义、R-15 跨视角同类合并 + `review aggregate`、R-24 单文件切分、R-27 schema 重试预算 + scan needs-human 语义、eval 排除 dropped；R-25 重启后复验通过。
 - prompt 调整：4 处（P-1/P-2/P-4 已落，P-3 待批次契约）。
 - 回归用例：485 accepted + 4 rejected；batch-3…30 与 batch-2b 的 eval 均全绿（missed 0 / noise 0）。
+- 已知覆盖缺口（诚实记录）：batch-26/28/30 另有 48 条聚合 findings 因 max-comments 上限被丢弃（实际类别见 case README 批次表，并非 style/docs），未做 disposition、未入基线；后续应提高上限或分批复评。batch-2 的原始 run 记录被 batch-2b 复评覆盖，其 17 条 findings 仅存于本 case 导出。
+- dispositions.json 曾以批量模板 reason 错误标注各批次为「batch-3」；已迁移到 v1 包装 schema（补 date/severity/endLine），466 条 reason 按各自 findings 的实际批次改写，`lib/eval.mjs` 同步接受文档化 schema。
 - 产品改进：见 case README 表格（verdict 语义、report 结论、插件输出清洗、repo 参数、scan lenses、eval 匹配、规则、重试、温度）。

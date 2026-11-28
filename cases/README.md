@@ -61,7 +61,7 @@ cases/<repo>/
 
 | case | 仓库形态 | 评审模式 | 状态 |
 |---|---|---|---|
-| [`paper-translator/`](paper-translator/README.md) | DSH 插件（无 `.git`） | `review scan` | 待评审 |
+| [`paper-translator/`](paper-translator/README.md) | DSH 插件（无 `.git`） | `review scan` | 已沉淀：31 个批次 / 489 条 findings 记录 = 485 条 accepted 基线 + 4 条 rejected 反例（`findings.json` 同时保留两类；基线回归按 disposition 语义区分），30 个 runId 的 `review eval` 复跑全绿（missed 0 / noise 0）；已知缺口见该 case README（max-comments 丢弃 48 条未入基线） |
 
 ## 使用方式
 

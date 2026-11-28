@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { evalCase, loadCase } from '../lib/eval.mjs';
+import { computeFingerprint } from '../lib/aggregate.mjs';
 
 function tmpDir(prefix = 'review-eval-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -140,6 +141,39 @@ test('eval: invalid disposition value is a schema error', () => {
     dispositions: [{ file: 'lib/a.mjs', disposition: 'maybe' }],
   });
   assert.throws(() => loadCase(caseDir), /invalid disposition/);
+});
+
+test('eval: documented v1 dispositions wrapper loads like the bare array', () => {
+  const dir = tmpDir('review-case-');
+  writeJson(path.join(dir, 'findings.json'), { schemaVersion: 1, findings: [accepted, rejected] });
+  // A real fingerprint (as the documented schema requires: it must come from
+  // findings.json) — a fabricated one pins nothing and matches nothing.
+  const fingerprint = computeFingerprint(rejected);
+  writeJson(path.join(dir, 'dispositions.json'), {
+    schemaVersion: 1,
+    dispositions: [
+      {
+        fingerprint, file: 'lib/b.mjs', startLine: 21, endLine: 21,
+        category: 'docs', severity: 'minor', title: 'naming nit in helper',
+        disposition: 'rejected', reason: 'unit scope noise', date: '2026-11-16',
+      },
+    ],
+  });
+  const loaded = loadCase(dir);
+  assert.equal(loaded.dispositions.length, 1);
+  assert.equal(loaded.dispositions[0].disposition, 'rejected');
+  assert.equal(loaded.dispositions[0].fingerprint, fingerprint);
+  assert.equal(loaded.dispositions[0].file, 'lib/b.mjs');
+  // The wrapper path resolves the same verdict as the bare-array equivalent.
+  const run = makeRun([accepted]);
+  const result = evalCase({ caseDir: dir, runDir: run });
+  assert.equal(result.exitCode, 0);
+  // The wrapper must not silently swallow an invalid state either.
+  writeJson(path.join(dir, 'dispositions.json'), { schemaVersion: 1, dispositions: [{ file: 'lib/b.mjs', disposition: 'maybe' }] });
+  assert.throws(() => loadCase(dir), /invalid disposition/);
+  // Nor a non-object entry.
+  writeJson(path.join(dir, 'dispositions.json'), { schemaVersion: 1, dispositions: [null] });
+  assert.throws(() => loadCase(dir), /invalid disposition/);
 });
 
 test('eval: missing case directory is a usage error', () => {
