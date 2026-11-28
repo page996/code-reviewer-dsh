@@ -217,10 +217,18 @@ function errorPayload(err, cwd) {
 
 /** Repo-relative POSIX display path; never leaks a drive letter outside the cwd. */
 function relPathSafe(cwd, target) {
-  const relative = path.relative(cwd, target);
+  let relative = '';
+  try {
+    relative = path.relative(cwd, target);
+  } catch {
+    return `<external>/${path.basename(String(target ?? '')) || 'unknown'}`;
+  }
+  // On Windows, path.relative across drives returns the absolute target path,
+  // which would leak a drive letter; treat it as external like ".." escapes.
+  if (path.isAbsolute(relative)) return `<external>/${path.basename(String(target ?? '')) || 'unknown'}`;
   const posix = toPosixPath(relative);
   if (!posix || posix === '.') return '.';
-  if (posix.startsWith('..')) return `<external>/${path.basename(target)}`;
+  if (posix.startsWith('..')) return `<external>/${path.basename(String(target ?? '')) || 'unknown'}`;
   return posix;
 }
 
@@ -468,7 +476,10 @@ async function safeListRuns(core, cwd, config, log) {
     return Array.isArray(runs) ? runs.filter(isPlainObject) : [];
   } catch (err) {
     log('warn', `读取历史运行失败：${sanitizeText(err?.message, cwd)}`);
-    return [];
+    // A broken store (EACCES, lock, corrupt index) must not masquerade as
+    // "no runs exist": propagate a distinguishable error so callers stop
+    // advising a pointless re-scope.
+    throw pluginError('STORE', `读取 .review/runs 失败：${sanitizeText(err?.message, cwd)}`);
   }
 }
 
@@ -750,7 +761,7 @@ async function finalizeFindings(core, { review, plan, config, llm, log }) {
 async function performReview(env, { core, cwd, config, scope, plan, runId, runDir, signal }) {
   throwIfAborted(signal, cwd);
   const route = resolveModelRoute(env.ctx, config, env.pluginConfig);
-  const llm = createHostLlm(env.ctx, route, env.log);
+  const llm = createHostLlm(env.ctx, route, env.log, { sessionKey: `dsh-code-review:${runId}` });
   let review;
   try {
     review = await core.review.runReview({ scope, plan, config, llm, cwd, log: env.log, signal });
@@ -781,10 +792,13 @@ async function performReview(env, { core, cwd, config, scope, plan, runId, runDi
   return { review, reviewRecord, anchored, aggregate, usage, route };
 }
 
-async function performGate(core, { cwd, config, aggregate, runDir, log }) {
+async function performGate(core, { cwd, config, aggregate, runDir, log, scopeMode = null }) {
   let gate;
   try {
-    gate = await core.gate.runGate({ cwd, config, aggregate, runDir, log });
+    // scopeMode must reach the engine: scan-mode findings are advisory
+    // (preexisting), and lib/gate keys its needs-human/blocking semantics on
+    // `scopeMode === 'scan'`. Omitting it mis-scores scan runs.
+    gate = await core.gate.runGate({ cwd, config, aggregate, runDir, log, scopeMode });
   } catch (err) {
     if (typeof err?.code === 'string' && err.code) throw err;
     throw pluginError('GATE', `门禁执行失败：${sanitizeText(err?.message, cwd)}`);
@@ -1031,8 +1045,18 @@ function resolveModelRoute(ctx, config, pluginConfig) {
   // A repo config's default model id ("deepseek-flash") must not override the session model;
   // only an explicitly different repo model is treated as a route choice.
   const explicitRepoModel = configModel.model && configModel.model !== DEFAULT_ROUTE.model ? configModel.model : undefined;
-  const provider = firstString(pluginModel.provider, configModel.provider, selection?.provider, DEFAULT_ROUTE.provider);
-  const model = firstString(pluginModel.model, explicitRepoModel, selection?.model, DEFAULT_ROUTE.model);
+  // Provider and model must come from the same source: pairing an overridden
+  // provider with the session selection's model id (or the reverse) would send
+  // a model the endpoint cannot serve. Any explicit override switches both
+  // halves off the session selection.
+  const overrideProvider = firstString(pluginModel.provider, configModel.provider);
+  const overrideModel = firstString(pluginModel.model, explicitRepoModel);
+  const provider = overrideProvider || overrideModel
+    ? (overrideProvider ?? DEFAULT_ROUTE.provider)
+    : firstString(selection?.provider, DEFAULT_ROUTE.provider);
+  const model = overrideProvider || overrideModel
+    ? (overrideModel ?? DEFAULT_ROUTE.model)
+    : firstString(selection?.model, DEFAULT_ROUTE.model);
   const reasoningEffort = firstString(pluginModel.reasoningEffort, configModel.reasoningEffort, DEFAULT_REASONING_EFFORT);
   return {
     provider,
@@ -1079,7 +1103,7 @@ function mapLlmFailure(failure, signal) {
  * Adapt `ctx.llm.stream` to the engine's `llm.complete(req)` interface.
  * Returns {text, usage, stopReason, model, effort}; errors keep LLM_* codes.
  */
-function createHostLlm(ctx, route, log) {
+function createHostLlm(ctx, route, log, { sessionKey = '' } = {}) {
   const totals = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, calls: 0, durationMs: 0 };
 
   async function complete(req = {}) {
@@ -1094,6 +1118,10 @@ function createHostLlm(ctx, route, log) {
       model: route.model,
       messages: [{ role: 'user', content: [{ type: 'text', text: user }] }],
     };
+    // Declared GenerateOptions field: providers that key per-conversation routing
+    // on it (e.g. pi-ai's opencode routes -> x-opencode-session) reject model
+    // calls without one; other adapters simply ignore it.
+    if (sessionKey) options.sessionId = sessionKey;
     if (typeof req?.system === 'string' && req.system) options.system = req.system;
     const maxTokens = finitePositive(req?.maxTokens) ?? route.maxTokens;
     if (maxTokens) options.maxTokens = maxTokens;
@@ -1324,8 +1352,11 @@ async function executeReviewGate(args, exec, env) {
         anchored: rc.run.reviews.anchored,
         config: rc.config,
       });
-    } catch {
-      aggregate = null;
+    } catch (err) {
+      env.log('warn', `重算聚合失败：${sanitizeText(err?.message, rc.cwd)}`);
+      // A crash between reviews.json and aggregate.json left data behind; a
+      // recompute failure here must not become a silently green empty gate.
+      throw pluginError('SCHEMA', `存在评审结果但聚合重算失败：${sanitizeText(err?.message, rc.cwd)}`);
     }
   }
   // 与 CLI 的 gate 一致：没有 LLM 评审结果时只跑确定性命令门禁（空 findings）。
@@ -1337,6 +1368,7 @@ async function executeReviewGate(args, exec, env) {
     aggregate,
     runDir: rc.runDir,
     log: env.log,
+    scopeMode: cleanString(rc.run.meta?.mode) ?? cleanString(rc.run.scope?.mode) ?? null,
   });
   const verdict = normalizeGateVerdict(gate.verdict);
   const exitCode = exitCodeForGate(gate, aggregate);
@@ -1503,7 +1535,11 @@ function parseCommandInput(rawInput) {
     if (token.startsWith('--')) {
       const eq = token.indexOf('=');
       const flag = (eq >= 0 ? token.slice(2, eq) : token.slice(2)).toLowerCase();
-      const value = eq >= 0 ? token.slice(eq + 1) : tokens[index + 1];
+      // Consume the next token only for flags that actually take a value;
+      // an unknown flag must not silently eat the following token (e.g.
+      // "/review --json staged" would otherwise review the whole workspace).
+      const takesValue = flag === 'mode' || flag === 'effort' || flag === 'base';
+      const value = eq >= 0 ? token.slice(eq + 1) : (takesValue ? tokens[index + 1] : undefined);
       if (eq < 0 && value !== undefined) index += 1;
       if (flag === 'mode' && value) {
         const mode = normalizeMode(value);
@@ -1577,7 +1613,7 @@ async function executeReviewCommand(env, invocation) {
       signal: invocation?.signal,
     });
     throwIfAborted(invocation?.signal, cwd);
-    const gate = await performGate(core, { cwd, config, aggregate: reviewed.aggregate, runDir, log: env.log });
+    const gate = await performGate(core, { cwd, config, aggregate: reviewed.aggregate, runDir, log: env.log, scopeMode: mode });
     const route = resolveModelRoute(env.ctx, config, env.pluginConfig);
     let reportNote = '';
     try {
@@ -1872,6 +1908,17 @@ const COUNT_SCHEMA = jsonObjectSchema(
   '按严重级别的 findings 计数',
 );
 
+const SCOPE_COUNTS_SCHEMA = jsonObjectSchema(
+  {
+    total: jsonNumber(),
+    reviewable: jsonNumber(),
+    excluded: jsonNumber(),
+    insertions: jsonNumber(),
+    deletions: jsonNumber(),
+  },
+  '按文件的选型计数（总数 / 可评审 / 排除 / 变更行）',
+);
+
 const USAGE_SCHEMA = jsonObjectSchema(
   {
     inputTokens: jsonNumber(),
@@ -1912,7 +1959,7 @@ function buildToolDefinitions(env) {
           {
             runId: jsonString('运行 id，形如 run-YYYYMMDD-HHmmss-ab12'),
             mode: jsonString('实际使用的模式'),
-            counts: COUNT_SCHEMA,
+            counts: SCOPE_COUNTS_SCHEMA,
             files: jsonArraySchema(
               jsonObjectSchema({
                 path: jsonString(),

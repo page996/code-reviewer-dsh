@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-code-review",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Review code changes and repositories inside DSH: deterministic scope/plan, model review, aggregation, gate and md/json/sarif reports.",
