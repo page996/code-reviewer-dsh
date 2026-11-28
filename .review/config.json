@@ -5,8 +5,10 @@
       "node test/hooks.contract.mjs"
     ]
   },
+  "review": {
+    "concurrency": 8
+  },
   "ciReview": {
     "autoFixMinor": false
   }
 }
-

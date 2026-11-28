@@ -224,6 +224,35 @@ export function sweepInterrupted(jobs, { now = Date.now() } = {}) {
 export const TERMINAL_STATUSES = Object.freeze(['completed', 'failed', 'cancelled']);
 
 /**
+ * Bound persistent growth: terminal jobs are kept only while newer than
+ * `maxAgeMs` and never more than `maxTerminal` of them; running and unknown
+ * records are always kept. Pure so the policy stays unit-testable.
+ */
+export function pruneTerminalJobs(
+  jobs,
+  { now = Date.now(), maxAgeMs = 14 * 24 * 60 * 60 * 1000, maxTerminal = 400 } = {},
+) {
+  const live = [];
+  const terminal = [];
+  for (const [id, job] of Object.entries(jobs ?? {})) {
+    if (job && TERMINAL_STATUSES.includes(job.status)) terminal.push([id, job]);
+    else live.push([id, job]);
+  }
+  const age = (job) => toEpoch(job?.finishedAt) || toEpoch(job?.updatedAt) || 0;
+  terminal.sort((a, b) => age(b[1]) - age(a[1]));
+  const keptTerminal = [];
+  for (const entry of terminal) {
+    if (keptTerminal.length >= maxTerminal) break;
+    const at = age(entry[1]);
+    if (at > 0 && now - at > maxAgeMs) continue;
+    keptTerminal.push(entry);
+  }
+  const next = {};
+  for (const [id, job] of [...live, ...keptTerminal]) next[id] = job;
+  return { jobs: next, pruned: terminal.length - keptTerminal.length };
+}
+
+/**
  * Guarded transition. A late write from a superseded job must not resurrect or
  * overwrite a newer one; pass `expectedId`/`onlyStatuses` to enforce that.
  */

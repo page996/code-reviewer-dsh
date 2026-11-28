@@ -60,10 +60,11 @@ Host endpoints used by pairing: `GET /api/bridge/ping` (public, loopback) and
 
 ## Install (manual, user action)
 
-A packaged VSIX is committed next to this README:
+A packaged VSIX is committed next to this README (relative to the repo root,
+so the same command works on any checkout):
 
 ```powershell
-code --install-extension E:/dsh-new-1/code-reviewer-dsh/plugins/ci-review/vscode-extension/ci-review-bridge-0.1.14.vsix
+code --install-extension ./plugins/ci-review/vscode-extension/ci-review-bridge-0.1.15.vsix
 ```
 
 Then in VS Code:

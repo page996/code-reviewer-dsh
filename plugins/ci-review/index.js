@@ -17,10 +17,13 @@ import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 import {
   aggregateVotes,
@@ -48,6 +51,7 @@ import {
   classifyFailure,
   MAX_JOB_TIMEOUT_MS,
   promptBudgetFor,
+  pruneTerminalJobs,
   summarizeJobs,
   sweepInterrupted,
   sweepOverdue,
@@ -72,8 +76,36 @@ function normalizePath(value) {
     .toLowerCase();
 }
 
+/**
+ * Boundary-aware containment: `e:/work/api-v2` must NOT count as inside
+ * `e:/work/api`. A bare startsWith(prefix) cross-matches sibling directories.
+ *
+ * Known limitation (deliberate): this is a lexical check; a symlink committed
+ * inside a reviewed repository can still point outside the root. A realpath
+ * pass on every read would multiply fs calls on each snapshot; the expensive
+ * writers (file/save) re-verify with the OS at write time.
+ */
+function isSameOrInsidePath(prefix, candidate) {
+  const base = normalizePath(prefix);
+  const target = normalizePath(candidate);
+  return Boolean(base) && (target === base || target.startsWith(`${base}/`));
+}
+
 function projectId(root) {
   return createHash('sha256').update(normalizePath(root)).digest('hex').slice(0, 16);
+}
+
+/**
+ * Client-supplied ids end up as plain-object keys; `__proto__`/`constructor`
+ * would silently mutate the record map instead of storing the entry. Accept
+ * only bounded, boring identifiers.
+ */
+function safeRecordKey(value) {
+  const key = String(value ?? '').trim();
+  if (!key || key.length > 200) return '';
+  if (key === '__proto__' || key === 'constructor' || key === 'prototype') return '';
+  if (!/^[A-Za-z0-9#._@:-]+$/.test(key)) return '';
+  return key;
 }
 
 function safeReadJson(file) {
@@ -317,12 +349,16 @@ export function apply(ctx, config = {}) {
 
   function writeAgentJobs(root, jobs) {
     try {
+      // Bounded growth: months of supervised jobs otherwise accumulate and are
+      // re-parsed/re-written on every job start and watchdog tick.
+      const { jobs: kept, pruned } = pruneTerminalJobs(jobs);
       const dir = path.join(root, '.review', 'ci-review');
       fs.mkdirSync(dir, { recursive: true });
       const file = agentJobsPath(root);
       const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
-      fs.writeFileSync(temp, `${JSON.stringify({ version: 1, jobs }, null, 2)}\n`, 'utf8');
+      fs.writeFileSync(temp, `${JSON.stringify({ version: 1, jobs: kept }, null, 2)}\n`, 'utf8');
       fs.renameSync(temp, file);
+      if (pruned > 0) log(`agent jobs: pruned ${pruned} old terminal record(s) in ${root}`);
     } catch (error) {
       log(`agent jobs persistence failed: ${String(error?.message ?? error)}`);
     }
@@ -625,6 +661,18 @@ export function apply(ctx, config = {}) {
     return discoverProjects().find((project) => project.id === id) ?? null;
   }
 
+  /** Absolute roots of every currently known project (bridge scope fence). */
+  function knownProjectRoots() {
+    try {
+      return { roots: discoverProjects().map((project) => project.root), failed: false };
+    } catch (error) {
+      // Fail visibly, not silently: when discovery fails the buffer fence
+      // below must not quietly accept out-of-root documents.
+      log(`project discovery failed (buffer fence degraded): ${String(error?.message ?? error)}`);
+      return { roots: [], failed: true };
+    }
+  }
+
   function projectSummary(project) {
     const checkout = checkoutInfo(project.root);
     let exists = true;
@@ -692,7 +740,9 @@ export function apply(ctx, config = {}) {
       kind: 'status',
       name: status.context ?? '',
       workflow: status.creator?.login ?? '',
-      status: 'completed',
+      // A legacy pending status is still running CI: reporting it as
+      // 'completed' rolls the checks up as a false green.
+      status: status.state === 'pending' ? 'pending' : 'completed',
       conclusion: status.state === 'success' ? 'success'
         : status.state === 'failure' ? 'failure'
           : status.state === 'pending' ? 'pending'
@@ -1267,12 +1317,11 @@ export function apply(ctx, config = {}) {
       log(`sessionQuery unavailable: ${error?.message ?? error}`);
       return [];
     }
-    const prefix = normalizePath(root);
     const result = [];
     for (const row of Array.isArray(rows) ? rows : []) {
       if (!row || typeof row !== 'object') continue;
       const cwd = String(row.cwd ?? row.header?.cwd ?? '');
-      if (!cwd || !normalizePath(cwd).startsWith(prefix)) continue;
+      if (!cwd || !isSameOrInsidePath(root, cwd)) continue;
       const id = String(row.id ?? row.sessionId ?? row.header?.id ?? '');
       if (!id) continue;
       result.push({
@@ -1323,13 +1372,20 @@ export function apply(ctx, config = {}) {
     const dir = taskDir(root);
     let entries = [];
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith('.json'));
+      // Task ids sort chronologically (task-YYYYMMDD…); parse only the newest
+      // files instead of every task ever written on each snapshot refresh.
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+        .map((entry) => entry.name)
+        .sort()
+        .reverse()
+        .slice(0, 200);
     } catch {
       return [];
     }
     const tasks = [];
-    for (const entry of entries) {
-      const task = safeReadJson(path.join(dir, entry.name));
+    for (const name of entries) {
+      const task = safeReadJson(path.join(dir, name));
       if (task && typeof task.id === 'string') tasks.push(task);
     }
     return tasks.sort((a, b) => String(b.startedAt ?? '').localeCompare(String(a.startedAt ?? ''))).slice(0, 20);
@@ -1346,13 +1402,32 @@ export function apply(ctx, config = {}) {
 
   const activations = new Map();
 
+  /**
+   * Atomic JSON write with temp cleanup: a crash between staging and rename
+   * must not leave .tmp-* litter behind, and a failed write/rename must not
+   * lose the original file.
+   */
+  function atomicWriteJson(file, value) {
+    const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
+    try {
+      fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+      fs.renameSync(temp, file);
+    } catch (error) {
+      try {
+        fs.rmSync(temp, { force: true });
+      } catch {
+        /* best-effort cleanup */
+      }
+      throw error;
+    }
+  }
+
   function resolveInsideRoot(root, relative) {
     if (typeof relative !== 'string' || !relative.trim()) return null;
     const normalized = relative.replace(/\\/g, '/');
     if (normalized.startsWith('/') || normalized.includes('..')) return null;
     const resolved = path.resolve(root, normalized);
-    const prefix = normalizePath(root);
-    return normalizePath(resolved).startsWith(prefix) ? normalized : null;
+    return isSameOrInsidePath(root, resolved) ? normalized : null;
   }
 
   function buildAgentPrompt({ project, brief, annotation }) {
@@ -1576,6 +1651,9 @@ export function apply(ctx, config = {}) {
       writeTask(project.root, task);
       activation.result
         .then((result) => {
+          // A user cancellation must not be overwritten by the disposed
+          // activation's late settlement.
+          if (task.status === 'cancelled') return;
           task.status = result?.stopReason && result.stopReason !== 'completed' ? 'failed' : 'completed';
           task.report = parseAgentReport(result);
           task.stopReason = result?.stopReason ?? null;
@@ -1583,6 +1661,7 @@ export function apply(ctx, config = {}) {
           writeTask(project.root, task);
         })
         .catch((error) => {
+          if (task.status === 'cancelled') return;
           task.status = 'failed';
           task.error = String(error?.message ?? error);
           task.finishedAt = new Date().toISOString();
@@ -1597,6 +1676,9 @@ export function apply(ctx, config = {}) {
       snapshotCache.delete(project.id);
       return sendJson(res, 200, { ok: true, task });
     } catch (error) {
+      // If startActivation threw, activations never stored this timer; clear
+      // it here or every failed retry leaks a pending 40-minute abort timer.
+      clearTimeout(timer);
       task.status = 'failed';
       task.error = String(error?.message ?? error);
       task.finishedAt = new Date().toISOString();
@@ -1711,7 +1793,7 @@ export function apply(ctx, config = {}) {
 
   function fileEntry(root, relative) {
     const resolved = path.resolve(root, relative);
-    if (!normalizePath(resolved).startsWith(normalizePath(root))) return null;
+    if (!isSameOrInsidePath(root, resolved)) return null;
     let stat;
     try {
       stat = fs.statSync(resolved);
@@ -1747,7 +1829,9 @@ export function apply(ctx, config = {}) {
   function writeCardDecisions(root, decisions) {
     const dir = path.join(root, '.review', 'ci-review');
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'cards.json'), `${JSON.stringify({ version: 1, decisions }, null, 2)}\n`, 'utf8');
+    // Atomic like every other state writer: a crash mid-write must not
+    // corrupt away all user card decisions at once.
+    atomicWriteJson(path.join(dir, 'cards.json'), { version: 1, decisions });
   }
 
   function sourceExcerpt(root, file, startLine, pad = 6) {
@@ -1763,8 +1847,15 @@ export function apply(ctx, config = {}) {
     const snippet = String(finding.existingCode ?? '').split('\n').map((line) => line.trim()).find((line) => line.length > 0);
     if (!snippet) return true;
     const probe = snippet.slice(0, 48);
+    // finding.file comes from persisted review artifacts (model-produced);
+    // resolve it through the same inside-root guard as every other read so a
+    // crafted "../.." or absolute path cannot point the Host at arbitrary files.
+    const relative = resolveInsideRoot(root, finding.file);
+    if (!relative) return false;
     try {
-      const content = fs.readFileSync(path.resolve(root, finding.file), 'utf8').split('\n');
+      // resolveInsideRoot returns a repo-relative path; read it against root,
+      // not against the Host process cwd.
+      const content = fs.readFileSync(path.resolve(root, relative), 'utf8').split('\n');
       const start = Math.max(0, (Number(finding.startLine) || 1) - 3);
       const window = content.slice(start, start + 8).join('\n');
       return window.includes(probe);
@@ -2261,7 +2352,7 @@ export function apply(ctx, config = {}) {
     let inserted = 0;
     for (const [file, fileCards] of byFile) {
       const absolute = path.resolve(dest, file);
-      if (!normalizePath(absolute).startsWith(normalizePath(dest))) continue;
+      if (!isSameOrInsidePath(dest, absolute)) continue;
       let text;
       try {
         text = fs.readFileSync(absolute, 'utf8');
@@ -2402,8 +2493,8 @@ export function apply(ctx, config = {}) {
    * record also carries per-verifier evidence and a severity vote.
    */
   async function startVerification({ project, problem, parent, subagents }) {
-    const key = String(problem.problemKey ?? problem.problemId ?? problem.id ?? '');
-    if (!key) return { ok: false, message: '缺少问题标识' };
+    const key = safeRecordKey(problem.problemKey ?? problem.problemId ?? problem.id ?? '');
+    if (!key) return { ok: false, message: '缺少问题标识（或标识不合法）' };
     const config = readCiReviewConfig(project.root);
     // The verifier count is a server-side policy; a client must not be able to
     // downgrade "multi-verifier voting" to a single vote via the request body.
@@ -2534,7 +2625,11 @@ export function apply(ctx, config = {}) {
               confidence: report?.confidence,
               finishedAt: new Date().toISOString(),
             });
-            void maybeAutoFix(next);
+            void maybeAutoFix(next).catch((error) => {
+              // Fire-and-forget must not become an unhandled rejection:
+              // under Node >=22 that kills the Host process.
+              log(`自动修复后台执行失败：${String(error?.message ?? error).slice(0, 300)}`);
+            });
           })
           .catch((error) => {
             updateVerifier(index, {
@@ -2577,7 +2672,6 @@ export function apply(ctx, config = {}) {
     })();
     if (!agentsSvc?.list || !subagents?.startActivation || !subagents?.rootOf) return { agentsSvc, subagents, parent: null };
     let parent = null;
-    const prefix = normalizePath(project.root);
     for (const agent of agentsSvc.list()) {
       try {
         const candidate = subagents.rootOf(agent);
@@ -2591,7 +2685,7 @@ export function apply(ctx, config = {}) {
         } catch {
           cwd = '';
         }
-        if (cwd && normalizePath(cwd).startsWith(prefix)) break;
+        if (cwd && isSameOrInsidePath(project.root, cwd)) break;
       } catch {
         /* try next */
       }
@@ -2619,7 +2713,9 @@ export function apply(ctx, config = {}) {
   function writeReviewJob(root, job) {
     const dir = reviewJobsDir(root);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, `${job.id}.json`), `${JSON.stringify(job, null, 2)}\n`, 'utf8');
+    // Atomic like the other state writers: a crash mid-write must not make
+    // a running job vanish on the next read.
+    atomicWriteJson(path.join(dir, `${job.id}.json`), job);
     return job;
   }
 
@@ -3086,7 +3182,7 @@ export function apply(ctx, config = {}) {
   function writeAudit(root, audit) {
     const dir = path.join(root, '.review', 'ci-review');
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(auditPath(root), `${JSON.stringify(audit, null, 2)}\n`, 'utf8');
+    atomicWriteJson(auditPath(root), audit);
     return audit;
   }
 
@@ -3215,6 +3311,16 @@ export function apply(ctx, config = {}) {
 
   /* -------------------------------------------------------------- snapshot */
 
+  // Own package version, surfaced so the panel footer can show it (users can
+  // compare against the market index / Discover page to notice updates).
+  const PLUGIN_VERSION = (() => {
+    try {
+      return String(JSON.parse(fs.readFileSync(path.join(PLUGIN_DIR, 'package.json'), 'utf8')).version || '');
+    } catch {
+      return '';
+    }
+  })();
+
   async function buildSnapshot(project) {
     const summary = projectSummary(project);
     const [github, sessions] = await Promise.all([
@@ -3235,6 +3341,7 @@ export function apply(ctx, config = {}) {
     return {
       ok: true,
       generatedAt: new Date().toISOString(),
+      pluginVersion: PLUGIN_VERSION,
       project: summary,
       github,
       localReviews,
@@ -3313,7 +3420,18 @@ export function apply(ctx, config = {}) {
 
   function checkToken(req) {
     const header = String(req.headers[TOKEN_HEADER] ?? '');
-    return header.length > 0 && header === token;
+    if (header.length === 0 || header.length !== token.length) return false;
+    try {
+      return timingSafeEqual(Buffer.from(header, 'utf8'), Buffer.from(token, 'utf8'));
+    } catch {
+      return false;
+    }
+  }
+
+  /** The request's socket peer is a loopback address (or unavailable). */
+  function loopbackPeer(req) {
+    const remote = String(req.socket?.remoteAddress ?? '');
+    return remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1' || remote === '';
   }
 
   function checkOrigin(req) {
@@ -3340,6 +3458,11 @@ export function apply(ctx, config = {}) {
       /* fall through */
     }
     if (checkToken(req)) return true;
+    // Header-based checks are client-controlled; a non-loopback peer that
+    // forges Sec-Fetch-Site/Host must not reach /api/* (gate/run and
+    // file/save are command/write sinks). Defense in depth behind the
+    // webserver's bind address, not a replacement for it.
+    if (!loopbackPeer(req)) return false;
     const fetchSite = String(req.headers['sec-fetch-site'] ?? '').toLowerCase();
     if (!['same-origin', 'same-site', 'none'].includes(fetchSite)) return false;
     const hostname = String(req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '');
@@ -3814,8 +3937,13 @@ export function apply(ctx, config = {}) {
         return sendJson(res, 200, { ok: false, message: '忽略必须填写理由（reason）' });
       }
       const decisions = readCardDecisions(project.root);
-      const ids = Array.isArray(body?.cardIds) ? body.cardIds.map(String) : [String(body?.cardId ?? '')];
-      for (const id of ids.filter(Boolean)) {
+      const ids = (Array.isArray(body?.cardIds) ? body.cardIds.map(String) : [String(body?.cardId ?? '')])
+        .map((id) => safeRecordKey(id))
+        .filter(Boolean);
+      if (ids.length === 0) {
+        return sendJson(res, 200, { ok: false, message: '缺少有效的卡片 id' });
+      }
+      for (const id of ids) {
         if (status === 'pending') delete decisions[id];
         else decisions[id] = { status, at: new Date().toISOString(), ...(reason ? { reason } : {}) };
       }
@@ -3893,6 +4021,9 @@ export function apply(ctx, config = {}) {
       if (!body || typeof body !== 'object') return sendError(res, 400, 'invalid JSON body');
       vscodeBridge.connected = true;
       vscodeBridge.updatedAt = new Date().toISOString();
+      // Discovery runs fs scans; compute the fence roots once per request so
+      // a client-sized batch cannot multiply them.
+      const fence = knownProjectRoots();
       const applyPayload = (payload) => {
         if (!payload || typeof payload !== 'object') return;
         if (payload.type === 'hello') {
@@ -3900,6 +4031,16 @@ export function apply(ctx, config = {}) {
           return;
         }
         if (payload.type !== 'buffer' || typeof payload.file !== 'string') return;
+        // Without an absPath (older bridges) at least require a safe relative
+        // file key; with one, containment must be provable.
+        const absPath = typeof payload.absPath === 'string' ? payload.absPath : '';
+        if (absPath) {
+          if (fence.failed) return;
+          if (fence.roots.length > 0 && !fence.roots.some((root) => isSameOrInsidePath(root, absPath))) return;
+        } else {
+          const relative = payload.file.replace(/\\/g, '/');
+          if (relative.startsWith('/') || /^[A-Za-z]:/.test(relative) || relative.split('/').includes('..')) return;
+        }
         const incomingVersion = Number(payload.version) || 0;
         const incomingSession = typeof payload.sessionId === 'string' ? payload.sessionId : '';
         const previous = vscodeBridge.buffers[payload.file];
@@ -3911,7 +4052,7 @@ export function apply(ctx, config = {}) {
         vscodeBridge.buffers[payload.file] = {
           file: payload.file,
           sessionId: incomingSession,
-          absPath: typeof payload.absPath === 'string' ? payload.absPath : '',
+          absPath,
           languageId: payload.languageId ?? '',
           version: incomingVersion,
           dirty: Boolean(payload.dirty),
@@ -3923,6 +4064,13 @@ export function apply(ctx, config = {}) {
           diagnostics: Array.isArray(payload.diagnostics) ? payload.diagnostics.slice(0, 200) : [],
           updatedAt: new Date().toISOString(),
         };
+        // Bounded memory: evict the oldest buffers beyond a small LRU so a
+        // long-lived Host does not accumulate every opened document forever.
+        const keys = Object.keys(vscodeBridge.buffers);
+        if (keys.length > 20) {
+          keys.sort((a, b) => String(vscodeBridge.buffers[a]?.updatedAt ?? '').localeCompare(String(vscodeBridge.buffers[b]?.updatedAt ?? '')));
+          for (const evict of keys.slice(0, keys.length - 20)) delete vscodeBridge.buffers[evict];
+        }
       };
       if (body.type === 'batch' && Array.isArray(body.buffers)) {
         for (const payload of body.buffers) applyPayload(payload);
@@ -4145,8 +4293,8 @@ export function apply(ctx, config = {}) {
       if (!project) return sendError(res, 404, 'unknown project');
       const body = await readJsonBody(req);
       const problem = body?.problem;
-      const problemKey = String(problem?.problemKey ?? problem?.problemId ?? problem?.id ?? '');
-      if (!problem || !problemKey || !problem.file) return sendJson(res, 200, { ok: false, message: '缺少 problem 信息' });
+      const problemKey = safeRecordKey(problem?.problemKey ?? problem?.problemId ?? problem?.id ?? '');
+      if (!problem || !problemKey || !problem.file) return sendJson(res, 200, { ok: false, message: '缺少 problem 信息（或标识不合法）' });
       const { parent, subagents } = await resolveVerificationParent(project);
       if (!parent || !subagents) return sendJson(res, 200, { ok: false, message: '没有可用在线会话，无法启动验证子代理' });
       try {

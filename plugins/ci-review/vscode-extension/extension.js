@@ -34,11 +34,13 @@ function post(bodyJson) {
       {
         host: '127.0.0.1',
         port: target.port,
-        path: `/dsh-ci-review/api/vscode/push?token=${encodeURIComponent(target.token)}`,
+        path: '/dsh-ci-review/api/vscode/push',
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           'content-length': data.length,
+          // The token travels only in the header: a URL query would be kept by
+          // any loopback access log or intercepting proxy.
           'x-dsh-ci-review-token': target.token,
         },
         timeout: 8000,
@@ -56,6 +58,7 @@ function post(bodyJson) {
 }
 
 function enqueue(payload) {
+  if (!payload || typeof payload.file !== 'string') return;
   if (payload.semantics) semanticsByFile.set(payload.file, payload.semantics);
   else if (semanticsByFile.has(payload.file)) payload.semantics = semanticsByFile.get(payload.file);
   pending.set(payload.file, payload);
@@ -90,7 +93,28 @@ async function flush() {
   setTimeout(() => void flush(), RETRY_DELAY_MS);
 }
 
+function isWorkspaceDocument(document) {
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (folders.length === 0) return false;
+  // Windows/macOS match paths case-insensitively; Linux does not, so compare
+  // raw there to avoid treating a case-variant sibling directory as inside.
+  const caseInsensitive = process.platform === 'win32' || process.platform === 'darwin';
+  const norm = (value) => {
+    const text = value.replace(/\\/g, '/').replace(/\/+$/, '');
+    return caseInsensitive ? text.toLowerCase() : text;
+  };
+  const target = norm(document.uri.fsPath);
+  return folders.some((folder) => {
+    const base = norm(folder.uri.fsPath);
+    return target === base || target.startsWith(`${base}/`);
+  });
+}
+
 function snapshot(document) {
+  // Only workspace documents are streamed: `asRelativePath(uri, false)` returns
+  // the ABSOLUTE path for out-of-workspace files, and shipping those would turn
+  // the bridge into a file exfiltration path for anything opened in the editor.
+  if (!isWorkspaceDocument(document)) return null;
   const file = vscode.workspace.asRelativePath(document.uri, false).replace(/\\/g, '/');
   const diagnostics = vscode.languages.getDiagnostics(document.uri).map((item) => ({
     severity: ['error', 'warning', 'info', 'hint'][item.severity] || 'info',
@@ -159,7 +183,9 @@ async function withSemantics(document, editor, base) {
 
 async function pushWithSemantics(editor) {
   if (!target || !editor) return;
-  const payload = await withSemantics(editor.document, editor, snapshot(editor.document));
+  const base = snapshot(editor.document);
+  if (!base) return;
+  const payload = await withSemantics(editor.document, editor, base);
   enqueue(payload);
 }
 
@@ -193,7 +219,7 @@ function connect(overrides = {}) {
   target = { port, token };
   pending.clear();
   const root = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
-  post(JSON.stringify({ type: 'hello', workspaceRoot: root.replace(/\\/g, '/'), vscodeVersion: vscode.version, extensionVersion: '0.1.13', sessionId: SESSION_ID }))
+  post(JSON.stringify({ type: 'hello', workspaceRoot: root.replace(/\\/g, '/'), vscodeVersion: vscode.version, extensionVersion: '0.1.15', sessionId: SESSION_ID }))
     .then((ok) => log(`hello accepted=${ok}`));
   const editor = vscode.window.activeTextEditor;
   if (editor) void pushWithSemantics(editor);
@@ -205,8 +231,12 @@ function activate(context) {
   context.subscriptions.push(vscode.window.registerUriHandler({
     handleUri(uri) {
       if (uri.path !== '/connect') return;
-      const params = new URLSearchParams(uri.query);
-      connect({ port: Number(params.get('port')) || undefined, token: params.get('token') || '' });
+      // vscode:// URIs can be opened by any webpage; accepting port/token
+      // from the query would let a hostile page re-point the bridge at its
+      // own listener. Re-read trusted sources (discovery file + settings)
+      // instead of URI parameters.
+      log('connect URI: re-reading discovery/config (URI parameters ignored)');
+      connect();
     },
   }));
   context.subscriptions.push(vscode.window.onDidChangeTextEditorSelection((event) => {
